@@ -3,41 +3,49 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#f7f9ff">
-  <title>OwO MO Downloader</title>
+  <meta name="theme-color" content="#f6f8fd">
+  <title>OwO MO Downloader A3.1 HQ</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <div class="decoration decoration-one"></div><div class="decoration decoration-two"></div>
+  <div class="orb orb-one"></div><div class="orb orb-two"></div>
   <main class="page">
-    <nav class="nav"><a class="brand" href="#"><span class="logo">▶</span><span>OwO MO Downloader</span></a><span class="version">A3 Rolling · 2026-09-10</span></nav>
-    <section class="hero">
-      <div class="eyebrow">GitHub Pages + Cloudflare Worker Free</div>
-      <h1>YouTube 影音下載工具</h1>
-      <p>貼上 YouTube 網址，解析可直接使用的影片或音訊格式。請只保存你有權下載的內容。</p>
-    </section>
-    <section class="panel main-panel">
+    <nav class="nav"><a class="brand" href="#"><span class="logo">▶</span><span>OwO MO Downloader</span></a><span class="version">A3.1 HQ · 2026-09-10</span></nav>
+    <section class="hero"><span class="eyebrow">GitHub Pages + Cloudflare Worker + ffmpeg.wasm</span><h1>高畫質影音下載</h1><p>取得分離式高畫質視訊與音訊，並直接在瀏覽器內合併為 MP4。原始檔不會上傳至其他合併伺服器。</p></section>
+
+    <section class="panel">
       <div class="step-title"><span>1</span><div><h2>貼上影片網址</h2><p>支援一般影片、Shorts、youtu.be、嵌入與直播頁網址</p></div></div>
-      <div class="url-box"><span class="yt-icon">▶</span><input id="youtubeUrl" type="url" autocomplete="off" placeholder="貼上 YouTube 網址…"><button id="analyze"><span>解析影片</span><b>→</b></button></div>
-      <details class="advanced"><summary>進階設定</summary><label for="worker">Cloudflare Worker 網址</label><input id="worker" type="url" placeholder="https://your-worker.workers.dev"><small>只會儲存在這台裝置的瀏覽器，不會加入執行紀錄。</small></details>
+      <div class="url-box"><span class="yt">▶</span><input id="youtubeUrl" type="url" autocomplete="off" placeholder="貼上 YouTube 網址…"><button id="analyze"><span>解析影片</span><b>→</b></button></div>
+      <details class="advanced"><summary>進階設定</summary><label for="worker">Cloudflare Worker 網址</label><input id="worker" type="url" placeholder="https://your-worker.workers.dev"><small>網址只保存在這台裝置的 localStorage。</small></details>
     </section>
-    <div id="status" class="status idle"><span class="status-dot"></span><span>等待貼上 YouTube 網址。</span></div>
-    <section id="videoInfo" class="panel video-panel hidden">
-      <img id="thumbnail" alt="影片縮圖"><div class="video-copy"><span class="success-tag">解析完成</span><h2 id="title"></h2><p id="meta"></p></div>
-    </section>
-    <section id="convertPanel" class="panel hidden">
-      <div class="step-title"><span>2</span><div><h2>選擇輸出格式</h2><p>影片使用可直接下載的影音合一來源；音訊保留原始來源格式</p></div></div>
-      <div class="type-switch">
-        <button class="type-option active" data-type="video"><span class="type-icon">▣</span><span><b>影片</b><small>影音合一</small></span><i>✓</i></button>
-        <button class="type-option" data-type="audio"><span class="type-icon">♫</span><span><b>音訊</b><small>原始音訊</small></span><i>✓</i></button>
+
+    <div id="status" class="status idle"><span class="dot"></span><span>等待貼上影片網址。</span></div>
+
+    <section id="videoInfo" class="panel video-panel hidden"><img id="thumbnail" alt="影片縮圖"><div><span class="tag">解析完成</span><h2 id="title"></h2><p id="meta"></p></div></section>
+
+    <section id="downloadPanel" class="panel hidden">
+      <div class="step-title"><span>2</span><div><h2>選擇下載方式</h2><p>高畫質模式會下載分離視訊與音訊，再於本機瀏覽器合併</p></div></div>
+      <div class="mode-switch">
+        <button class="mode active" data-mode="hq"><span>✦</span><div><b>高畫質合併</b><small>最高可用畫質 + 音訊</small></div><i>✓</i></button>
+        <button class="mode" data-mode="direct"><span>↓</span><div><b>直接下載</b><small>不合併的影音合一格式</small></div><i>✓</i></button>
       </div>
-      <div class="selection-grid"><div id="qualityGroup"><label for="quality">可用格式</label><div class="select-wrap"><select id="quality"></select></div><p class="hint">只列出已成功產生媒體網址的格式。</p></div></div>
-      <div id="formatNote" class="format-note"></div>
-      <button id="download" class="download-button"><span>下載 MP4</span><b>↓</b></button>
+
+      <div id="hqOptions" class="option-grid">
+        <div><label for="videoFormat">視訊畫質</label><div class="select-wrap"><select id="videoFormat"></select></div></div>
+        <div><label for="audioFormat">音訊來源</label><div class="select-wrap"><select id="audioFormat"></select></div></div>
+      </div>
+      <div id="directOptions" class="hidden"><label for="directFormat">影音合一格式</label><div class="select-wrap"><select id="directFormat"></select></div></div>
+
+      <div id="formatNote" class="note"></div>
+      <div id="progressBox" class="progress-box hidden"><div class="progress-head"><span id="progressText">準備中…</span><strong id="progressValue">0%</strong></div><div class="progress-track"><span id="progressBar"></span></div></div>
+      <button id="download" class="primary"><span>下載並合併 MP4</span><b>↓</b></button>
     </section>
-    <section class="panel log-panel"><details open><summary>執行紀錄</summary><div class="log-head"><span>解析與下載記錄</span><button id="clearLog">清除</button></div><pre id="log">尚未執行。</pre></details></section>
-    <footer><strong>OwO MO Downloader</strong><span>請遵守來源網站條款及著作權規範</span></footer>
+
+    <section class="panel log-panel"><details open><summary>執行紀錄</summary><div class="log-head"><span>解析、下載與合併記錄</span><button id="clearLog">清除</button></div><pre id="log">尚未執行。</pre></details></section>
+    <footer><strong>OwO MO Downloader</strong><span>請只保存你有權下載的內容</span></footer>
   </main>
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.js"></script>
+  <script src="https://unpkg.com/@ffmpeg/util@0.12.2/dist/umd/index.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

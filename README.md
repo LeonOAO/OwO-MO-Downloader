@@ -1,46 +1,26 @@
-# OwO MO Downloader A3 Rolling
+# OwO MO Downloader A3.1 HQ
 
-更新日期：2026-09-10
-版本：2026.09.10-A3.0-Rolling
+版本：2026.09.10-A3.1.0-HQ
 
-## 架構
+## 部署
 
-- GitHub Pages：`index.html`、`app.js`、`app.css`
-- Cloudflare Worker Free：`worker.js`
-- 不需要主機、Cloudflare Tunnel、Docker 或付費 Container
+1. 將 `worker.js` 完整部署到 Cloudflare Worker。
+2. 將 `index.html`、`app.js`、`app.css` 放到 GitHub Pages 發布目錄。
+3. 開啟網站，在「進階設定」填入 Worker 根網址。
+4. 解析影片後，若同時取得「僅視訊」與「僅音訊」，即可使用高畫質合併。
 
-## A3 新增內容
+## 工作方式
 
-- 集中式 Player Client 組態，便於 YouTube 改版後快速更新。
-- WATCH_PAGE、WEB、MWEB、WEB_EMBEDDED、ANDROID、ANDROID_VR、IOS、TVHTML5 輪詢。
-- Player JavaScript 網址提取。
-- 無 `eval` 的 Signature 操作解譯器。
-- `n` 參數轉換框架。
-- 錯誤分類：AUTH_REQUIRED、NO_STREAMING_DATA、VIDEO_UNAVAILABLE、REGION_BLOCKED 等。
-- Worker 回傳的完整 `steps` 已由前端逐條寫入執行紀錄。
-- 音訊下載保留實際容器，不再將未轉碼的來源誤標成 MP3。
+- Worker 蒐集各播放器 Client 的可用格式。
+- 高畫質通常為分離式視訊與音訊。
+- 前端分別下載兩條串流。
+- ffmpeg.wasm 在瀏覽器內合併並輸出 MP4。
+- 若只有影音合一格式，介面自動切換為直接下載。
 
-## 部署 Worker
+## 限制
 
-1. 開啟 Cloudflare Dashboard。
-2. 進入 Workers & Pages，建立或開啟現有 Worker。
-3. 用本套件的 `worker.js` 完整取代現有程式。
-4. 部署後開啟 Worker 根網址。
-5. 確認回傳版本為 `2026.09.10-A3.0-Rolling`。
-
-## 部署 GitHub Pages
-
-將以下三個檔案放在 GitHub Pages 發布目錄：
-
-- `index.html`
-- `app.js`
-- `app.css`
-
-開啟網站，在「進階設定」填入 Worker 根網址後即可使用。
-
-## 重要限制
-
-- 若所有 Client 都回傳 LOGIN_REQUIRED，代表 YouTube 未提供 streamingData，Signature 解密無法介入。
-- Player JavaScript 經常改版，Signature 或 N 規則可能需要再次更新。
-- Cloudflare Worker 無法執行原生 FFmpeg，因此不提供 1080p 以上影音分離串流的伺服器端合併。
-- 請只下載你有權保存的內容，並遵守來源網站條款與著作權規範。
+- 手機瀏覽器不適合合併大型或長時間影片。
+- 預估工作記憶體超過 700 MiB 時，前端會停止並要求選擇較低畫質。
+- ffmpeg.wasm 核心由 unpkg CDN 載入。
+- Cloudflare Worker 的 YouTube 出口仍可能遇到 HTTP 429 或 LOGIN_REQUIRED。
+- 媒體網址有時效性，解析後應盡快下載。
