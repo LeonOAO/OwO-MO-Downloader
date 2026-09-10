@@ -1,6 +1,6 @@
 "use strict";
 const $ = id => document.getElementById(id);
-const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, busy: false };
+const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, busy: false, videoId: "", baseReady: false };
 const MAX_BROWSER_WORK_BYTES = 700 * 1024 * 1024;
 
 function log(message) {
@@ -95,34 +95,101 @@ function updateButton() {
   $("download").disabled = !ready || state.busy;
   $("download").querySelector("span").textContent = state.mode === "hq" ? "下載並合併 MP4" : "直接下載 MP4";
 }
+function mergeFormats(current, incoming) {
+  const map = new Map();
+  for (const format of [...current, ...incoming]) {
+    const key = `${format.itag || ""}|${format.mimeType || ""}|${format.quality || ""}|${format.kind || ""}`;
+    if (!map.has(key) || (!map.get(key).url && format.url)) map.set(key, format);
+  }
+  return [...map.values()];
+}
+
+function applyVideoData(data, id) {
+  if (data.title) $("title").textContent = data.title;
+  if (data.thumbnail) $("thumbnail").src = data.thumbnail;
+  else if (!$("thumbnail").src) $("thumbnail").src = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+  $("videoInfo").classList.remove("hidden");
+  $("downloadPanel").classList.remove("hidden");
+  $("meta").textContent = `影片 ID：${id} · 來源：${data.source || "目前保留"} · 可用格式：${state.formats.length} 個`;
+  populate();
+}
+
+async function requestPhase(id, mode) {
+  const response = await fetch(endpoint("/youtube", { id, mode }), { cache: "no-store" });
+  const data = await response.json().catch(() => ({}));
+  if (Array.isArray(data.steps)) data.steps.forEach(log);
+  return { response, data };
+}
+
+async function searchHighQuality(id) {
+  log("已保留基本下載格式，開始自動搜尋高畫質分離視訊與音訊。");
+  status("已保留基本格式，正在自動搜尋高畫質…", "working");
+  try {
+    const { response, data } = await requestPhase(id, "hq");
+    const incoming = Array.isArray(data.formats) ? data.formats : [];
+    if (incoming.length) {
+      state.formats = mergeFormats(state.formats, incoming);
+      applyVideoData(data, id);
+    }
+    const { videoOnly, audioOnly } = lists();
+    if (videoOnly.length && audioOnly.length) {
+      setMode("hq");
+      status(`高畫質搜尋完成，已保留基本格式並找到「${videoOnly.length}」個視訊及「${audioOnly.length}」個音訊格式。`, "success");
+      log("高畫質搜尋成功，已合併格式清單，原有基本格式保持可用。");
+      return;
+    }
+    const reason = data.note || data.error || (response.ok ? "目前沒有取得可合併的高畫質分離格式。" : `Worker 回傳 HTTP ${response.status}。`);
+    setMode("direct");
+    status(`基本格式仍可下載；高畫質搜尋未成功：${reason}`, "success");
+    log(`高畫質搜尋未成功，但基本格式已保留：${reason}`);
+  } catch (error) {
+    setMode("direct");
+    status(`基本格式仍可下載；高畫質搜尋發生錯誤：${error.message}`, "success");
+    log(`高畫質搜尋錯誤，但基本格式未清除：${error.message}`);
+  }
+}
+
 async function analyze() {
   const button = $("analyze");
   try {
     button.disabled = true;
-    status("正在解析播放器資料…", "working");
+    state.formats = [];
+    state.baseReady = false;
+    $("progressBox").classList.add("hidden");
+    status("正在尋找可直接下載的基本格式…", "working");
     const id = videoId($("youtubeUrl").value);
     if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id)) throw Error("這不是可辨識的 YouTube 網址。");
+    state.videoId = id;
     localStorage.setItem("workerUrl", $("worker").value.trim());
     log(`開始解析影片 ID：${id}`);
-    const response = await fetch(endpoint("/youtube", { id }), { cache: "no-store" });
-    const data = await response.json().catch(() => ({}));
-    if (Array.isArray(data.steps)) data.steps.forEach(log);
+
+    const { response, data } = await requestPhase(id, "quick");
     if (!response.ok) throw Error(data.error || `Worker 回傳 HTTP ${response.status}。`);
-    state.formats = Array.isArray(data.formats) ? data.formats : [];
-    $("title").textContent = data.title || `YouTube ${id}`;
-    $("thumbnail").src = data.thumbnail || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
-    $("meta").textContent = `影片 ID：${id} · 來源：${data.source || "未知"} · 可用格式：${state.formats.length} 個`;
-    $("videoInfo").classList.remove("hidden");
-    $("downloadPanel").classList.remove("hidden");
-    populate();
-    if (!state.formats.length) throw Error(data.note || "目前沒有可下載格式。");
-    status(`解析完成，共取得「${state.formats.length}」個可用格式。`, "success");
-    log(`解析完成，共取得「${state.formats.length}」個可用格式。`);
+    const quickFormats = Array.isArray(data.formats) ? data.formats : [];
+    if (!quickFormats.length) throw Error(data.note || "目前沒有取得可直接下載的基本格式。");
+
+    state.formats = mergeFormats([], quickFormats);
+    state.baseReady = true;
+    applyVideoData(data, id);
+    setMode("direct");
+    status(`已取得「${state.formats.length}」個基本格式，正在自動搜尋高畫質…`, "success");
+    log(`基本解析完成，已先保留「${state.formats.length}」個可下載格式。`);
+
+    await searchHighQuality(id);
   } catch (error) {
-    status(error.message, "error");
-    log(`解析失敗：${error.message}`);
-  } finally { button.disabled = false; }
+    if (state.baseReady && state.formats.length) {
+      setMode("direct");
+      status(`基本格式仍可下載；後續處理失敗：${error.message}`, "success");
+      log(`後續處理失敗，但基本格式未清除：${error.message}`);
+    } else {
+      status(error.message, "error");
+      log(`解析失敗：${error.message}`);
+    }
+  } finally {
+    button.disabled = false;
+  }
 }
+
 async function fetchMedia(format, label, from, to) {
   setProgress(from, `正在下載${label}…`);
   const response = await fetch(endpoint("/media", { url: format.url }), { cache: "no-store" });

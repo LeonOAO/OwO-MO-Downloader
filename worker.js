@@ -1,4 +1,4 @@
-const VERSION = "2026.09.10-A3.1.0-HQ";
+const VERSION = "2026.09.10-A3.1.1-HQ-Auto";
 const SERVICE = "OwO MO Downloader Worker A3 Rolling";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 
@@ -144,7 +144,7 @@ async function innertubePlayer(apiKey, visitorData, id, profile) {
   return response.json();
 }
 
-async function collectSources(html, watchPlayer, id, steps) {
+async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
   const output = [{ label: "WATCH_PAGE", player: watchPlayer }];
   let state = playState(watchPlayer);
   let rawCount = rawFormats(watchPlayer).length;
@@ -173,10 +173,15 @@ async function collectSources(html, watchPlayer, id, steps) {
     return output;
   }
 
-  steps.push("【FALLBACK】繼續蒐集可用影音合一、分離視訊與分離音訊格式。");
+  steps.push(mode === "quick"
+    ? "【快速解析】先使用 ANDROID 尋找可直接下載的影音合一格式。"
+    : "【高畫質搜尋】保留既有結果，繼續蒐集分離視訊與分離音訊格式。");
   let authCount = state.status === "LOGIN_REQUIRED" ? 1 : 0;
+  const profiles = mode === "quick"
+    ? PLAYER_CLIENTS.filter(profile => profile.label === "ANDROID")
+    : PLAYER_CLIENTS.filter(profile => profile.label !== "ANDROID");
 
-  for (const profile of PLAYER_CLIENTS) {
+  for (const profile of profiles) {
     try {
       const player = await innertubePlayer(apiKey, visitorData, id, profile);
       state = playState(player);
@@ -186,6 +191,11 @@ async function collectSources(html, watchPlayer, id, steps) {
 
       steps.push(`【${profile.label}】狀態：${state.status}；原始格式：「${rawCount}」個；含網址或密文：「${addressCount}」個；原因：${state.reason}。`);
       output.push({ label: profile.label, player });
+
+      if (mode === "quick" && addressCount) {
+        steps.push(`【快速解析】${profile.label} 已取得「${addressCount}」個可解析格式，先回傳基本結果。`);
+        break;
+      }
 
       const all = output.flatMap(source => addressableFormats(source.player));
       const videoOnly = all.some(format => String(format.mimeType || "").startsWith("video/") && !format.audioQuality);
@@ -397,7 +407,7 @@ function resolveFormatUrl(format, rules, counters) {
   return target.href;
 }
 
-async function youtube(id) {
+async function youtube(id, mode = "quick") {
   if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) return json({ error: "影片 ID 格式錯誤" }, 400);
   const steps = [];
   const watch = `https://www.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW`;
@@ -412,7 +422,7 @@ async function youtube(id) {
   if (!watchPlayer) return json({ error: "頁面中找不到 ytInitialPlayerResponse", steps }, 422);
   steps.push("【解析】已取得 ytInitialPlayerResponse。");
 
-  const sources = await collectSources(html, watchPlayer, id, steps);
+  const sources = await collectSources(html, watchPlayer, id, steps, mode);
   const selected = sources.find(source => addressableFormats(source.player).length) || sources[0];
   const details = selected.player.videoDetails || watchPlayer.videoDetails || {};
   const rawMap = new Map();
@@ -430,7 +440,7 @@ async function youtube(id) {
     const note = hasLoginRequired
       ? `已測試來源要求登入，且沒有取得可解析媒體位址（${summary}）。`
       : `播放器可能只提供 SABR 格式描述，沒有 url、signatureCipher 或 cipher（${summary}）。`;
-    return json({ id, title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "", formats: [], steps, code, retryable: false, version: VERSION, note });
+    return json({ id, phase: mode, title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "", formats: [], steps, code, retryable: false, version: VERSION, note });
   }
 
   steps.push(`【來源】彙整 ${sources.map(source => source.label).join("、")}，取得「${raw.length}」個不重複的含網址或密文格式。`);
@@ -446,7 +456,7 @@ async function youtube(id) {
   steps.push(`【網址】Signature 成功：「${counters.signature}」個；失敗：「${counters.signatureFailed}」個。`);
   steps.push(`【網址】N 參數成功：「${counters.n}」個；未處理：「${counters.nFailed}」個。`);
   steps.push(`【網址】取得「${formats.length}」個可直接使用的候選網址。`);
-  return json({ id, source: sources.filter(source => addressableFormats(source.player).length).map(source => source.label).join("+") || selected.label, version: VERSION, code: formats.length ? "OK" : "SIGNATURE_REQUIRED", title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "",
+  return json({ id, phase: mode, source: sources.filter(source => addressableFormats(source.player).length).map(source => source.label).join("+") || selected.label, version: VERSION, code: formats.length ? "OK" : "SIGNATURE_REQUIRED", title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "",
     lengthSeconds: details.lengthSeconds || "", formats, steps,
     note: formats.length ? "" : "播放器已回傳格式，但格式都只有加密 signatureCipher。此執行環境需要更新播放器規則解析器。" });
 }
@@ -475,9 +485,9 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors() });
     const url = new URL(request.url);
     try {
-      if (url.pathname === "/youtube" && request.method === "GET") return await youtube(url.searchParams.get("id"));
+      if (url.pathname === "/youtube" && request.method === "GET") return await youtube(url.searchParams.get("id"), url.searchParams.get("mode") === "hq" ? "hq" : "quick");
       if (url.pathname === "/media" && ["GET", "HEAD"].includes(request.method)) return await media(request, url.searchParams.get("url"));
-      return json({ service: SERVICE, version: VERSION, architecture: "GitHub Pages + Cloudflare Worker Free", endpoints: ["GET /youtube?id=VIDEO_ID", "GET /media?url=MEDIA_URL"] });
+      return json({ service: SERVICE, version: VERSION, architecture: "GitHub Pages + Cloudflare Worker Free", endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq", "GET /media?url=MEDIA_URL"] });
     } catch (error) {
       return json({ error: error.message || "Worker 執行失敗", code: "WORKER_INTERNAL_ERROR", version: VERSION }, 500);
     }
