@@ -1,1 +1,50 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OwO MO Downloader</title><link rel="stylesheet" href="app.css"></head><body><main><nav><b>▶ OwO MO Downloader</b><span>更新日期 · 2026-09-10</span></nav><header><em>簡單、乾淨、在瀏覽器完成</em><h1>YouTube 影音下載工具</h1><p>貼上 YouTube 網址，解析後選擇影片 MP4 或音訊來源。</p></header><section><h2>① 貼上影片網址</h2><div class="url"><input id="youtubeUrl" placeholder="貼上 YouTube 網址…"><button id="analyze">解析影片</button></div><details><summary>進階設定</summary><label>Cloudflare Worker 網址</label><input id="worker" placeholder="https://your-worker.workers.dev"></details></section><div id="status" class="status">等待貼上 YouTube 網址</div><section id="info" class="hidden video"><img id="thumbnail"><div><i>解析完成</i><h2 id="title"></h2><p id="meta"></p></div></section><section id="output" class="hidden"><h2>② 選擇輸出格式</h2><div class="tabs"><button data-type="video" class="active">影片 MP4</button><button data-type="audio">音訊來源</button></div><label id="qualityLabel">影片解析度</label><select id="quality"></select><p id="note"></p><button id="download" class="primary">下載 MP4 ↓</button></section><section><details><summary>檢視執行紀錄</summary><pre id="log">尚未執行。</pre></details></section><footer>請只下載你有權保存的內容</footer></main><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f7f9ff">
+  <title>OwO MO Downloader</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="decoration decoration-one"></div><div class="decoration decoration-two"></div>
+  <main class="page">
+    <nav class="nav"><a class="brand" href="#"><span class="logo">▶</span><span>OwO MO Downloader</span></a><span class="version">強化版 A1 · 2026-09-10</span></nav>
+    <section class="hero">
+      <div class="eyebrow">簡單、乾淨、在瀏覽器完成</div>
+      <h1>YouTube 影音下載工具</h1>
+      <p>貼上 YouTube 網址，解析後選擇影片 MP4 或音訊 MP3，再依需求選擇解析度或音質。</p>
+    </section>
+
+    <section class="panel main-panel">
+      <div class="step-title"><span>1</span><div><h2>貼上影片網址</h2><p>支援一般影片、Shorts、youtu.be、直播頁網址與純影片 ID</p></div></div>
+      <div class="url-box"><span class="yt-icon">▶</span><input id="youtubeUrl" type="text" inputmode="url" autocomplete="off" placeholder="貼上 YouTube 網址、縮短網址或影片 ID…"><button id="analyze"><span>解析影片</span><b>→</b></button></div>
+      <details class="advanced"><summary>進階設定</summary><label for="worker">Cloudflare Worker 網址</label><input id="worker" type="url" placeholder="https://your-worker.workers.dev"><small>只會儲存在這台裝置的瀏覽器。</small></details>
+    </section>
+
+    <div id="status" class="status idle"><span class="status-dot"></span><span>等待貼上 YouTube 網址</span></div>
+
+    <section id="videoInfo" class="panel video-panel hidden">
+      <img id="thumbnail" alt="影片縮圖"><div class="video-copy"><span class="success-tag">解析完成</span><h2 id="title"></h2><p id="meta"></p></div>
+    </section>
+
+    <section id="convertPanel" class="panel hidden">
+      <div class="step-title"><span>2</span><div><h2>選擇輸出格式</h2><p>影片輸出 MP4，純音訊輸出 MP3</p></div></div>
+      <div class="type-switch">
+        <button class="type-option active" data-type="video"><span class="type-icon">▣</span><span><b>影片</b><small>MP4 格式</small></span><i>✓</i></button>
+        <button class="type-option" data-type="audio"><span class="type-icon">♫</span><span><b>音訊</b><small>MP3 格式</small></span><i>✓</i></button>
+      </div>
+      <div class="selection-grid">
+        <div id="qualityGroup"><label for="quality">影片解析度</label><div class="select-wrap"><select id="quality"></select></div><p class="hint">僅列出目前解析到的可用畫質。</p></div>
+        <div id="bitrateGroup" class="hidden"><label for="bitrate">MP3 音質</label><div class="select-wrap"><select id="bitrate"><option value="128">128 kbps · 標準</option><option value="192" selected>192 kbps · 高音質</option><option value="256">256 kbps · 更高音質</option><option value="320">320 kbps · 最高音質</option></select></div><p class="hint">你說的 kpm 應為 kbps，數值越高檔案通常越大。</p></div>
+      </div>
+      <div id="formatNote" class="format-note"></div>
+      <button id="download" class="download-button"><span>下載 MP4</span><b>↓</b></button>
+    </section>
+
+    <section class="panel log-panel"><details><summary>檢視執行紀錄</summary><div class="log-head"><span>解析與下載記錄</span><button id="clearLog">清除</button></div><pre id="log">尚未執行。</pre></details></section>
+    <footer><strong>OwO MO Downloader</strong><span>請只下載你有權保存的內容</span></footer>
+  </main>
+  <script src="app.js"></script>
+</body></html>
