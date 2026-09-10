@@ -1,34 +1,46 @@
-# OwO MO Downloader 強化版 A1
+# OwO MO Downloader A3 Rolling
 
 更新日期：2026-09-10
+版本：2026.09.10-A3.0-Rolling
 
-## 本版新增
+## 架構
 
-- 支援完整 YouTube 網址、`youtu.be` 縮短網址、Shorts、Live、Embed、Music YouTube 與純 11 碼影片 ID。
-- 從 watch 頁面取得 `ytInitialPlayerResponse` 與 Player JavaScript。
-- 解析常見 `signatureCipher` 交換、反轉及裁切規則。
-- 對常見 N 參數規則進行最佳努力解析。
-- 僅回傳經 `googlevideo.com` Range 請求驗證成功的格式。
-- Player 規則在同一 Worker isolate 快取 1 小時。
-- 前端紀錄會顯示 HTML、Player、簽章、N 參數及格式驗證步驟。
+- GitHub Pages：`index.html`、`app.js`、`app.css`
+- Cloudflare Worker Free：`worker.js`
+- 不需要主機、Cloudflare Tunnel、Docker 或付費 Container
 
-## 部署
+## A3 新增內容
 
-### GitHub Pages
+- 集中式 Player Client 組態，便於 YouTube 改版後快速更新。
+- WATCH_PAGE、WEB、MWEB、WEB_EMBEDDED、ANDROID、ANDROID_VR、IOS、TVHTML5 輪詢。
+- Player JavaScript 網址提取。
+- 無 `eval` 的 Signature 操作解譯器。
+- `n` 參數轉換框架。
+- 錯誤分類：AUTH_REQUIRED、NO_STREAMING_DATA、VIDEO_UNAVAILABLE、REGION_BLOCKED 等。
+- Worker 回傳的完整 `steps` 已由前端逐條寫入執行紀錄。
+- 音訊下載保留實際容器，不再將未轉碼的來源誤標成 MP3。
 
-將 `index.html`、`app.css`、`app.js` 放在儲存庫根目錄。於 Settings > Pages 選擇從 `main` 分支的根目錄部署。
+## 部署 Worker
 
-### Cloudflare Worker
+1. 開啟 Cloudflare Dashboard。
+2. 進入 Workers & Pages，建立或開啟現有 Worker。
+3. 用本套件的 `worker.js` 完整取代現有程式。
+4. 部署後開啟 Worker 根網址。
+5. 確認回傳版本為 `2026.09.10-A3.0-Rolling`。
 
-1. 建立 Module Worker。
-2. 以本版 `worker.js` 完整取代原始內容。
-3. 部署後複製 `https://名稱.帳號.workers.dev` 網址。
-4. 回到網站，在「進階設定」貼上 Worker 網址。
+## 部署 GitHub Pages
+
+將以下三個檔案放在 GitHub Pages 發布目錄：
+
+- `index.html`
+- `app.js`
+- `app.css`
+
+開啟網站，在「進階設定」填入 Worker 根網址後即可使用。
 
 ## 重要限制
 
-- 本版不會繞過登入、付費、私人影片、年齡驗證、地區授權或 DRM。
-- 若 YouTube 要求 PO Token、Visitor Data 或登入，純 Worker 版仍可能無法取得格式。
-- Player JavaScript 會持續變動；N 參數若改為複雜函式，目前會保留原值，再以實際 CDN 驗證結果決定是否回傳。
-- 目前音訊下載保留來源格式，尚未在瀏覽器內轉成真正 MP3。
-- 請只下載你有權保存的內容，並遵守相關服務條款及法律規範。
+- 若所有 Client 都回傳 LOGIN_REQUIRED，代表 YouTube 未提供 streamingData，Signature 解密無法介入。
+- Player JavaScript 經常改版，Signature 或 N 規則可能需要再次更新。
+- Cloudflare Worker 無法執行原生 FFmpeg，因此不提供 1080p 以上影音分離串流的伺服器端合併。
+- 請只下載你有權保存的內容，並遵守來源網站條款與著作權規範。
