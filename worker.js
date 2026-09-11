@@ -1,4 +1,4 @@
-const VERSION = "2026.09.11-A3.2.0-FB-Public";
+const VERSION = "2026.09.11-A3.2.1-FB-Share";
 const SERVICE = "OwO MO Downloader Worker A3 Rolling";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -530,23 +530,153 @@ function validateFacebookPageUrl(value) {
   return url;
 }
 
+
+function isFacebookSharePath(url) {
+  return url.hostname.toLowerCase() === "fb.watch" || /^\/share\/(?:r|v|reel)\//i.test(url.pathname);
+}
+
+function cleanFacebookShareUrl(input) {
+  const url = new URL(input.href);
+  ["mibextid", "sfnsn", "d", "rdid", "share_url", "refsrc", "ref"].forEach(key => url.searchParams.delete(key));
+  url.hash = "";
+  return url;
+}
+
+function absoluteFacebookUrl(value, baseUrl) {
+  if (!value) return "";
+  const decoded = decodeFacebookValue(value);
+  try {
+    const url = new URL(decoded, baseUrl);
+    return FACEBOOK_PAGE_HOSTS.includes(url.hostname.toLowerCase()) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function canonicalFacebookUrl(html, baseUrl) {
+  const candidates = [
+    metaContent(html, "og:url"),
+    metaContent(html, "al:android:url"),
+    metaContent(html, "al:ios:url"),
+    (html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i) || [])[1] || "",
+    (html.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["']/i) || [])[1] || "",
+    (html.match(/"url"\s*:\s*"(https?:\\?\/\\?\/(?:www\.)?facebook\.com\\?\/(?:reel|watch|[^"\\]+\/videos)\\?\/[^"\\]+)"/i) || [])[1] || ""
+  ];
+  for (const candidate of candidates) {
+    const result = absoluteFacebookUrl(candidate, baseUrl);
+    if (result && !isFacebookSharePath(new URL(result))) return result;
+  }
+  return "";
+}
+
+async function fetchFacebookPage(url, options = {}) {
+  const mobile = Boolean(options.mobile);
+  const target = new URL(url.href);
+  if (mobile && target.hostname !== "fb.watch") target.hostname = "m.facebook.com";
+  return fetch(target, {
+    method: "GET",
+    headers: {
+      "User-Agent": mobile
+        ? "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36"
+        : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
+      "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.7",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Cache-Control": "no-cache",
+      "Pragma": "no-cache"
+    },
+    redirect: options.redirect || "manual",
+    cache: "no-store"
+  });
+}
+
+async function resolveFacebookShareUrl(inputUrl, steps) {
+  let current = cleanFacebookShareUrl(inputUrl);
+  steps.push(`【FACEBOOK】已辨識分享網址：${current.pathname}`);
+  steps.push("【FACEBOOK】已移除分享追蹤參數。");
+
+  const visited = new Set();
+  for (let hop = 1; hop <= 5; hop++) {
+    if (visited.has(current.href)) break;
+    visited.add(current.href);
+
+    let response;
+    try {
+      response = await fetchFacebookPage(current, { redirect: "manual" });
+    } catch (error) {
+      steps.push(`【FACEBOOK】第「${hop}」層重新導向請求失敗：${error.message}。`);
+      break;
+    }
+
+    steps.push(`【FACEBOOK】分享網址第「${hop}」層回傳 HTTP ${response.status}。`);
+    const location = response.headers.get("Location");
+    if (location) {
+      const next = absoluteFacebookUrl(location, current.href);
+      if (next) {
+        current = cleanFacebookShareUrl(new URL(next));
+        steps.push(`【FACEBOOK】已取得下一層 Facebook 網址：${current.pathname}`);
+        if (!isFacebookSharePath(current)) return current;
+        continue;
+      }
+    }
+
+    const html = await response.text().catch(() => "");
+    if (html) {
+      const canonical = canonicalFacebookUrl(html, current.href);
+      if (canonical) {
+        const result = cleanFacebookShareUrl(new URL(canonical));
+        steps.push(`【FACEBOOK】已從頁面資料取得固定網址：${result.pathname}`);
+        return result;
+      }
+    }
+
+    if (response.status === 400 || response.status === 403 || !html) {
+      try {
+        const mobileResponse = await fetchFacebookPage(current, { mobile: true, redirect: "follow" });
+        steps.push(`【FACEBOOK】行動版備援回傳 HTTP ${mobileResponse.status}。`);
+        const mobileHtml = await mobileResponse.text();
+        const finalUrl = new URL(mobileResponse.url);
+        if (!isFacebookSharePath(finalUrl)) {
+          steps.push(`【FACEBOOK】行動版備援已取得固定網址：${finalUrl.pathname}`);
+          return finalUrl;
+        }
+        const canonical = canonicalFacebookUrl(mobileHtml, finalUrl.href);
+        if (canonical) {
+          const result = cleanFacebookShareUrl(new URL(canonical));
+          steps.push(`【FACEBOOK】已從行動版頁面取得固定網址：${result.pathname}`);
+          return result;
+        }
+      } catch (error) {
+        steps.push(`【FACEBOOK】行動版備援失敗：${error.message}。`);
+      }
+    }
+    break;
+  }
+
+  steps.push("【FACEBOOK】未取得固定 Reels／影片網址，改以清理後的分享網址直接解析。");
+  return current;
+}
+
 async function facebookResolve(value) {
   let pageUrl;
   try { pageUrl = validateFacebookPageUrl(value); }
   catch (error) { return json({ error: error.message, code: "INVALID_FACEBOOK_URL", version: VERSION }, 400); }
 
   const steps = [];
-  const response = await fetch(pageUrl, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36",
-      "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.7",
-      "Accept": "text/html,application/xhtml+xml"
-    },
-    redirect: "follow",
-    cache: "no-store"
-  });
-  steps.push(`【FACEBOOK】頁面回傳 HTTP ${response.status}。`);
-  if (!response.ok) return json({ error: `Facebook 頁面回傳 HTTP ${response.status}。`, code: "FACEBOOK_PAGE_ERROR", version: VERSION, steps }, 502);
+  if (isFacebookSharePath(pageUrl)) {
+    pageUrl = await resolveFacebookShareUrl(pageUrl, steps);
+  }
+
+  let response = await fetchFacebookPage(pageUrl, { mobile: true, redirect: "follow" });
+  steps.push(`【FACEBOOK】影片頁面回傳 HTTP ${response.status}。`);
+
+  if (!response.ok && pageUrl.hostname !== "www.facebook.com") {
+    const desktopUrl = new URL(pageUrl.href);
+    desktopUrl.hostname = "www.facebook.com";
+    response = await fetchFacebookPage(desktopUrl, { redirect: "follow" });
+    steps.push(`【FACEBOOK】桌面版備援回傳 HTTP ${response.status}。`);
+  }
+
+  if (!response.ok) return json({ error: `Facebook 影片頁面回傳 HTTP ${response.status}。`, code: "FACEBOOK_PAGE_ERROR", version: VERSION, steps }, 502);
 
   const finalUrl = response.url;
   const html = await response.text();
@@ -574,13 +704,13 @@ async function facebookResolve(value) {
 
   if (!formats.length) {
     return json({
-      platform: "facebook", id, title, thumbnail, formats: [], steps,
+      platform: "facebook", id, canonicalUrl: finalUrl, title, thumbnail, formats: [], steps,
       code: "FACEBOOK_MEDIA_NOT_FOUND", retryable: false, version: VERSION,
       note: "頁面中沒有找到公開 HD／SD 媒體網址。影片可能需要登入、不是公開內容，或 Facebook 已調整頁面資料格式。"
     });
   }
 
-  return json({ platform: "facebook", id, source: "FACEBOOK", version: VERSION, code: "OK", title, thumbnail, lengthSeconds: "", formats, steps, note: "" });
+  return json({ platform: "facebook", id, canonicalUrl: finalUrl, source: "FACEBOOK", version: VERSION, code: "OK", title, thumbnail, lengthSeconds: "", formats, steps, note: "" });
 }
 
 async function facebookMedia(request, target) {

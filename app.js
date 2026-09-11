@@ -165,6 +165,7 @@ async function analyzeFacebook(url) {
   if (Array.isArray(data.steps)) data.steps.forEach(log);
   if (!response.ok) throw Error(data.error || `Worker 回傳 HTTP ${response.status}。`);
   const formats = Array.isArray(data.formats) ? data.formats : [];
+  if (data.canonicalUrl) log(`Facebook 固定影片網址：${data.canonicalUrl}`);
   if (!formats.length) throw Error(data.note || "目前沒有取得 Facebook 公開影片格式。");
   state.formats = mergeFormats([], formats);
   state.videoId = data.id || "facebook";

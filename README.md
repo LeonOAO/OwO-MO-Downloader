@@ -1,6 +1,6 @@
 # OwO MO Downloader A3.1 HQ
 
-版本：2026.09.11-A3.2.0-FB-Public
+版本：2026.09.11-A3.2.1-FB-Share
 
 ## 部署
 
@@ -49,3 +49,12 @@
 - Facebook 格式使用 Cloudflare Worker 代理下載。
 - 不接收 Facebook 帳號、密碼或 Cookie。
 - 私人、朋友限定、社團限定與需要登入的影片不在本版範圍。
+
+## A3.2.1 Facebook 分享網址
+
+- 新增 `facebook.com/share/r/`、`share/v/`、`share/reel/` 與 `fb.watch` 處理。
+- 自動移除 `mibextid` 等追蹤參數。
+- 先以手動重新導向讀取 `Location`，最多追蹤五層。
+- 無 `Location` 時會從 canonical、`og:url` 與 App Link 資料找固定網址。
+- HTTP 400／403 時自動嘗試 Facebook 行動版頁面。
+- 成功時回傳 `canonicalUrl` 並寫入前端執行紀錄。
