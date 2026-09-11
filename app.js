@@ -169,9 +169,9 @@ function populate() {
   const { videoOnly, audioOnly, muxed } = lists();
   const video = $("videoFormat"), audio = $("audioFormat"), direct = $("directFormat");
   video.replaceChildren(); audio.replaceChildren(); direct.replaceChildren();
-  videoOnly.forEach(f => appendOption(video, f, `${f.quality} · ${f.container.toUpperCase()} · ${humanBytes(bytes(f))}`));
-  audioOnly.forEach(f => appendOption(audio, f, `${Math.round((f.bitrate||0)/1000)||"未知"} kbps · ${f.container.toUpperCase()} · ${humanBytes(bytes(f))}`));
-  muxed.forEach(f => appendOption(direct, f, `${f.quality} · ${f.container.toUpperCase()} · ${humanBytes(bytes(f))}`));
+  videoOnly.forEach(f => appendOption(video, f, displayFormat(f)));
+  audioOnly.forEach(f => appendOption(audio, f, displayFormat(f, true)));
+  muxed.forEach(f => appendOption(direct, f, displayFormat(f)));
   const hqReady = videoOnly.length && audioOnly.length;
   const directReady = muxed.length;
   if (!hqReady && directReady) setMode("direct");
@@ -208,17 +208,90 @@ function updateButton() {
   wavButton.disabled = !completeVideoReady || state.busy;
   $("mp3Bitrate").disabled = !completeVideoReady || state.busy;
 }
+function decodeBase64UrlJson(value) {
+  try {
+    const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+    return JSON.parse(atob(padded));
+  } catch { return null; }
+}
+function stableMediaId(format) {
+  if (format.mediaId) return String(format.mediaId);
+  if (Number.isInteger(format.mediaIndex)) return `item-${format.mediaIndex}`;
+  if (!format.url) return "";
+  try {
+    const url = new URL(format.url);
+    const vs = url.searchParams.get("vs");
+    const vsId = String(vs || "").match(/^([0-9]+)/)?.[1];
+    if (vsId) return `vs-${vsId}`;
+    for (const name of ["media_id", "mediaid", "video_id", "videoid", "id"]) {
+      const value = url.searchParams.get(name);
+      if (value && /^[A-Za-z0-9_-]{5,}$/.test(value)) return `${name}-${value}`;
+    }
+    const efg = decodeBase64UrlJson(url.searchParams.get("efg"));
+    const efgId = efg && (efg.video_id || efg.media_id || efg.id);
+    if (efgId) return `efg-${efgId}`;
+    return `${url.hostname.toLowerCase()}${url.pathname}`;
+  } catch { return String(format.url); }
+}
+function formatQualityKey(format) {
+  return [
+    String(format.quality || "未知").toLowerCase(),
+    String(format.kind || "媒體").toLowerCase(),
+    String(format.container || "bin").toLowerCase(),
+    String(format.codec || "").toLowerCase()
+  ].join("|");
+}
+function formatPreference(format) {
+  return qualityNumber(format) * 1e12 + Number(format.bitrate || 0) * 1e3 + bytes(format);
+}
+function annotateMediaGroups(formats) {
+  if (state.platform === "youtube") return formats.map(format => ({ ...format, mediaIndex: 1, mediaCount: 1 }));
+  const groupOrder = [];
+  const groupMap = new Map();
+  for (const format of formats) {
+    const id = stableMediaId(format) || `unknown-${groupOrder.length + 1}`;
+    if (!groupMap.has(id)) {
+      groupMap.set(id, groupOrder.length + 1);
+      groupOrder.push(id);
+    }
+  }
+  const count = groupOrder.length;
+  return formats.map(format => {
+    const id = stableMediaId(format) || groupOrder[0] || "item-1";
+    return { ...format, mediaIdentity: id, mediaIndex: groupMap.get(id) || 1, mediaCount: count };
+  });
+}
 function mergeFormats(current, incoming) {
   const map = new Map();
-  for (const format of [...current, ...incoming]) {
+  for (const raw of [...current, ...incoming]) {
+    const format = { ...raw };
     let key;
-    if (["instagram", "threads"].includes(state.platform) && format.url) {
-      try { const u = new URL(format.url); key = `${u.hostname}${u.pathname}|${format.kind || ""}`; }
-      catch { key = `${format.url}|${format.kind || ""}`; }
-    } else key = `${format.itag || ""}|${format.mimeType || ""}|${format.quality || ""}|${format.kind || ""}`;
-    if (!map.has(key) || (!map.get(key).url && format.url)) map.set(key, format);
+    if (["facebook", "instagram", "threads"].includes(state.platform) && format.url) {
+      const identity = stableMediaId(format);
+      key = `${identity}|${formatQualityKey(format)}`;
+    } else {
+      key = `${format.itag || ""}|${format.mimeType || ""}|${format.quality || ""}|${format.kind || ""}`;
+    }
+    const existing = map.get(key);
+    if (!existing || formatPreference(format) > formatPreference(existing) || (!existing.url && format.url)) map.set(key, format);
   }
-  return [...map.values()];
+  return annotateMediaGroups([...map.values()]);
+}
+function mediaPrefix(format) {
+  return Number(format.mediaCount || 1) > 1 ? `影片 ${format.mediaIndex} · ` : "";
+}
+function displayFormat(format, audio = false) {
+  const quality = audio ? `${Math.round((format.bitrate || 0) / 1000) || "未知"} kbps` : format.quality;
+  return `${mediaPrefix(format)}${quality} · ${format.container.toUpperCase()} · ${humanBytes(bytes(format))}`;
+}
+function safeFileToken(value, fallback = "media") {
+  const cleaned = String(value || "").trim().replace(/[\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return cleaned || fallback;
+}
+function mediaFileStem(format) {
+  const index = Number(format.mediaCount || 1) > 1 ? `-video-${String(format.mediaIndex).padStart(2, "0")}` : "";
+  return `${safeFileToken(state.platform)}${index}-${safeFileToken(format.quality, "original")}`;
 }
 
 function applyVideoData(data, id) {
@@ -408,7 +481,7 @@ async function mergeDownload() {
   const output = await ffmpeg.readFile(outputName);
   await Promise.allSettled([ffmpeg.deleteFile(videoName), ffmpeg.deleteFile(audioName), ffmpeg.deleteFile(outputName)]);
   setProgress(100, "合併完成，正在儲存 MP4…");
-  saveBlob(output, `${state.platform}-${video.quality}.mp4`, "video/mp4");
+  saveBlob(output, `${mediaFileStem(video)}.mp4`, "video/mp4");
   log(`合併完成：${video.quality} MP4。`);
 }
 async function directDownload() {
@@ -416,7 +489,7 @@ async function directDownload() {
   if (!format) throw Error("沒有可直接下載的格式。");
   const data = await fetchMedia(format, "影片", 2, 95);
   setProgress(100, "下載完成，正在儲存檔案…");
-  saveBlob(data, `${state.platform}-${format.quality}.${format.container || "mp4"}`, format.mimeType || "video/mp4");
+  saveBlob(data, `${mediaFileStem(format)}.${format.container || "mp4"}`, format.mimeType || "video/mp4");
   log(`直接下載完成：${format.quality}/${format.container}。`);
 }
 async function prepareCompleteVideoForAudio(format, start = 2, end = 56) {
@@ -483,7 +556,7 @@ async function convertWav() {
     await Promise.allSettled([ffmpeg.deleteFile(inputName), ffmpeg.deleteFile(outputName)]);
     if (!output || !output.length) throw Error("影片中沒有可轉換的音訊軌。");
     setProgress(100, "WAV 轉換完成，正在儲存檔案…");
-    saveBlob(output, `${state.platform}-${format.quality}-audio.wav`, "audio/wav");
+    saveBlob(output, `${mediaFileStem(format)}-audio.wav`, "audio/wav");
     status("WAV 轉換完成，檔案已交給瀏覽器儲存。", "success");
     log("WAV 轉換完成：PCM 16-bit、44.1 kHz、立體聲。");
   } catch (error) {
@@ -532,7 +605,7 @@ async function convertMp3() {
     await Promise.allSettled([ffmpeg.deleteFile(inputName), ffmpeg.deleteFile(outputName)]);
     if (!output || !output.length) throw Error("影片中沒有可轉換的音訊軌。");
     setProgress(100, "MP3 轉換完成，正在儲存檔案…");
-    saveBlob(output, `${state.platform}-${format.quality}-audio-${bitrate}kbps.mp3`, "audio/mpeg");
+    saveBlob(output, `${mediaFileStem(format)}-audio-${bitrate}kbps.mp3`, "audio/mpeg");
     status("MP3 轉換完成，檔案已交給瀏覽器儲存。", "success");
     log(`MP3 轉換完成：${bitrate} kbps、44.1 kHz、立體聲。`);
   } catch (error) {
@@ -577,7 +650,7 @@ async function extractAudio() {
     await Promise.allSettled([ffmpeg.deleteFile(inputName), ffmpeg.deleteFile(outputName)]);
     if (!output || !output.length) throw Error("完整影片中沒有可提取的音訊軌。");
     setProgress(100, "音訊提取完成，正在儲存 M4A…");
-    saveBlob(output, `${state.platform}-${format.quality}-audio.m4a`, "audio/mp4");
+    saveBlob(output, `${mediaFileStem(format)}-audio.m4a`, "audio/mp4");
     status("音訊提取完成，M4A 已交給瀏覽器儲存。", "success");
     log(`音訊提取完成：${copied ? "保留原始音訊品質" : "轉換為 AAC 192 kbps"}。`);
   } catch (error) {
