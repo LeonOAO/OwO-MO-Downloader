@@ -1,16 +1,39 @@
-# OwO MO Downloader A3.3.12 Instagram GraphQL
+# OwO MO Downloader A3.4.1 Instagram Crawler Media API
 
-版本：2026.09.11-A3.3.12-Instagram-GraphQL
+版本：2026.09.11-A3.4.1-Instagram-Crawler-Media-API
 
-## 修正內容
+## 架構
 
-- Instagram 公開 Reel／貼文的靜態 HTML 沒有媒體時，改用 shortcode 執行 PolarisPostRootQuery。
-- 使用目前 2026 年資料結構 `xdt_api__v1__media__shortcode__web_info`，遞迴提取 `video_url` 與 `video_versions`。
-- 從頁面、Set-Cookie 或 IG_COOKIE 取得 CSRF Token。
-- GraphQL 匿名查詢失敗且已提供 IG_COOKIE 時，再使用登入工作階段查詢一次。
-- 媒體依 CDN 路徑去重，避免首頁或預載區塊造成重複格式。
-- 保留 Threads 嚴格分享網址判定、四平台標籤、MP4、M4A、MP3 位元率與 WAV 功能。
+維持原本架構：GitHub Pages + 單一 Cloudflare Worker。本機不安裝 Python、Node.js、Docker、Cobalt、瀏覽器擴充功能或其他程式。
 
-## 部署
+## Instagram 解析順序
 
-本次核心修正位於 `worker.js`，可只更新 Worker。完整 ZIP 同步提供全部最新版檔案。
+1. 公開頁面靜態媒體資料。
+2. Instagram Embed 頁面。
+3. Link Crawler View，使用連結預覽 User-Agent 搜尋目標 Media ID 附近的 `video_versions`。
+4. 提供 IG_COOKIE 時，使用 shortcode 直接換算 Media ID，呼叫 `/api/v1/media/<id>/info/`。
+5. Private Media API 支援 `video_versions` 與 `carousel_media`，每個項目挑選最大解析度。
+
+## 工作階段保護
+
+- Crawler View 遇到 HTTP 429 後冷卻 10 分鐘。
+- Cookie 工作階段遇到 `checkpoint_required`、`challenge_required` 或 `consent_required` 後冷卻 30 分鐘。
+- Cookie 只會送往 `www.instagram.com` 與 Meta CDN，不會傳給第三方 API。
+- 不儲存 Cookie、媒體網址或解析結果。
+
+## 已移除
+
+- COBALT_API_URL
+- COBALT_API_AUTH
+- `/cobalt-media`
+- Cobalt 前端來源判斷
+
+## 更新檔案
+
+本版同步更新：
+
+- `worker.js`
+- `app.js`
+- `index.html`
+
+`app.css` 功能未變，但完整 ZIP 已包含最新版。
