@@ -239,8 +239,8 @@ async function analyzeFacebook(url) {
         break;
       }
 
-      if (["INVALID_FACEBOOK_URL", "FACEBOOK_MEDIA_DOMAIN_DENIED"].includes(data.code)) {
-        log(`【FACEBOOK】錯誤「${data.code}」不適合重試，提前停止。`);
+      if (["INVALID_FACEBOOK_URL", "FACEBOOK_MEDIA_DOMAIN_DENIED", "FB_STORY_SESSION_REQUIRED", "FB_SESSION_EXPIRED"].includes(data.code)) {
+        log(`【FACEBOOK】錯誤「${data.code}」需要先修正登入工作階段或網址，提前停止。`);
         break;
       }
     } catch (error) {
