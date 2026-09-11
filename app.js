@@ -158,54 +158,24 @@ async function searchHighQuality(id) {
   }
 }
 
-function facebookHasHighQuality() {
-  const { videoOnly, audioOnly, muxed } = lists();
-  const highMuxed = muxed.some(format => {
-    const height = qualityNumber(format);
-    return height >= 720 || /HD/i.test(String(format.quality || ""));
-  });
-  const highVideo = videoOnly.some(format => {
-    const height = qualityNumber(format);
-    return height >= 720 || /HD/i.test(String(format.quality || ""));
-  });
-  return highMuxed || (highVideo && audioOnly.length > 0);
-}
-
 async function analyzeFacebook(url) {
-  log("已辨識平台：Facebook，開始穩定解析影片頁面。");
-  status("正在解析 Facebook 影片…", "working");
-
-  const response = await fetch(endpoint("/facebook", {
-    url,
-    nonce: `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  }), {
-    cache: "no-store",
-    headers: { "Cache-Control": "no-cache" }
-  });
+  log("已辨識平台：Facebook，開始解析公開影片頁面。");
+  const response = await fetch(endpoint("/facebook", { url }), { cache: "no-store" });
   const data = await response.json().catch(() => ({}));
   if (Array.isArray(data.steps)) data.steps.forEach(log);
   if (!response.ok) throw Error(data.error || `Worker 回傳 HTTP ${response.status}。`);
-
   const formats = Array.isArray(data.formats) ? data.formats : [];
   if (data.canonicalUrl) log(`Facebook 固定影片網址：${data.canonicalUrl}`);
-  if (!formats.length) throw Error(data.note || "目前沒有取得 Facebook 影片格式。");
-
+  if (!formats.length) throw Error(data.note || "目前沒有取得 Facebook 公開影片格式。");
   state.formats = mergeFormats([], formats);
   state.videoId = data.id || "facebook";
   state.baseReady = true;
   applyVideoData(data, state.videoId);
-
-  const currentLists = lists();
-  if (currentLists.videoOnly.length && currentLists.audioOnly.length) setMode("hq");
+  const facebookLists = lists();
+  if (facebookLists.videoOnly.length && facebookLists.audioOnly.length) setMode("hq");
   else setMode("direct");
-
-  if (facebookHasHighQuality()) {
-    status(`Facebook 解析完成，已取得高畫質，共「${state.formats.length}」個格式。`, "success");
-    log(`Facebook 解析完成，已取得高畫質，共「${state.formats.length}」個格式。`);
-  } else {
-    status(`Facebook 解析完成，已保留「${state.formats.length}」個可下載格式。`, "success");
-    log(`Facebook 解析完成，已保留「${state.formats.length}」個格式；本次未取得額外高畫質。`);
-  }
+  status(`Facebook 解析完成，共取得「${state.formats.length}」個影片格式。`, "success");
+  log(`Facebook 解析完成，共取得「${state.formats.length}」個格式。`);
 }
 
 async function analyzeYouTube(url) {
