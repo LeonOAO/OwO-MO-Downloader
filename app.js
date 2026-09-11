@@ -36,39 +36,13 @@ function videoId(value) {
 }
 function detectPlatform(value) {
   try {
-    const url = new URL(value.trim());
-    const host = url.hostname.toLowerCase().replace(/^www\./, "");
-
-    if (
-      host === "youtu.be" ||
-      host === "youtube.com" ||
-      host.endsWith(".youtube.com")
-    ) return "youtube";
-
-    if (
-      host === "fb.watch" ||
-      host === "facebook.com" ||
-      host.endsWith(".facebook.com")
-    ) return "facebook";
-
-    if (
-      host === "instagr.am" ||
-      host.endsWith(".instagr.am") ||
-      host === "instagram.com" ||
-      host.endsWith(".instagram.com")
-    ) return "instagram";
-
-    if (
-      host === "threads.com" ||
-      host.endsWith(".threads.com") ||
-      host === "threads.net" ||
-      host.endsWith(".threads.net")
-    ) return "threads";
-
+    const host = new URL(value.trim()).hostname.toLowerCase().replace(/^www\./, "");
+    if (["youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"].includes(host)) return "youtube";
+    if (["facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"].includes(host)) return "facebook";
+    if (["instagram.com", "m.instagram.com", "instagr.am"].includes(host)) return "instagram";
+    if (["threads.com", "threads.net"].includes(host)) return "threads";
     return "";
-  } catch {
-    return "";
-  }
+  } catch { return ""; }
 }
 
 function platformRequestHeaders(platform = state.platform) {
@@ -204,7 +178,7 @@ function populate() {
   else setMode("hq");
   $("formatNote").textContent = hqReady
     ? "高畫質模式會分別下載視訊與音訊，再以 ffmpeg.wasm 在本機合併。檔案越大，手機記憶體需求越高。"
-    : directReady ? "目前沒有取得分離式高畫質來源，已切換為影音合一直接下載。" : "目前沒有可下載的格式。";
+    : directReady ? "目前沒有取得分離式高畫質來源，已切換為完整影片下載。" : "目前沒有可下載的格式。";
   updateButton();
 }
 function setMode(mode) {
@@ -219,12 +193,29 @@ function updateButton() {
   const { videoOnly, audioOnly, muxed } = lists();
   const ready = state.mode === "hq" ? videoOnly.length && audioOnly.length : muxed.length;
   $("download").disabled = !ready || state.busy;
-  $("download").querySelector("span").textContent = state.mode === "hq" ? "下載並合併 MP4" : "直接下載 MP4";
+  $("download").querySelector("span").textContent = "下載影片 MP4";
+  const audioButton = $("extractAudio");
+  const mp3Button = $("convertMp3");
+  const wavButton = $("convertWav");
+  const mp3Options = $("mp3Options");
+  const completeVideoReady = state.mode === "direct" && muxed.length > 0;
+  audioButton.classList.toggle("hidden", !completeVideoReady);
+  mp3Button.classList.toggle("hidden", !completeVideoReady);
+  wavButton.classList.toggle("hidden", !completeVideoReady);
+  mp3Options.classList.toggle("hidden", !completeVideoReady);
+  audioButton.disabled = !completeVideoReady || state.busy;
+  mp3Button.disabled = !completeVideoReady || state.busy;
+  wavButton.disabled = !completeVideoReady || state.busy;
+  $("mp3Bitrate").disabled = !completeVideoReady || state.busy;
 }
 function mergeFormats(current, incoming) {
   const map = new Map();
   for (const format of [...current, ...incoming]) {
-    const key = `${format.itag || ""}|${format.mimeType || ""}|${format.quality || ""}|${format.kind || ""}`;
+    let key;
+    if (["instagram", "threads"].includes(state.platform) && format.url) {
+      try { const u = new URL(format.url); key = `${u.hostname}${u.pathname}|${format.kind || ""}`; }
+      catch { key = `${format.url}|${format.kind || ""}`; }
+    } else key = `${format.itag || ""}|${format.mimeType || ""}|${format.quality || ""}|${format.kind || ""}`;
     if (!map.has(key) || (!map.get(key).url && format.url)) map.set(key, format);
   }
   return [...map.values()];
@@ -428,6 +419,176 @@ async function directDownload() {
   saveBlob(data, `${state.platform}-${format.quality}.${format.container || "mp4"}`, format.mimeType || "video/mp4");
   log(`直接下載完成：${format.quality}/${format.container}。`);
 }
+async function prepareCompleteVideoForAudio(format, start = 2, end = 56) {
+  if (!format) throw Error("沒有可處理音訊的影片格式。");
+  const mediaData = await fetchMedia(format, "影片", start, end);
+  const estimated = mediaData.byteLength * 3;
+  if (estimated > MAX_BROWSER_WORK_BYTES) {
+    throw Error(`預估音訊處理記憶體約 ${humanBytes(estimated)}，超過瀏覽器安全上限。請選擇較小的影片格式。`);
+  }
+  return mediaData;
+}
+
+function selectedMp3Bitrate() {
+  const allowed = new Set([128, 192, 256, 320]);
+  const value = Number($("mp3Bitrate").value);
+  return allowed.has(value) ? value : 192;
+}
+
+function updateMp3BitrateUi() {
+  const bitrate = selectedMp3Bitrate();
+  const descriptions = {
+    128: "節省容量，適合語音與一般行動聆聽。",
+    192: "適合一般聆聽與檔案大小平衡。",
+    256: "較高音質，適合音樂保存。",
+    320: "最高位元率，檔案容量也最大。"
+  };
+  $("mp3BitrateHelp").textContent = `目前選擇：${bitrate} kbps，${descriptions[bitrate]}`;
+  $("convertMp3").querySelector("span").textContent = `轉換音訊 MP3｜${bitrate} kbps`;
+}
+
+async function convertWav() {
+  if (state.busy) return;
+  const format = selected("directFormat");
+  if (!format) {
+    status("沒有可轉換音訊的影片格式。", "error");
+    return;
+  }
+  try {
+    state.busy = true;
+    updateButton();
+    status("正在下載影片並轉換為 WAV…", "working");
+    log(`開始將影片音訊轉換為 WAV：${format.quality}/${format.container}。`);
+    const mediaData = await prepareCompleteVideoForAudio(format);
+    const estimatedWavBytes = mediaData.byteLength * 5;
+    if (estimatedWavBytes > MAX_BROWSER_WORK_BYTES) {
+      throw Error(`WAV 為未壓縮格式，預估處理記憶體約 ${humanBytes(estimatedWavBytes)}，超過瀏覽器安全上限。請選擇較小的影片格式。`);
+    }
+    const ffmpeg = await ensureFFmpeg();
+    const inputExt = format.container || "mp4";
+    const inputName = `wav-source.${inputExt}`;
+    const outputName = "converted-audio.wav";
+    await ffmpeg.writeFile(inputName, mediaData);
+    setProgress(70, "正在將音訊轉換為 WAV…");
+    await ffmpeg.exec([
+      "-i", inputName,
+      "-map", "0:a:0",
+      "-vn",
+      "-c:a", "pcm_s16le",
+      "-ar", "44100",
+      "-ac", "2",
+      outputName
+    ]);
+    const output = await ffmpeg.readFile(outputName);
+    await Promise.allSettled([ffmpeg.deleteFile(inputName), ffmpeg.deleteFile(outputName)]);
+    if (!output || !output.length) throw Error("影片中沒有可轉換的音訊軌。");
+    setProgress(100, "WAV 轉換完成，正在儲存檔案…");
+    saveBlob(output, `${state.platform}-${format.quality}-audio.wav`, "audio/wav");
+    status("WAV 轉換完成，檔案已交給瀏覽器儲存。", "success");
+    log("WAV 轉換完成：PCM 16-bit、44.1 kHz、立體聲。");
+  } catch (error) {
+    const message = String(error.message || error).includes("matches no streams")
+      ? "影片中沒有可轉換的音訊軌。"
+      : String(error.message || error);
+    status(message, "error");
+    log(`WAV 轉換失敗：${message}`);
+  } finally {
+    state.busy = false;
+    updateButton();
+  }
+}
+
+async function convertMp3() {
+  if (state.busy) return;
+  const format = selected("directFormat");
+  if (!format) {
+    status("沒有可轉換音訊的影片格式。", "error");
+    return;
+  }
+  try {
+    state.busy = true;
+    updateButton();
+    status("正在下載影片並轉換為 MP3…", "working");
+    log(`開始將影片音訊轉換為 MP3：${format.quality}/${format.container}。`);
+    const bitrate = selectedMp3Bitrate();
+    const mediaData = await prepareCompleteVideoForAudio(format);
+    const ffmpeg = await ensureFFmpeg();
+    const inputExt = format.container || "mp4";
+    const inputName = `mp3-source.${inputExt}`;
+    const outputName = "converted-audio.mp3";
+    await ffmpeg.writeFile(inputName, mediaData);
+    setProgress(70, "正在將音訊轉換為 MP3…");
+    await ffmpeg.exec([
+      "-i", inputName,
+      "-map", "0:a:0",
+      "-vn",
+      "-c:a", "libmp3lame",
+      "-b:a", `${bitrate}k`,
+      "-ar", "44100",
+      "-ac", "2",
+      outputName
+    ]);
+    const output = await ffmpeg.readFile(outputName);
+    await Promise.allSettled([ffmpeg.deleteFile(inputName), ffmpeg.deleteFile(outputName)]);
+    if (!output || !output.length) throw Error("影片中沒有可轉換的音訊軌。");
+    setProgress(100, "MP3 轉換完成，正在儲存檔案…");
+    saveBlob(output, `${state.platform}-${format.quality}-audio-${bitrate}kbps.mp3`, "audio/mpeg");
+    status("MP3 轉換完成，檔案已交給瀏覽器儲存。", "success");
+    log(`MP3 轉換完成：${bitrate} kbps、44.1 kHz、立體聲。`);
+  } catch (error) {
+    const message = String(error.message || error).includes("matches no streams")
+      ? "影片中沒有可轉換的音訊軌。"
+      : String(error.message || error);
+    status(message, "error");
+    log(`MP3 轉換失敗：${message}`);
+  } finally {
+    state.busy = false;
+    updateButton();
+  }
+}
+
+async function extractAudio() {
+  if (state.busy) return;
+  const format = selected("directFormat");
+  if (!format) {
+    status("沒有可提取音訊的完整影片格式。", "error");
+    return;
+  }
+  try {
+    state.busy = true;
+    updateButton();
+    status("正在下載完整影片並提取音訊…", "working");
+    log(`開始從完整影片提取音訊：${format.quality}/${format.container}。`);
+    const mediaData = await prepareCompleteVideoForAudio(format, 2, 58);
+    const ffmpeg = await ensureFFmpeg();
+    const inputExt = format.container || "mp4";
+    const inputName = `audio-source.${inputExt}`;
+    const outputName = "extracted-audio.m4a";
+    await ffmpeg.writeFile(inputName, mediaData);
+    setProgress(72, "正在從完整影片提取音訊…");
+    let copied = true;
+    try {
+      await ffmpeg.exec(["-i", inputName, "-map", "0:a:0", "-vn", "-c:a", "copy", outputName]);
+    } catch {
+      copied = false;
+      await ffmpeg.exec(["-i", inputName, "-map", "0:a:0", "-vn", "-c:a", "aac", "-b:a", "192k", outputName]);
+    }
+    const output = await ffmpeg.readFile(outputName);
+    await Promise.allSettled([ffmpeg.deleteFile(inputName), ffmpeg.deleteFile(outputName)]);
+    if (!output || !output.length) throw Error("完整影片中沒有可提取的音訊軌。");
+    setProgress(100, "音訊提取完成，正在儲存 M4A…");
+    saveBlob(output, `${state.platform}-${format.quality}-audio.m4a`, "audio/mp4");
+    status("音訊提取完成，M4A 已交給瀏覽器儲存。", "success");
+    log(`音訊提取完成：${copied ? "保留原始音訊品質" : "轉換為 AAC 192 kbps"}。`);
+  } catch (error) {
+    status(error.message.includes("matches no streams") ? "完整影片內沒有可提取的音訊軌。" : error.message, "error");
+    log(`音訊提取失敗：${error.message}`);
+  } finally {
+    state.busy = false;
+    updateButton();
+  }
+}
+
 async function download() {
   if (state.busy) return;
   try {
@@ -442,6 +603,11 @@ async function download() {
 
 $("analyze").onclick = analyze;
 $("download").onclick = download;
+$("extractAudio").onclick = extractAudio;
+$("convertMp3").onclick = convertMp3;
+$("convertWav").onclick = convertWav;
+$("mp3Bitrate").onchange = updateMp3BitrateUi;
+updateMp3BitrateUi();
 $("youtubeUrl").onkeydown = event => { if (event.key === "Enter") analyze(); };
 $("clearLog").onclick = () => $("log").textContent = "尚未執行。";
 $("videoFormat").onchange = updateButton;
