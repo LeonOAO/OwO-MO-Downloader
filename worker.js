@@ -1,4 +1,4 @@
-const VERSION = "2026.09.11-A3.2.2-FB-Session";
+const VERSION = "2026.09.11-A3.2.8-FB-Web-Cookie";
 const SERVICE = "OwO MO Downloader Worker A3 Rolling";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -8,7 +8,7 @@ function cors(origin = "*") {
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
-    "Access-Control-Allow-Headers": "Range,Content-Type",
+    "Access-Control-Allow-Headers": "Range,Content-Type,X-FB-Session",
     "Access-Control-Expose-Headers": "Content-Length,Content-Range,Accept-Ranges,Content-Type,Content-Disposition",
     "Vary": "Origin"
   };
@@ -466,21 +466,30 @@ async function youtube(id, mode = "quick") {
 
 function decodeHtml(value) {
   return String(value || "")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;|&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
+      try { return String.fromCodePoint(parseInt(hex, 16)); } catch { return _; }
+    })
+    .replace(/&#([0-9]+);/g, (_, decimal) => {
+      try { return String.fromCodePoint(parseInt(decimal, 10)); } catch { return _; }
+    })
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;|&#039;|&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
 }
 
 function decodeFacebookValue(value) {
   let output = decodeHtml(value);
-  try { output = JSON.parse(`"${output.replace(/"/g, '\\"')}"`); } catch {}
-  return output
+  try { output = JSON.parse(`"${output.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`); } catch {}
+  return decodeHtml(output)
     .replace(/\\u0025/g, "%")
     .replace(/\\u0026/g, "&")
     .replace(/\\u003D/g, "=")
     .replace(/\\u003F/g, "?")
+    .replace(/\\u003C/g, "<")
+    .replace(/\\u003E/g, ">")
     .replace(/\\\//g, "/");
 }
 
@@ -497,26 +506,118 @@ function metaContent(html, property) {
   return "";
 }
 
+function cleanFacebookTitle(value) {
+  let title = decodeHtml(decodeFacebookValue(value))
+    .replace(/\s*\|\s*Facebook\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!title) return "Facebook 影片";
+  const firstSentence = title.match(/^(.{1,100}?[。！？!?])(?:\s|$)/);
+  if (firstSentence) title = firstSentence[1];
+  else if (title.length > 100) title = `${title.slice(0, 100).trim()}…`;
+  return title;
+}
+
+function inferFacebookHeight(url, quality) {
+  const decoded = decodeURIComponent(url);
+  const match = decoded.match(/(?:height|_nc_ohc|dimensions?)[=_-](\d{3,4})/i) || decoded.match(/(2160|1440|1080|720|540|480|360)p/i);
+  if (match) return Number(match[1]);
+  return quality === "HD" ? 720 : 360;
+}
+
+function parseDashManifest(value) {
+  const manifest = decodeFacebookValue(value)
+    .replace(/\\n/g, "")
+    .replace(/\\t/g, "")
+    .replace(/\\"/g, '"');
+  const candidates = [];
+  const representationPattern = /<Representation\b([^>]*)>([\s\S]*?)<\/Representation>/gi;
+  let match;
+  while ((match = representationPattern.exec(manifest))) {
+    const attributes = match[1];
+    const body = match[2];
+    const baseUrlMatch = body.match(/<BaseURL>([\s\S]*?)<\/BaseURL>/i);
+    if (!baseUrlMatch) continue;
+    const url = decodeHtml(baseUrlMatch[1].trim());
+    if (!/^https:\/\//i.test(url)) continue;
+    const mime = (attributes.match(/mimeType="([^"]+)"/i) || [])[1] || "";
+    const height = Number((attributes.match(/height="(\d+)"/i) || [])[1] || 0);
+    const bandwidth = Number((attributes.match(/bandwidth="(\d+)"/i) || [])[1] || 0);
+    const codecs = (attributes.match(/codecs="([^"]+)"/i) || [])[1] || "";
+    candidates.push({
+      quality: height ? `${height}p` : mime.startsWith("audio/") ? "音訊" : "HD",
+      height,
+      bitrate: bandwidth,
+      kind: mime.startsWith("audio/") ? "僅音訊" : "僅視訊",
+      mimeType: mime || (height ? "video/mp4" : "audio/mp4"),
+      codec: codecs,
+      url
+    });
+  }
+  return candidates;
+}
+
 function collectFacebookUrls(html) {
   const candidates = [];
   const definitions = [
-    { quality: "HD", patterns: [/"browser_native_hd_url"\s*:\s*"([^"]+)"/g, /"hd_src"\s*:\s*"([^"]+)"/g, /"playable_url_quality_hd"\s*:\s*"([^"]+)"/g] },
-    { quality: "SD", patterns: [/"browser_native_sd_url"\s*:\s*"([^"]+)"/g, /"sd_src"\s*:\s*"([^"]+)"/g, /"playable_url"\s*:\s*"([^"]+)"/g] }
+    { quality: "HD", patterns: [
+      /"browser_native_hd_url"\s*:\s*"([^"]+)"/g,
+      /"browser_native_hd_url"\s*:\s*\{[^}]*"url"\s*:\s*"([^"]+)"/g,
+      /"hd_src"\s*:\s*"([^"]+)"/g,
+      /"hd_src_no_ratelimit"\s*:\s*"([^"]+)"/g,
+      /"playable_url_quality_hd"\s*:\s*"([^"]+)"/g,
+      /"playable_url_quality_hd"\s*:\s*\{[^}]*"url"\s*:\s*"([^"]+)"/g,
+      /"video_hd_url"\s*:\s*"([^"]+)"/g,
+      /"hdUrl"\s*:\s*"([^"]+)"/g
+    ] },
+    { quality: "SD", patterns: [
+      /"browser_native_sd_url"\s*:\s*"([^"]+)"/g,
+      /"browser_native_sd_url"\s*:\s*\{[^}]*"url"\s*:\s*"([^"]+)"/g,
+      /"sd_src"\s*:\s*"([^"]+)"/g,
+      /"sd_src_no_ratelimit"\s*:\s*"([^"]+)"/g,
+      /"playable_url"\s*:\s*"([^"]+)"/g,
+      /"playable_url"\s*:\s*\{[^}]*"url"\s*:\s*"([^"]+)"/g,
+      /"video_url"\s*:\s*"([^"]+)"/g,
+      /"sdUrl"\s*:\s*"([^"]+)"/g
+    ] }
   ];
   for (const definition of definitions) {
     for (const pattern of definition.patterns) {
       let match;
       while ((match = pattern.exec(html))) {
         const url = decodeFacebookValue(match[1]);
-        if (/^https:\/\//i.test(url)) candidates.push({ quality: definition.quality, url });
+        if (/^https:\/\//i.test(url)) {
+          candidates.push({
+            quality: definition.quality,
+            height: inferFacebookHeight(url, definition.quality),
+            bitrate: definition.quality === "HD" ? 2000000 : 700000,
+            kind: "影音合一",
+            mimeType: "video/mp4",
+            codec: "",
+            url
+          });
+        }
       }
     }
   }
+
+  const dashPatterns = [
+    /"dash_manifest"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"dashManifest"\s*:\s*"((?:\\.|[^"])*)"/g
+  ];
+  for (const pattern of dashPatterns) {
+    let match;
+    while ((match = pattern.exec(html))) candidates.push(...parseDashManifest(match[1]));
+  }
+
   const ogVideo = metaContent(html, "og:video") || metaContent(html, "og:video:url") || metaContent(html, "og:video:secure_url");
-  if (/^https:\/\//i.test(ogVideo)) candidates.push({ quality: "SD", url: ogVideo });
+  if (/^https:\/\//i.test(ogVideo)) {
+    candidates.push({ quality: "SD", height: 360, bitrate: 700000, kind: "影音合一", mimeType: "video/mp4", codec: "", url: ogVideo });
+  }
+
   const unique = new Map();
   for (const candidate of candidates) {
-    const key = `${candidate.quality}|${candidate.url}`;
+    const key = `${candidate.kind}|${candidate.height || candidate.quality}|${candidate.url}`;
     if (!unique.has(key)) unique.set(key, candidate);
   }
   return [...unique.values()];
@@ -537,6 +638,18 @@ function isFacebookSharePath(url) {
 
 function isFacebookAuthPath(url) {
   return /^\/(?:login|checkpoint|recover|reg|privacy\/consent)(?:\/|$)/i.test(url.pathname);
+}
+
+function isFacebookStoryPath(url) {
+  return /^\/stories\/[^/]+\/[^/?#]+/i.test(url.pathname);
+}
+
+function cleanFacebookStoryUrl(input) {
+  const url = new URL(input.href);
+  ["mibextid", "source", "refsrc", "ref", "sfnsn"].forEach(key => url.searchParams.delete(key));
+  url.searchParams.set("view_single", "1");
+  url.hash = "";
+  return url;
 }
 
 function isUsableFacebookVideoUrl(url) {
@@ -676,13 +789,23 @@ async function resolveFacebookShareUrl(inputUrl, steps, cookie = "") {
   return current;
 }
 
-async function facebookResolve(value, env) {
+function requestFacebookCookie(request, env) {
+  const supplied = String(request.headers.get("X-FB-Session") || "").trim();
+  const secret = String(env && env.FB_COOKIE || "").trim();
+  return supplied || secret;
+}
+async function facebookResolve(value, env, request) {
   let pageUrl;
   try { pageUrl = validateFacebookPageUrl(value); }
   catch (error) { return json({ error: error.message, code: "INVALID_FACEBOOK_URL", version: VERSION }, 400); }
 
   const steps = [];
-  const cookie = String(env && env.FB_COOKIE || "").trim();
+  const cookie = requestFacebookCookie(request, env);
+  const storyMode = isFacebookStoryPath(pageUrl);
+  if (storyMode) {
+    pageUrl = cleanFacebookStoryUrl(pageUrl);
+    steps.push("【FACEBOOK STORY】已辨識限時動態網址，改用登入工作階段專用流程。");
+  }
   const originalUrl = new URL(pageUrl.href);
 
   async function resolveAndFetch(activeCookie, label) {
@@ -703,11 +826,23 @@ async function facebookResolve(value, env) {
     return { response: result, finalUrl: resultUrl };
   }
 
-  let attempt = await resolveAndFetch("", "訪客");
+  if (storyMode && !cookie) {
+    return json({
+      error: "Facebook 限時動態需要登入工作階段；目前 Worker 尚未設定 FB_COOKIE Secret。",
+      code: "FB_STORY_SESSION_REQUIRED",
+      retryable: false,
+      version: VERSION,
+      steps
+    }, 401);
+  }
+
+  let attempt = storyMode
+    ? await resolveAndFetch(cookie, "限時動態登入工作階段")
+    : await resolveAndFetch("", "訪客");
   let response = attempt.response;
   let finalUrlObject = attempt.finalUrl;
 
-  if ((!response.ok || isFacebookAuthPath(finalUrlObject)) && cookie) {
+  if (!storyMode && (!response.ok || isFacebookAuthPath(finalUrlObject)) && cookie) {
     steps.push("【FACEBOOK】訪客模式未取得影片頁面，開始使用 FB_COOKIE Secret 重試。");
     attempt = await resolveAndFetch(cookie, "登入工作階段");
     response = attempt.response;
@@ -715,30 +850,57 @@ async function facebookResolve(value, env) {
   }
 
   if (isFacebookAuthPath(finalUrlObject)) {
-    return json({ error: cookie ? "FB_COOKIE 工作階段已失效或沒有影片觀看權限。" : "Facebook 將分享網址導向登入頁；尚未設定 FB_COOKIE Secret。", code: cookie ? "FB_SESSION_EXPIRED" : "FB_SESSION_REQUIRED", version: VERSION, steps }, 401);
+    return json({ error: cookie ? "FB_COOKIE 工作階段已失效或沒有影片觀看權限。" : "Facebook 將網址導向登入頁；尚未設定 FB_COOKIE Secret。", code: cookie ? "FB_SESSION_EXPIRED" : "FB_SESSION_REQUIRED", retryable: false, version: VERSION, steps }, 401);
   }
   if (!response.ok) return json({ error: `Facebook 影片頁面回傳 HTTP ${response.status}。`, code: "FACEBOOK_PAGE_ERROR", version: VERSION, steps }, 502);
 
   const finalUrl = finalUrlObject.href;
-  const html = await response.text();
-  steps.push(`【FACEBOOK】已取得公開頁面 HTML，共「${html.length}」個字元。`);
-  const found = collectFacebookUrls(html);
-  steps.push(`【FACEBOOK】找到「${found.length}」個公開媒體候選網址。`);
+  let html = await response.text();
+  steps.push(`【FACEBOOK】已取得影片頁面 HTML，共「${html.length}」個字元。`);
+  let found = collectFacebookUrls(html);
+
+  const hasHighQuality = found.some(item => item.kind === "僅視訊" || Number(item.height || 0) >= 720 || item.quality === "HD");
+  if (!hasHighQuality && cookie) {
+    steps.push("【FACEBOOK】訪客頁面只有 SD，使用 FB_COOKIE 再搜尋 HD 與 DASH 格式。");
+    const authenticated = await fetchFacebookPage(new URL(finalUrl), { mobile: false, redirect: "follow", cookie });
+    steps.push(`【FACEBOOK】登入工作階段高畫質頁面回傳 HTTP ${authenticated.status}。`);
+    if (authenticated.ok && !isFacebookAuthPath(new URL(authenticated.url))) {
+      const authenticatedHtml = await authenticated.text();
+      steps.push(`【FACEBOOK】已取得登入工作階段 HTML，共「${authenticatedHtml.length}」個字元。`);
+      const merged = new Map();
+      for (const item of [...found, ...collectFacebookUrls(authenticatedHtml)]) {
+        merged.set(`${item.kind}|${item.height || item.quality}|${item.url}`, item);
+      }
+      found = [...merged.values()];
+      html = `${html}
+${authenticatedHtml}`;
+    }
+  }
+
+  const muxedCount = found.filter(item => item.kind === "影音合一").length;
+  const videoCount = found.filter(item => item.kind === "僅視訊").length;
+  const audioCount = found.filter(item => item.kind === "僅音訊").length;
+  steps.push(`${storyMode ? "【FACEBOOK STORY】" : "【FACEBOOK】"}找到「${found.length}」個媒體格式：影音合一「${muxedCount}」個、僅視訊「${videoCount}」個、僅音訊「${audioCount}」個。`);
 
   const formats = found.map((item, index) => ({
-    itag: `fb-${item.quality.toLowerCase()}-${index + 1}`,
-    quality: item.quality === "HD" ? "HD" : "SD",
-    kind: "影音合一",
-    container: "mp4",
-    mimeType: "video/mp4",
-    codec: "",
-    bitrate: item.quality === "HD" ? 2000000 : 700000,
+    itag: `fb-${String(item.kind || "media").replace(/[^a-z0-9]/gi, "").toLowerCase()}-${item.height || String(item.quality).toLowerCase()}-${index + 1}`,
+    quality: item.quality || (item.height ? `${item.height}p` : "未知"),
+    kind: item.kind || "影音合一",
+    container: String(item.mimeType || "video/mp4").includes("webm") ? "webm" : "mp4",
+    mimeType: item.mimeType || "video/mp4",
+    codec: item.codec || "",
+    bitrate: item.bitrate || 0,
     contentLength: "",
     source: "FACEBOOK",
     url: item.url
-  })).sort((a, b) => b.bitrate - a.bitrate);
+  })).sort((a, b) => {
+    const heightA = Number((String(a.quality).match(/\d+/) || [0])[0]);
+    const heightB = Number((String(b.quality).match(/\d+/) || [0])[0]);
+    return heightB - heightA || b.bitrate - a.bitrate;
+  });
 
-  const title = metaContent(html, "og:title") || metaContent(html, "twitter:title") || "Facebook 公開影片";
+  const rawTitle = metaContent(html, "og:title") || metaContent(html, "twitter:title") || "Facebook 影片";
+  const title = cleanFacebookTitle(rawTitle);
   const thumbnail = metaContent(html, "og:image") || metaContent(html, "twitter:image");
   const idMatch = finalUrl.match(/(?:videos|reel)\/(\d+)/) || finalUrl.match(/[?&]v=(\d+)/);
   const id = idMatch ? idMatch[1] : `fb-${Date.now()}`;
@@ -747,11 +909,13 @@ async function facebookResolve(value, env) {
     return json({
       platform: "facebook", id, canonicalUrl: finalUrl, title, thumbnail, formats: [], steps,
       code: "FACEBOOK_MEDIA_NOT_FOUND", retryable: false, version: VERSION,
-      note: "頁面中沒有找到公開 HD／SD 媒體網址。影片可能需要登入、不是公開內容，或 Facebook 已調整頁面資料格式。"
+      note: storyMode
+        ? "限時動態頁面已載入，但沒有找到可下載的影片媒體。內容可能是圖片、已過期，或目前登入帳戶沒有觀看權限。"
+        : "頁面中沒有找到公開 HD／SD 媒體網址。影片可能需要登入、不是公開內容，或 Facebook 已調整頁面資料格式。"
     });
   }
 
-  return json({ platform: "facebook", id, canonicalUrl: finalUrl, source: "FACEBOOK", version: VERSION, code: "OK", title, thumbnail, lengthSeconds: "", formats, steps, note: "" });
+  return json({ platform: "facebook", contentType: storyMode ? "story" : "video", id, canonicalUrl: finalUrl, source: "FACEBOOK", version: VERSION, code: "OK", title, thumbnail, lengthSeconds: "", formats, steps, note: "" });
 }
 
 async function facebookMedia(request, target, env) {
@@ -769,7 +933,7 @@ async function facebookMedia(request, target, env) {
     "Accept": "*/*",
     "Accept-Encoding": "identity"
   });
-  const cookie = String(env && env.FB_COOKIE || "").trim();
+  const cookie = requestFacebookCookie(request, env);
   if (cookie) headers.set("Cookie", cookie);
   const range = request.headers.get("Range");
   if (range) headers.set("Range", range);
@@ -906,10 +1070,10 @@ export default {
     const url = new URL(request.url);
     try {
       if (url.pathname === "/youtube" && request.method === "GET") return await youtube(url.searchParams.get("id"), url.searchParams.get("mode") === "hq" ? "hq" : "quick");
-      if (url.pathname === "/facebook" && request.method === "GET") return await facebookResolve(url.searchParams.get("url"), env);
+      if (url.pathname === "/facebook" && request.method === "GET") return await facebookResolve(url.searchParams.get("url"), env, request);
       if (url.pathname === "/facebook-media" && ["GET", "HEAD"].includes(request.method)) return await facebookMedia(request, url.searchParams.get("url"), env);
       if (url.pathname === "/media" && ["GET", "HEAD"].includes(request.method)) return await media(request, url.searchParams.get("url"), url.searchParams.get("id"), url.searchParams.get("itag"), url.searchParams.get("source"));
-      return json({ service: SERVICE, version: VERSION, architecture: "GitHub Pages + Cloudflare Worker Free", facebookSession: Boolean(env && env.FB_COOKIE), endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
+      return json({ service: SERVICE, version: VERSION, architecture: "GitHub Pages + Cloudflare Worker Free", facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, webCookieInput: true, endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
     } catch (error) {
       return json({ error: error.message || "Worker 執行失敗", code: "WORKER_INTERNAL_ERROR", version: VERSION }, 500);
     }
