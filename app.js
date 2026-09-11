@@ -1,6 +1,6 @@
 "use strict";
 const $ = id => document.getElementById(id);
-const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, busy: false, videoId: "", baseReady: false, platform: "youtube" };
+const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "" };
 const MAX_BROWSER_WORK_BYTES = 700 * 1024 * 1024;
 
 function log(message) {
@@ -43,6 +43,43 @@ function detectPlatform(value) {
   } catch { return ""; }
 }
 
+function fbRequestHeaders() {
+  const headers = { "Cache-Control": "no-cache" };
+  if (state.fbCookie) headers["X-FB-Session"] = state.fbCookie;
+  return headers;
+}
+function setFbSessionUi(applied, message = "") {
+  const badge = $("fbSessionBadge");
+  badge.textContent = applied ? "此分頁已套用" : "未套用";
+  badge.className = `session-badge ${applied ? "on" : "off"}`;
+  document.querySelector(".session-card").classList.toggle("applied", applied);
+  if (message) $("fbSessionHelp").textContent = message;
+}
+function normalizeCookieInput(value) {
+  return String(value || "").trim().replace(/^cookie\s*:\s*/i, "").replace(/^['"]|['"]$/g, "").trim();
+}
+function applyFbCookie() {
+  const value = normalizeCookieInput($("fbCookie").value);
+  if (!value || !/(?:^|;\s*)c_user=/.test(value) || !/(?:^|;\s*)xs=/.test(value)) {
+    setFbSessionUi(false, "格式不完整，至少需要 c_user 與 xs。Cookie 不會保存至瀏覽器儲存空間。");
+    status("FB_COOKIE 格式不完整，請確認包含 c_user 與 xs。", "error");
+    return;
+  }
+  state.fbCookie = value;
+  $("fbCookie").value = "";
+  setFbSessionUi(true, "已套用至目前分頁。重新整理或關閉分頁後自動清除；執行紀錄不會顯示 Cookie。 ");
+  status("Facebook 登入工作階段已套用至目前分頁。", "success");
+  log("Facebook 登入工作階段已套用至目前分頁（內容已隱藏）。");
+}
+function clearFbCookie() {
+  state.fbCookie = "";
+  $("fbCookie").value = "";
+  $("fbCookie").type = "password";
+  $("toggleFbCookie").textContent = "顯示";
+  setFbSessionUi(false, "Cookie 已從目前分頁記憶體清除，不會影響 Cloudflare Secret。 ");
+  status("Facebook 登入工作階段已從目前分頁清除。", "idle");
+  log("Facebook 登入工作階段已從目前分頁清除。");
+}
 function endpoint(path, params = {}) {
   const base = $("worker").value.trim().replace(/\/$/, "");
   if (!base) throw Error("請先在進階設定輸入 Cloudflare Worker 網址。");
@@ -160,7 +197,7 @@ async function searchHighQuality(id) {
 
 async function analyzeFacebook(url) {
   log("已辨識平台：Facebook，開始解析公開影片頁面。");
-  const response = await fetch(endpoint("/facebook", { url }), { cache: "no-store" });
+  const response = await fetch(endpoint("/facebook", { url }), { cache: "no-store", headers: fbRequestHeaders() });
   const data = await response.json().catch(() => ({}));
   if (Array.isArray(data.steps)) data.steps.forEach(log);
   if (!response.ok) throw Error(data.error || `Worker 回傳 HTTP ${response.status}。`);
@@ -233,7 +270,7 @@ async function fetchMedia(format, label, from, to) {
         source: format.source || "ANDROID",
         ext: format.container || "bin"
       });
-  const response = await fetch(mediaEndpoint, { cache: "no-store" });
+  const response = await fetch(mediaEndpoint, { cache: "no-store", headers: state.platform === "facebook" ? fbRequestHeaders() : undefined });
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
     if (Array.isArray(detail.steps)) detail.steps.forEach(log);
@@ -327,5 +364,13 @@ $("clearLog").onclick = () => $("log").textContent = "尚未執行。";
 $("videoFormat").onchange = updateButton;
 $("audioFormat").onchange = updateButton;
 $("directFormat").onchange = updateButton;
+$("applyFbCookie").onclick = applyFbCookie;
+$("clearFbCookie").onclick = clearFbCookie;
+$("toggleFbCookie").onclick = () => {
+  const input = $("fbCookie");
+  input.type = input.type === "password" ? "text" : "password";
+  $("toggleFbCookie").textContent = input.type === "password" ? "顯示" : "隱藏";
+};
+$("fbCookie").onkeydown = event => { if (event.key === "Enter") applyFbCookie(); };
 document.querySelectorAll(".mode").forEach(button => button.onclick = () => setMode(button.dataset.mode));
 $("worker").value = localStorage.getItem("workerUrl") || "";
