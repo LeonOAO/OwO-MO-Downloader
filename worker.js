@@ -1,4 +1,4 @@
-const VERSION = "2026.09.11-A3.3.10-Platform-Pills";
+const VERSION = "2026.09.11-A3.3.12-Instagram-GraphQL";
 const SERVICE = "OwO MO Downloader Worker A3 Rolling";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -1126,6 +1126,130 @@ async function fetchSocialPage(url, platform, cookie = "") {
   return fetch(url, { headers, redirect: "follow", cache: "no-store" });
 }
 
+
+function instagramShortcode(url) {
+  return (url.pathname.match(/^\/(?:reel|p|tv)\/([^/?#]+)/i) || [])[1] || "";
+}
+
+function instagramCsrfFromPage(html, response, cookie = "") {
+  const cookieMatch = String(cookie).match(/(?:^|;\s*)csrftoken=([^;]+)/i);
+  if (cookieMatch) return decodeURIComponent(cookieMatch[1]);
+  const htmlPatterns = [
+    /"csrf_token"\s*:\s*"([^"]+)"/i,
+    /"csrfToken"\s*:\s*"([^"]+)"/i,
+    /csrftoken=([^;"'\\]+)/i
+  ];
+  for (const pattern of htmlPatterns) {
+    const found = html.match(pattern);
+    if (found) return decodeSocialMediaUrl(found[1]);
+  }
+  const setCookie = response && response.headers ? String(response.headers.get("set-cookie") || "") : "";
+  const headerMatch = setCookie.match(/csrftoken=([^;]+)/i);
+  return headerMatch ? decodeURIComponent(headerMatch[1]) : "";
+}
+
+function instagramMediaFromApi(value) {
+  const candidates = [];
+  const images = [];
+  const visited = new Set();
+  const queue = [value];
+  const addVideo = (url, width = 0, height = 0) => {
+    const decoded = decodeSocialMediaUrl(url);
+    if (!/^https:\/\//i.test(decoded) || !/(?:cdninstagram|fbcdn)/i.test(decoded)) return;
+    candidates.push({
+      url: decoded,
+      quality: height ? `${height}p` : width ? `${width}px` : "原始畫質",
+      kind: "影音合一",
+      mimeType: "video/mp4",
+      bitrate: Number(width || 0) * Number(height || 0)
+    });
+  };
+  while (queue.length) {
+    const item = queue.shift();
+    if (!item || typeof item !== "object" || visited.has(item)) continue;
+    visited.add(item);
+    if (typeof item.video_url === "string") addVideo(item.video_url, item.original_width || item.width, item.original_height || item.height);
+    if (typeof item.videoUrl === "string") addVideo(item.videoUrl, item.width, item.height);
+    if (typeof item.contentUrl === "string" && /(?:\.mp4|cdninstagram|fbcdn)/i.test(item.contentUrl)) addVideo(item.contentUrl, item.width, item.height);
+    if (Array.isArray(item.video_versions)) {
+      for (const version of item.video_versions) addVideo(version && version.url, version && version.width, version && version.height);
+    }
+    const imageUrl = item.image_versions2 && item.image_versions2.candidates && item.image_versions2.candidates[0] && item.image_versions2.candidates[0].url;
+    if (imageUrl) images.push(decodeSocialMediaUrl(imageUrl));
+    for (const child of Object.values(item)) {
+      if (child && typeof child === "object") queue.push(...(Array.isArray(child) ? child : [child]));
+    }
+  }
+  const unique = new Map();
+  for (const candidate of candidates) {
+    const key = socialMediaKey(candidate.url);
+    const old = unique.get(key);
+    if (!old || candidate.bitrate > old.bitrate) unique.set(key, candidate);
+  }
+  return { media: [...unique.values()], images: [...new Set(images)] };
+}
+
+async function fetchInstagramGraphql(url, pageHtml, pageResponse, cookie, steps) {
+  const shortcode = instagramShortcode(url);
+  if (!shortcode) return { media: [], images: [] };
+  const csrf = instagramCsrfFromPage(pageHtml, pageResponse, cookie);
+  const variables = {
+    shortcode,
+    fetch_tagged_user_count: null,
+    hoisted_comment_id: null,
+    hoisted_reply_id: null,
+    __relay_internal__pv__PolarisAIGMMediaWebLabelEnabledrelayprovider: false,
+    __relay_internal__pv__PolarisIsLoggedInrelayprovider: Boolean(cookie)
+  };
+  const body = new URLSearchParams({
+    av: "0",
+    __d: "www",
+    __user: "0",
+    __a: "1",
+    __req: "1",
+    __comet_req: "7",
+    fb_api_caller_class: "RelayModern",
+    fb_api_req_friendly_name: "PolarisPostRootQuery",
+    variables: JSON.stringify(variables),
+    server_timestamps: "true",
+    doc_id: "27128499623469141"
+  });
+  const headers = new Headers({
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1",
+    "Accept": "*/*",
+    "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.7",
+    "Content-Type": "application/x-www-form-urlencoded",
+    "Origin": "https://www.instagram.com",
+    "Referer": url.href,
+    "X-IG-App-ID": "936619743392459",
+    "X-FB-Friendly-Name": "PolarisPostRootQuery",
+    "X-ASBD-ID": "129477"
+  });
+  if (csrf) headers.set("X-CSRFToken", csrf);
+  const combinedCookie = [cookie, csrf && !/(?:^|;\s*)csrftoken=/i.test(cookie || "") ? `csrftoken=${csrf}` : ""].filter(Boolean).join("; ");
+  if (combinedCookie) headers.set("Cookie", combinedCookie);
+  try {
+    const response = await fetch("https://www.instagram.com/graphql/query", {
+      method: "POST",
+      headers,
+      body,
+      redirect: "follow",
+      cache: "no-store"
+    });
+    const text = await response.text();
+    steps.push(`【INSTAGRAM GRAPHQL】PolarisPostRootQuery 回傳 HTTP ${response.status}，JSON「${text.length}」個字元。`);
+    if (!response.ok) return { media: [], images: [] };
+    let data;
+    try { data = JSON.parse(text); } catch { return { media: [], images: [] }; }
+    const parsed = instagramMediaFromApi(data);
+    steps.push(`【INSTAGRAM GRAPHQL】shortcode ${shortcode} 找到「${parsed.media.length}」個目標影片格式。`);
+    return parsed;
+  } catch (error) {
+    steps.push(`【INSTAGRAM GRAPHQL】請求失敗：${error.message}。`);
+    return { media: [], images: [] };
+  }
+}
+
 async function resolveThreadsShare(url, cookie, steps) {
   for (const host of ["www.threads.com", "www.threads.net"]) {
     try {
@@ -1150,14 +1274,36 @@ async function resolveSocial(value, platform, request, env) {
   const type = socialContentType(url, platform);
   if (type === "unknown") return json({ error: `${platform === "instagram" ? "Instagram" : "Threads"} 網址不是可辨識的貼文、Reel、Story、Highlight 或短網址。`, code: `${label}_UNSUPPORTED_URL`, version: VERSION }, 400);
 
-  const steps = [`【${label}】已辨識${type === "reel" ? " Reels" : type === "story" ? " Stories" : type === "highlight" ? " Highlights" : "貼文"}網址：${url.pathname}`];
+  const steps = [`【${label}】已辨識${type === "reel" ? " Reels" : type === "story" ? " Stories" : type === "highlight" ? " Highlights" : type === "share" ? "分享" : "貼文"}網址：${url.pathname}`];
   const cookie = requestMetaCookie(request, env, platform);
-  if (platform === "threads" && type === "share") url = await resolveThreadsShare(url, "", steps);
+  if (platform === "threads" && type === "share") {
+    url = await resolveThreadsShare(url, "", steps);
+    const validPostPath = /^\/@[^/]+\/post\/[^/?#]+/i.test(url.pathname) || /^\/t\/[^/?#]+/i.test(url.pathname);
+    if (!validPostPath) {
+      steps.push("【THREADS】分享網址未解析成有效貼文，停止掃描首頁或錯誤頁面的背景媒體。");
+      return json({
+        platform, contentType: "share", canonicalUrl: "", formats: [], steps, version: VERSION,
+        code: "THREADS_SHARE_INVALID",
+        error: "Threads 分享網址已失效、貼文不存在，或平台未回傳有效的貼文永久網址。"
+      }, 422);
+    }
+  }
   let response = await fetchSocialPage(url, platform, "");
   let finalUrl = new URL(response.url);
   let html = await response.text();
   steps.push(`【${label}】訪客頁面回傳 HTTP ${response.status}，HTML「${html.length}」個字元。`);
+  if (platform === "threads") {
+    const validFinalPath = /^\/@[^/]+\/post\/[^/?#]+/i.test(finalUrl.pathname) || /^\/t\/[^/?#]+/i.test(finalUrl.pathname);
+    if (!validFinalPath || finalUrl.searchParams.get("error") === "invalid_post") {
+      steps.push("【THREADS】最終頁面不是有效貼文，停止掃描背景媒體。");
+      return json({ platform, contentType: type, canonicalUrl: "", formats: [], steps, version: VERSION, code: "THREADS_INVALID_POST", error: "Threads 貼文不存在、已失效，或分享網址沒有對應到有效貼文。" }, 422);
+    }
+  }
   let parsed = collectMetaSocialMedia(html, platform);
+  if (platform === "instagram" && ["reel", "post"].includes(type) && !parsed.media.length) {
+    steps.push("【INSTAGRAM】靜態 HTML 沒有目標影片，改用目前網頁使用的 shortcode GraphQL 查詢。");
+    parsed = await fetchInstagramGraphql(url, html, response, "", steps);
+  }
 
   const loginRequiredType = type === "story" || type === "highlight";
   if ((!response.ok || socialLoginPage(finalUrl, html, platform) || !parsed.media.length) && cookie) {
@@ -1167,6 +1313,9 @@ async function resolveSocial(value, platform, request, env) {
     html = await response.text();
     steps.push(`【${label}】登入工作階段頁面回傳 HTTP ${response.status}，HTML「${html.length}」個字元。`);
     parsed = collectMetaSocialMedia(html, platform);
+    if (platform === "instagram" && ["reel", "post"].includes(type) && !parsed.media.length) {
+      parsed = await fetchInstagramGraphql(url, html, response, cookie, steps);
+    }
   }
 
   if (!parsed.media.length) {
