@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#eef3ff">
   <meta name="color-scheme" content="light">
-  <title>OwO MO Downloader A3.2.13 Mobile UI Fix</title>
+  <title>OwO MO Downloader A3.3.0 IG + Threads</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -20,12 +20,12 @@
         </span>
         <span>OwO MO Downloader</span>
       </a>
-      <span class="version">A3.2.13 Mobile UI Fix</span>
+      <span class="version">A3.3.0 IG + Threads</span>
     </nav>
 
     <section class="hero">
       <span class="eyebrow"><span class="eyebrow-dot"></span> GitHub Pages + Cloudflare Worker</span>
-      <h1>YouTube／Facebook<br><span>影音下載工具</span></h1>
+      <h1>YouTube／Meta<br><span>影音下載工具</span></h1>
       <p>支援公開影片、Reels、Stories 與高畫質影音合併。影片在瀏覽器內處理，介面更清楚、操作更直覺。</p>
       <div class="hero-pills" aria-label="主要特色">
         <span>高畫質合併</span><span>Stories 支援</span><span>分頁 Cookie</span>
@@ -35,7 +35,7 @@
     <section class="panel input-panel">
       <div class="step-title">
         <span class="step-number">1</span>
-        <div><h2>貼上影片網址</h2><p>支援 YouTube 影片、Shorts，以及 Facebook 公開影片、Reels、Stories、fb.watch</p></div>
+        <div><h2>貼上影片網址</h2><p>支援 YouTube 影片、Shorts，以及 Facebook、Instagram、Threads 的影片、Reels、Stories、Highlights 與分享網址</p></div>
       </div>
 
       <div class="url-box">
@@ -69,6 +69,21 @@
               <button id="clearFbCookie" type="button" class="soft-button clear-button"><span>×</span>清除</button>
             </div>
             <small id="fbSessionHelp">Cookie 僅暫存在目前分頁記憶體，重新整理或關閉分頁後會清除，不會寫入網址、localStorage 或執行紀錄。</small>
+          </div>
+          <div class="session-card ig-session-card">
+            <div class="session-heading"><div><b>Instagram 登入工作階段</b><small>供 Stories、Highlights 或登入限定內容使用</small></div><span id="igSessionBadge" class="session-badge off">未套用</span></div>
+            <label for="igCookie">IG_COOKIE</label>
+            <div class="secret-input-row"><input id="igCookie" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上 sessionid=...; csrftoken=...;"><button id="toggleIgCookie" type="button" class="soft-button icon-button"><span>顯示</span></button></div>
+            <div class="session-actions"><button id="applyIgCookie" type="button" class="soft-button apply-button"><span>✓</span>套用至此分頁</button><button id="clearIgCookie" type="button" class="soft-button clear-button"><span>×</span>清除</button></div>
+            <small id="igSessionHelp">Cookie 僅暫存在目前分頁記憶體，不會寫入瀏覽器儲存空間。</small>
+          </div>
+
+          <div class="session-card th-session-card">
+            <div class="session-heading"><div><b>Threads 登入工作階段</b><small>公開貼文優先匿名解析，也可使用 Threads 或 Instagram 工作階段備援</small></div><span id="thSessionBadge" class="session-badge off">未套用</span></div>
+            <label for="thCookie">TH_COOKIE</label>
+            <div class="secret-input-row"><input id="thCookie" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上 Threads Cookie Header String"><button id="toggleThCookie" type="button" class="soft-button icon-button"><span>顯示</span></button></div>
+            <div class="session-actions"><button id="applyThCookie" type="button" class="soft-button apply-button"><span>✓</span>套用至此分頁</button><button id="clearThCookie" type="button" class="soft-button clear-button"><span>×</span>清除</button></div>
+            <small id="thSessionHelp">未填 TH_COOKIE 時，Worker 可使用本分頁的 IG_COOKIE 作為備援。</small>
           </div>
         </div>
       </details>
