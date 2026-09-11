@@ -2,57 +2,98 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#f6f8fd">
-  <title>OwO MO Downloader A3.2.8 FB Web Cookie</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#eef3ff">
+  <meta name="color-scheme" content="light">
+  <title>OwO MO Downloader A3.2.11 Polished UI</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <div class="orb orb-one"></div><div class="orb orb-two"></div>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
   <main class="page">
-    <nav class="nav"><a class="brand" href="#"><span class="logo">▶</span><span>OwO MO Downloader</span></a><span class="version">A3.2.8 FB Web Cookie · 2026-09-11</span></nav>
-    <section class="hero"><span class="eyebrow">GitHub Pages + Cloudflare Worker + ffmpeg.wasm</span><h1>YouTube／Facebook 影音下載</h1><p>取得分離式高畫質視訊與音訊，並直接在瀏覽器內合併為 MP4。原始檔不會上傳至其他合併伺服器。</p></section>
+    <nav class="nav" aria-label="主要導覽">
+      <a class="brand" href="#" aria-label="回到頁首">
+        <span class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M8 5.8v12.4L18.5 12 8 5.8Z"/></svg>
+        </span>
+        <span>OwO MO Downloader</span>
+      </a>
+      <span class="version">A3.2.11 Polished UI</span>
+    </nav>
 
-    <section class="panel">
-      <div class="step-title"><span>1</span><div><h2>貼上影片網址</h2><p>支援 YouTube 影片、Shorts，以及 Facebook 公開影片、Reels、Stories、fb.watch</p></div></div>
-      <div class="url-box"><span class="yt">▶</span><input id="youtubeUrl" type="url" autocomplete="off" placeholder="貼上 YouTube 或 Facebook 網址…"><button id="analyze"><span>解析影片</span><b>→</b></button></div>
+    <section class="hero">
+      <span class="eyebrow"><span class="eyebrow-dot"></span> GitHub Pages + Cloudflare Worker</span>
+      <h1>YouTube／Facebook<br><span>影音下載工具</span></h1>
+      <p>支援公開影片、Reels、Stories 與高畫質影音合併。影片在瀏覽器內處理，介面更清楚、操作更直覺。</p>
+      <div class="hero-pills" aria-label="主要特色">
+        <span>高畫質合併</span><span>Stories 支援</span><span>分頁 Cookie</span>
+      </div>
+    </section>
+
+    <section class="panel input-panel">
+      <div class="step-title">
+        <span class="step-number">1</span>
+        <div><h2>貼上影片網址</h2><p>支援 YouTube 影片、Shorts，以及 Facebook 公開影片、Reels、Stories、fb.watch</p></div>
+      </div>
+
+      <div class="url-box">
+        <span class="input-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10.6 13.4a1 1 0 0 0 1.4 1.4l5-5a3 3 0 1 0-4.2-4.2l-2 2a1 1 0 1 0 1.4 1.4l2-2a1 1 0 1 1 1.4 1.4l-5 5Zm2.8-2.8a1 1 0 0 0-1.4-1.4l-5 5a3 3 0 1 0 4.2 4.2l2-2a1 1 0 1 0-1.4-1.4l-2 2a1 1 0 1 1-1.4-1.4l5-5Z"/></svg></span>
+        <input id="youtubeUrl" type="url" autocomplete="off" inputmode="url" placeholder="貼上 YouTube 或 Facebook 網址…">
+        <button id="analyze" class="action-button analyze-button" type="button">
+          <span>解析影片</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+        </button>
+      </div>
+
       <details class="advanced">
-        <summary>進階設定</summary>
-        <label for="worker">Cloudflare Worker 網址</label>
-        <input id="worker" type="url" placeholder="https://your-worker.workers.dev">
-        <small>Worker 網址只保存在這台裝置的 localStorage。</small>
+        <summary><span class="summary-icon">⚙</span><span>進階設定</span><span class="summary-chevron">⌄</span></summary>
+        <div class="advanced-content">
+          <label for="worker">Cloudflare Worker 網址</label>
+          <input id="worker" type="url" placeholder="https://your-worker.workers.dev">
+          <small>Worker 網址只保存在這台裝置的 localStorage。</small>
 
-        <div class="session-card">
-          <div class="session-heading">
-            <div>
-              <b>Facebook 登入工作階段</b>
-              <small>供 Facebook Stories 或登入限定影片使用</small>
+          <div class="session-card">
+            <div class="session-heading">
+              <div><b>Facebook 登入工作階段</b><small>供 Facebook Stories 或登入限定影片使用</small></div>
+              <span id="fbSessionBadge" class="session-badge off">未套用</span>
             </div>
-            <span id="fbSessionBadge" class="session-badge off">未套用</span>
+            <label for="fbCookie">FB_COOKIE</label>
+            <div class="secret-input-row">
+              <input id="fbCookie" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上 c_user=...; xs=...; datr=...;">
+              <button id="toggleFbCookie" type="button" class="soft-button icon-button"><span>顯示</span></button>
+            </div>
+            <div class="session-actions">
+              <button id="applyFbCookie" type="button" class="soft-button apply-button"><span>✓</span>套用至此分頁</button>
+              <button id="clearFbCookie" type="button" class="soft-button clear-button"><span>×</span>清除</button>
+            </div>
+            <small id="fbSessionHelp">Cookie 僅暫存在目前分頁記憶體，重新整理或關閉分頁後會清除，不會寫入網址、localStorage 或執行紀錄。</small>
           </div>
-          <label for="fbCookie">FB_COOKIE</label>
-          <div class="secret-input-row">
-            <input id="fbCookie" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上 c_user=...; xs=...; datr=...;">
-            <button id="toggleFbCookie" type="button" class="secondary">顯示</button>
-          </div>
-          <div class="session-actions">
-            <button id="applyFbCookie" type="button" class="secondary strong">套用至此分頁</button>
-            <button id="clearFbCookie" type="button" class="secondary danger">清除</button>
-          </div>
-          <small id="fbSessionHelp">Cookie 僅暫存在目前分頁記憶體，重新整理或關閉分頁後會清除，不會寫入網址、localStorage 或執行紀錄。</small>
         </div>
       </details>
     </section>
 
-    <div id="status" class="status idle"><span class="dot"></span><span>等待貼上影片網址。</span></div>
+    <div id="status" class="status idle" role="status" aria-live="polite"><span class="dot"></span><span>等待貼上影片網址。</span></div>
 
-    <section id="videoInfo" class="panel video-panel hidden"><img id="thumbnail" alt="影片縮圖"><div><span class="tag">解析完成</span><h2 id="title"></h2><p id="meta"></p></div></section>
+    <section id="videoInfo" class="panel video-panel hidden">
+      <div class="thumbnail-wrap"><img id="thumbnail" alt="影片縮圖"><span class="thumbnail-badge">解析完成</span></div>
+      <div class="video-copy"><span class="tag">可下載</span><h2 id="title"></h2><p id="meta"></p></div>
+    </section>
 
     <section id="downloadPanel" class="panel hidden">
-      <div class="step-title"><span>2</span><div><h2>選擇下載方式</h2><p>高畫質模式會下載分離視訊與音訊，再於本機瀏覽器合併</p></div></div>
+      <div class="step-title">
+        <span class="step-number">2</span>
+        <div><h2>選擇下載方式</h2><p>依取得的格式直接下載，或於瀏覽器內合併高畫質視訊與音訊</p></div>
+      </div>
+
       <div class="mode-switch">
-        <button class="mode active" data-mode="hq"><span>✦</span><div><b>高畫質合併</b><small>最高可用畫質 + 音訊</small></div><i>✓</i></button>
-        <button class="mode" data-mode="direct"><span>↓</span><div><b>直接下載</b><small>不合併的影音合一格式</small></div><i>✓</i></button>
+        <button class="mode active" data-mode="hq" type="button">
+          <span class="mode-icon">✦</span><div><b>高畫質合併</b><small>最高可用畫質 + 音訊</small></div><i>✓</i>
+        </button>
+        <button class="mode" data-mode="direct" type="button">
+          <span class="mode-icon">↓</span><div><b>直接下載</b><small>不合併的影音合一格式</small></div><i>✓</i>
+        </button>
       </div>
 
       <div id="hqOptions" class="option-grid">
@@ -62,13 +103,27 @@
       <div id="directOptions" class="hidden"><label for="directFormat">影音合一格式</label><div class="select-wrap"><select id="directFormat"></select></div></div>
 
       <div id="formatNote" class="note"></div>
-      <div id="progressBox" class="progress-box hidden"><div class="progress-head"><span id="progressText">準備中…</span><strong id="progressValue">0%</strong></div><div class="progress-track"><span id="progressBar"></span></div></div>
-      <button id="download" class="primary"><span>下載並合併 MP4</span><b>↓</b></button>
+      <div id="progressBox" class="progress-box hidden">
+        <div class="progress-head"><span id="progressText">準備中…</span><strong id="progressValue">0%</strong></div>
+        <div class="progress-track"><span id="progressBar"></span></div>
+      </div>
+      <button id="download" class="action-button download-button" type="button">
+        <span>下載並合併 MP4</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg>
+      </button>
     </section>
 
-    <section class="panel log-panel"><details open><summary>執行紀錄</summary><div class="log-head"><span>解析、下載與合併記錄</span><button id="clearLog">清除</button></div><pre id="log">尚未執行。</pre></details></section>
+    <section class="panel log-panel">
+      <details open>
+        <summary><span class="summary-icon">≡</span><span>執行紀錄</span><span class="summary-chevron">⌄</span></summary>
+        <div class="log-head"><span>解析、下載與合併記錄</span><button id="clearLog" class="soft-button clear-log" type="button">清除紀錄</button></div>
+        <pre id="log">尚未執行。</pre>
+      </details>
+    </section>
+
     <footer><strong>OwO MO Downloader</strong><span>請只保存你有權下載的內容</span></footer>
   </main>
+
   <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.js"></script>
   <script src="https://unpkg.com/@ffmpeg/util@0.12.2/dist/umd/index.js"></script>
   <script src="app.js"></script>
