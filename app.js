@@ -135,6 +135,7 @@ async function analyzeSocial(url, platform) {
   state.videoId = data.id || platform;
   state.baseReady = true;
   applyVideoData(data, state.videoId);
+  setMode(lists().videoOnly.length && lists().audioOnly.length ? "hq" : "direct");
   status(`${label} 解析完成，共取得「${state.formats.length}」個影片格式。`, "success");
 }
 function endpoint(path, params = {}) {
@@ -238,8 +239,6 @@ function explicitMediaIdentity(format) {
   } catch {}
   return "";
 }
-
-// 強化社群平台 kind 容錯邏輯（非僅視訊/僅音訊一律預設為影音合一）
 function normalizedKind(format) {
   const kind = String(format?.kind || "").trim().toLowerCase();
   if (["僅視訊", "video_only", "video-only"].includes(kind)) return "僅視訊";
@@ -327,11 +326,10 @@ function mediaFileStem(format) {
   return `${safeFileToken(state.platform)}${index}-${safeFileToken(format.quality, "original")}`;
 }
 
-// 顯示面板並更新格式選單
 function applyVideoData(data, id) {
   const details = data || {};
   $("videoInfo").classList.remove("hidden");
-  $("downloadPanel").classList.remove("hidden"); // 確保下載區開啟
+  $("downloadPanel").classList.remove("hidden"); 
   $("title").textContent = details.title || `${state.platform} 影片`;
   $("thumbnail").src = details.thumbnail || "";
   $("thumbnail").alt = details.title ? `${details.title} 縮圖` : "影片縮圖";
@@ -339,32 +337,109 @@ function applyVideoData(data, id) {
   $("meta").textContent = `影片 ID：${id || "未知"} · 來源：${String(details.source || state.platform).toUpperCase()} · 可用格式：${state.formats.length} 個${length}`;
   populate();
 }
+
+// ============== 核心修改：YouTube 解析與 Cobalt 備援 ==============
 async function analyzeYoutube(id) {
   log(`開始解析影片 ID：${id}`);
-  const quickResponse = await fetch(endpoint("/youtube", { id, mode: "quick" }), { cache: "no-store" });
-  const quick = await quickResponse.json().catch(() => ({}));
-  if (Array.isArray(quick.steps)) quick.steps.forEach(log);
-  if (!quickResponse.ok) throw Error(quick.error || quick.note || `Worker 回傳 HTTP ${quickResponse.status}。`);
-  state.formats = mergeFormats([], Array.isArray(quick.formats) ? quick.formats : []);
-  let finalData = quick;
-  if (!state.formats.length || state.mode === "hq") {
-    log("【高畫質搜尋】正在蒐集分離視訊、音訊、Codec 與 HLS 備援資訊。");
-    const hqResponse = await fetch(endpoint("/youtube", { id, mode: "hq" }), { cache: "no-store" });
-    const hq = await hqResponse.json().catch(() => ({}));
-    if (Array.isArray(hq.steps)) hq.steps.forEach(log);
-    if (hqResponse.ok) {
-      state.formats = mergeFormats(state.formats, Array.isArray(hq.formats) ? hq.formats : []);
-      finalData = { ...quick, ...hq, title: hq.title || quick.title, thumbnail: hq.thumbnail || quick.thumbnail };
-    } else if (!state.formats.length) {
-      throw Error(hq.error || hq.note || `高畫質搜尋回傳 HTTP ${hqResponse.status}。`);
+  
+  try {
+    // 階段 1：嘗試呼叫原版的 Cloudflare Worker 進行解析
+    const quickResponse = await fetch(endpoint("/youtube", { id, mode: "quick" }), { cache: "no-store" });
+    const quick = await quickResponse.json().catch(() => ({}));
+    if (Array.isArray(quick.steps)) quick.steps.forEach(log);
+    if (!quickResponse.ok) throw Error(quick.error || quick.note || `Worker 回傳 HTTP ${quickResponse.status}。`);
+    state.formats = mergeFormats([], Array.isArray(quick.formats) ? quick.formats : []);
+    let finalData = quick;
+    
+    if (!state.formats.length || state.mode === "hq") {
+      log("【高畫質搜尋】正在蒐集分離視訊、音訊、Codec 與 HLS 備援資訊。");
+      const hqResponse = await fetch(endpoint("/youtube", { id, mode: "hq" }), { cache: "no-store" });
+      const hq = await hqResponse.json().catch(() => ({}));
+      if (Array.isArray(hq.steps)) hq.steps.forEach(log);
+      if (hqResponse.ok) {
+        state.formats = mergeFormats(state.formats, Array.isArray(hq.formats) ? hq.formats : []);
+        finalData = { ...quick, ...hq, title: hq.title || quick.title, thumbnail: hq.thumbnail || quick.thumbnail };
+      } else if (!state.formats.length) {
+        throw Error(hq.error || hq.note || `高畫質搜尋回傳 HTTP ${hqResponse.status}。`);
+      }
+    }
+    
+    if (!state.formats.length) throw Error(finalData.note || finalData.error || "目前沒有取得可下載的 YouTube 格式。");
+    
+    state.videoId = id;
+    state.baseReady = true;
+    applyVideoData(finalData, id);
+    setMode(lists().videoOnly.length && lists().audioOnly.length ? "hq" : "direct");
+    status(`YouTube 解析完成，共取得「${state.formats.length}」個格式。`, "success");
+
+  } catch (err) {
+    // 階段 2：若 Worker 失敗（被阻擋或要求登入），啟動 Cobalt 備援機制
+    log(`【原版 Worker 解析失敗】${err.message}`);
+    log("【自動備援】啟動無伺服器備援機制，切換至 Cobalt API 進行解析...");
+    status("原伺服器受限，自動切換至備援解析...", "working");
+
+    try {
+      const videoUrl = `https://www.youtube.com/watch?v=${id}`;
+      const cobaltResponse = await fetch("https://api.cobalt.tools/", {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          url: videoUrl,
+          videoQuality: "1080", // 向 Cobalt 請求 1080p
+          filenamePattern: "classic"
+        })
+      });
+
+      if (!cobaltResponse.ok) {
+        throw Error(`Cobalt 伺服器回傳 HTTP ${cobaltResponse.status}`);
+      }
+      
+      const cobaltData = await cobaltResponse.json();
+      if (cobaltData.status === "error") {
+        throw Error(cobaltData.text || "Cobalt 解析回傳錯誤");
+      }
+
+      const targetUrl = cobaltData.url;
+      if (!targetUrl) throw Error("Cobalt API 未返回有效的下載網址。");
+
+      // 將 Cobalt 返回的網址偽裝成既有的格式結構，供下載區使用
+      state.formats = [{
+        itag: "cobalt",
+        quality: "最高可用畫質 (Cobalt)",
+        kind: "影音合一",
+        container: "mp4",
+        mimeType: "video/mp4",
+        codec: "未知",
+        bitrate: 0, 
+        contentLength: 0,
+        source: "COBALT", // 給予特殊來源標記，稍後攔截
+        url: targetUrl
+      }];
+      
+      state.videoId = id;
+      state.baseReady = true;
+      
+      // 填入基本的影片顯示資訊
+      applyVideoData({
+          title: "YouTube 影片 (Cobalt 備援下載)",
+          thumbnail: `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`,
+          source: "COBALT"
+      }, id);
+      
+      setMode("direct"); // Cobalt 預設回傳影音合一檔案，切換到完整影片下載模式
+      status("YouTube 備援解析成功！", "success");
+      log("【自動備援】Cobalt API 解析成功，取得備援影音合一網址。");
+
+    } catch (cobaltErr) {
+      log(`【備援解析失敗】${cobaltErr.message}`);
+      throw Error("原生伺服器與 Cobalt 備援均解析失敗，無法繞過 YouTube 驗證。");
     }
   }
-  if (!state.formats.length) throw Error(finalData.note || finalData.error || "目前沒有取得可下載的 YouTube 格式。");
-  state.videoId = id;
-  state.baseReady = true;
-  applyVideoData(finalData, id);
-  status(`YouTube 解析完成，共取得「${state.formats.length}」個格式。`, "success");
 }
+
 async function analyze() {
   if (state.busy) return;
   const value = $("youtubeUrl").value.trim();
@@ -387,19 +462,33 @@ async function analyze() {
       state.formats = mergeFormats([], Array.isArray(data.formats) ? data.formats : []);
       if (!state.formats.length) throw Error(data.note || "目前沒有取得 Facebook 影片格式。");
       state.videoId = data.id || "facebook"; state.baseReady = true; applyVideoData(data, state.videoId);
+      setMode(lists().videoOnly.length && lists().audioOnly.length ? "hq" : "direct");
       status(`Facebook 解析完成，共取得「${state.formats.length}」個格式。`, "success");
     } else await analyzeSocial(value, platform);
   } catch (error) {
     status(String(error.message || error), "error"); log(`解析失敗：${String(error.message || error)}`);
   } finally { state.busy = false; updateButton(); }
 }
+
+// ============== 核心修改：媒體路由攔截 ==============
 function mediaEndpoint(format, download = false) {
+  // 如果是透過 Cobalt 抓到的網址，直接回傳即可，不要再丟進 Worker 伺服器
+  if (format.source === "COBALT") {
+    return format.url;
+  }
+  
   if (state.platform === "youtube") return endpoint("/media", { id: state.videoId, itag: format.itag, source: format.source || "ANDROID", ext: format.container || "bin", download: download ? "1" : "0" });
   if (state.platform === "facebook") return endpoint("/facebook-media", { url: format.url });
   return endpoint("/social-media", { url: format.url, platform: state.platform });
 }
+
 async function fetchMedia(format, label = "媒體", start = 5, end = 65) {
-  const response = await fetch(mediaEndpoint(format), { cache: "no-store", headers: platformRequestHeaders() });
+  // 對於 Cobalt 的跨域請求，不要帶入特殊的 Headers
+  const requestHeaders = format.source === "COBALT" 
+      ? { "Cache-Control": "no-cache" } 
+      : platformRequestHeaders();
+
+  const response = await fetch(mediaEndpoint(format), { cache: "no-store", headers: requestHeaders });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw Error(data.error || `${label}下載失敗：HTTP ${response.status}。`);
