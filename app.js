@@ -338,22 +338,32 @@ function applyVideoData(data, id) {
   populate();
 }
 
-// ============== 核心修改：YouTube 解析與 Cobalt 備援 ==============
-async function analyzeYoutube(id) {
+// ============== 核心整合：主要 Worker 優先，429 自動切換 Cobalt ==============
+async function analyzeYoutube(id, pageUrl) {
   log(`開始解析影片 ID：${id}`);
-  
+  let useCobalt = false;
+
+  // 1. 嘗試原本的 Worker 模式
   try {
-    // 階段 1：嘗試呼叫原版的 Cloudflare Worker 進行解析
+    status("正在透過主要通道解析 YouTube…", "working");
     const quickResponse = await fetch(endpoint("/youtube", { id, mode: "quick" }), { cache: "no-store" });
+    
+    if (quickResponse.status === 429) {
+      throw Error("HTTP 429 Too Many Requests");
+    }
+
     const quick = await quickResponse.json().catch(() => ({}));
     if (Array.isArray(quick.steps)) quick.steps.forEach(log);
     if (!quickResponse.ok) throw Error(quick.error || quick.note || `Worker 回傳 HTTP ${quickResponse.status}。`);
+    
     state.formats = mergeFormats([], Array.isArray(quick.formats) ? quick.formats : []);
     let finalData = quick;
-    
+
     if (!state.formats.length || state.mode === "hq") {
       log("【高畫質搜尋】正在蒐集分離視訊、音訊、Codec 與 HLS 備援資訊。");
       const hqResponse = await fetch(endpoint("/youtube", { id, mode: "hq" }), { cache: "no-store" });
+      if (hqResponse.status === 429) throw Error("HTTP 429 Too Many Requests");
+      
       const hq = await hqResponse.json().catch(() => ({}));
       if (Array.isArray(hq.steps)) hq.steps.forEach(log);
       if (hqResponse.ok) {
@@ -363,80 +373,75 @@ async function analyzeYoutube(id) {
         throw Error(hq.error || hq.note || `高畫質搜尋回傳 HTTP ${hqResponse.status}。`);
       }
     }
-    
-    if (!state.formats.length) throw Error(finalData.note || finalData.error || "目前沒有取得可下載的 YouTube 格式。");
-    
+
+    if (!state.formats.length) throw Error("目前沒有取得可下載的 YouTube 格式。");
+
     state.videoId = id;
     state.baseReady = true;
     applyVideoData(finalData, id);
     setMode(lists().videoOnly.length && lists().audioOnly.length ? "hq" : "direct");
     status(`YouTube 解析完成，共取得「${state.formats.length}」個格式。`, "success");
+    return;
 
-  } catch (err) {
-    // 階段 2：若 Worker 失敗（被阻擋或要求登入），啟動 Cobalt 備援機制
-    log(`【原版 Worker 解析失敗】${err.message}`);
-    log("【自動備援】啟動無伺服器備援機制，切換至 Cobalt API 進行解析...");
-    status("原伺服器受限，自動切換至備援解析...", "working");
-
-    try {
-      const videoUrl = `https://www.youtube.com/watch?v=${id}`;
-      const cobaltResponse = await fetch("https://api.cobalt.tools/", {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          url: videoUrl,
-          videoQuality: "1080", // 向 Cobalt 請求 1080p
-          filenamePattern: "classic"
-        })
-      });
-
-      if (!cobaltResponse.ok) {
-        throw Error(`Cobalt 伺服器回傳 HTTP ${cobaltResponse.status}`);
-      }
-      
-      const cobaltData = await cobaltResponse.json();
-      if (cobaltData.status === "error") {
-        throw Error(cobaltData.text || "Cobalt 解析回傳錯誤");
-      }
-
-      const targetUrl = cobaltData.url;
-      if (!targetUrl) throw Error("Cobalt API 未返回有效的下載網址。");
-
-      // 將 Cobalt 返回的網址偽裝成既有的格式結構，供下載區使用
-      state.formats = [{
-        itag: "cobalt",
-        quality: "最高可用畫質 (Cobalt)",
-        kind: "影音合一",
-        container: "mp4",
-        mimeType: "video/mp4",
-        codec: "未知",
-        bitrate: 0, 
-        contentLength: 0,
-        source: "COBALT", // 給予特殊來源標記，稍後攔截
-        url: targetUrl
-      }];
-      
-      state.videoId = id;
-      state.baseReady = true;
-      
-      // 填入基本的影片顯示資訊
-      applyVideoData({
-          title: "YouTube 影片 (Cobalt 備援下載)",
-          thumbnail: `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`,
-          source: "COBALT"
-      }, id);
-      
-      setMode("direct"); // Cobalt 預設回傳影音合一檔案，切換到完整影片下載模式
-      status("YouTube 備援解析成功！", "success");
-      log("【自動備援】Cobalt API 解析成功，取得備援影音合一網址。");
-
-    } catch (cobaltErr) {
-      log(`【備援解析失敗】${cobaltErr.message}`);
-      throw Error("原生伺服器與 Cobalt 備援均解析失敗，無法繞過 YouTube 驗證。");
+  } catch (workerErr) {
+    if (workerErr.message.includes("429") || workerErr.message.includes("LOGIN_REQUIRED") || workerErr.message.includes("Worker")) {
+      log(`【主要通道受限】${workerErr.message}，自動切換至 Cobalt API 備援...`);
+      useCobalt = true;
+    } else {
+      throw workerErr;
     }
+  }
+
+  // 2. 觸發 Cobalt API 備援處理
+  if (useCobalt) {
+    status("主要通道受限，正在透過 Cobalt 備援解析…", "working");
+    
+    const cobaltResponse = await fetch("https://api.cobalt.tools/", {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        url: pageUrl,
+        videoQuality: "1080",
+        filenamePattern: "classic"
+      })
+    });
+
+    if (!cobaltResponse.ok) throw Error(`Cobalt 備援通道回傳 HTTP ${cobaltResponse.status}`);
+    
+    const cobaltData = await cobaltResponse.json();
+    if (cobaltData.status === "error") throw Error(cobaltData.text || "Cobalt 解析失敗");
+
+    const targetUrl = cobaltData.url;
+    if (!targetUrl) throw Error("Cobalt 備援通道未返回有效的下載網址。");
+
+    state.formats = [{
+      itag: "cobalt",
+      quality: "最高可用畫質 (Cobalt)",
+      kind: "影音合一",
+      container: "mp4",
+      mimeType: "video/mp4",
+      codec: "未知",
+      bitrate: 0, 
+      contentLength: 0,
+      source: "COBALT",
+      url: targetUrl
+    }];
+    
+    state.videoId = id;
+    state.baseReady = true;
+    
+    applyVideoData({
+      title: "YouTube 影片 (Cobalt 備援)",
+      thumbnail: `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`,
+      source: "COBALT"
+    }, id);
+    
+    setMode("direct");
+    status("Cobalt 備援解析成功！", "success");
+    log("【成功】已透過 Cobalt 備援通道取得下載連結。");
   }
 }
 
@@ -450,9 +455,10 @@ async function analyze() {
     $("videoInfo").classList.add("hidden");
     $("downloadPanel").classList.add("hidden");
     status("正在解析影片頁面…", "working");
+    
     if (platform === "youtube") {
       const id = videoId(value); if (!id) throw Error("無法辨識 YouTube 影片 ID。");
-      await analyzeYoutube(id);
+      await analyzeYoutube(id, value);
     } else if (platform === "facebook") {
       log("已辨識平台：Facebook，開始解析影片頁面。");
       const response = await fetch(endpoint("/facebook", { url: value }), { cache: "no-store", headers: platformRequestHeaders("facebook") });
@@ -470,12 +476,9 @@ async function analyze() {
   } finally { state.busy = false; updateButton(); }
 }
 
-// ============== 核心修改：媒體路由攔截 ==============
+// ============== 核心修改：Cobalt 媒體路由攔截 ==============
 function mediaEndpoint(format, download = false) {
-  // 如果是透過 Cobalt 抓到的網址，直接回傳即可，不要再丟進 Worker 伺服器
-  if (format.source === "COBALT") {
-    return format.url;
-  }
+  if (format.source === "COBALT") return format.url;
   
   if (state.platform === "youtube") return endpoint("/media", { id: state.videoId, itag: format.itag, source: format.source || "ANDROID", ext: format.container || "bin", download: download ? "1" : "0" });
   if (state.platform === "facebook") return endpoint("/facebook-media", { url: format.url });
@@ -483,10 +486,7 @@ function mediaEndpoint(format, download = false) {
 }
 
 async function fetchMedia(format, label = "媒體", start = 5, end = 65) {
-  // 對於 Cobalt 的跨域請求，不要帶入特殊的 Headers
-  const requestHeaders = format.source === "COBALT" 
-      ? { "Cache-Control": "no-cache" } 
-      : platformRequestHeaders();
+  const requestHeaders = format.source === "COBALT" ? { "Cache-Control": "no-cache" } : platformRequestHeaders();
 
   const response = await fetch(mediaEndpoint(format), { cache: "no-store", headers: requestHeaders });
   if (!response.ok) {
@@ -523,7 +523,7 @@ async function ensureFFmpeg() {
   if (state.ffmpegLoaded && state.ffmpeg) return state.ffmpeg;
   if (state.ffmpegLoading) return state.ffmpegLoading;
   state.ffmpegLoading = (async () => {
-    status("首次使用，正在載入 FFmpeg WebAssembly…", "working"); log("【FFMPEG】以 ES Module 延遲載入，不使用會觸發 exports 錯誤的 CommonJS UMD util。");
+    status("首次使用，正在載入 FFmpeg WebAssembly…", "working"); log("【Ffmpeg】以 ES Module 延遲載入。");
     const { FFmpeg, toBlobURL } = await loadFFmpegModules();
     const ffmpeg = new FFmpeg();
     ffmpeg.on("log", ({ message }) => message && log(`【FFMPEG】${message}`));
