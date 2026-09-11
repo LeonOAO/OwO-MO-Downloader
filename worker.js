@@ -1,4 +1,4 @@
-const VERSION = "2026.09.11-A3.2.1-FB-Share";
+const VERSION = "2026.09.11-A3.2.2-FB-Session";
 const SERVICE = "OwO MO Downloader Worker A3 Rolling";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -535,6 +535,14 @@ function isFacebookSharePath(url) {
   return url.hostname.toLowerCase() === "fb.watch" || /^\/share\/(?:r|v|reel)\//i.test(url.pathname);
 }
 
+function isFacebookAuthPath(url) {
+  return /^\/(?:login|checkpoint|recover|reg|privacy\/consent)(?:\/|$)/i.test(url.pathname);
+}
+
+function isUsableFacebookVideoUrl(url) {
+  return !isFacebookSharePath(url) && !isFacebookAuthPath(url);
+}
+
 function cleanFacebookShareUrl(input) {
   const url = new URL(input.href);
   ["mibextid", "sfnsn", "d", "rdid", "share_url", "refsrc", "ref"].forEach(key => url.searchParams.delete(key));
@@ -573,23 +581,29 @@ async function fetchFacebookPage(url, options = {}) {
   const mobile = Boolean(options.mobile);
   const target = new URL(url.href);
   if (mobile && target.hostname !== "fb.watch") target.hostname = "m.facebook.com";
+  const headers = new Headers({
+    "User-Agent": mobile
+      ? "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36"
+      : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
+    "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.7",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Upgrade-Insecure-Requests": "1"
+  });
+  if (options.cookie) headers.set("Cookie", options.cookie);
   return fetch(target, {
     method: "GET",
-    headers: {
-      "User-Agent": mobile
-        ? "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36"
-        : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
-      "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.7",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Cache-Control": "no-cache",
-      "Pragma": "no-cache"
-    },
+    headers,
     redirect: options.redirect || "manual",
     cache: "no-store"
   });
 }
 
-async function resolveFacebookShareUrl(inputUrl, steps) {
+async function resolveFacebookShareUrl(inputUrl, steps, cookie = "") {
   let current = cleanFacebookShareUrl(inputUrl);
   steps.push(`【FACEBOOK】已辨識分享網址：${current.pathname}`);
   steps.push("【FACEBOOK】已移除分享追蹤參數。");
@@ -601,7 +615,7 @@ async function resolveFacebookShareUrl(inputUrl, steps) {
 
     let response;
     try {
-      response = await fetchFacebookPage(current, { redirect: "manual" });
+      response = await fetchFacebookPage(current, { redirect: "manual", cookie });
     } catch (error) {
       steps.push(`【FACEBOOK】第「${hop}」層重新導向請求失敗：${error.message}。`);
       break;
@@ -614,7 +628,11 @@ async function resolveFacebookShareUrl(inputUrl, steps) {
       if (next) {
         current = cleanFacebookShareUrl(new URL(next));
         steps.push(`【FACEBOOK】已取得下一層 Facebook 網址：${current.pathname}`);
-        if (!isFacebookSharePath(current)) return current;
+        if (isFacebookAuthPath(current)) {
+          steps.push("【FACEBOOK】重新導向至登入頁，本層不視為固定影片網址。");
+          break;
+        }
+        if (isUsableFacebookVideoUrl(current)) return current;
         continue;
       }
     }
@@ -631,11 +649,13 @@ async function resolveFacebookShareUrl(inputUrl, steps) {
 
     if (response.status === 400 || response.status === 403 || !html) {
       try {
-        const mobileResponse = await fetchFacebookPage(current, { mobile: true, redirect: "follow" });
+        const mobileResponse = await fetchFacebookPage(current, { mobile: true, redirect: "follow", cookie });
         steps.push(`【FACEBOOK】行動版備援回傳 HTTP ${mobileResponse.status}。`);
         const mobileHtml = await mobileResponse.text();
         const finalUrl = new URL(mobileResponse.url);
-        if (!isFacebookSharePath(finalUrl)) {
+        if (isFacebookAuthPath(finalUrl)) {
+          steps.push("【FACEBOOK】行動版備援仍進入登入頁。");
+        } else if (isUsableFacebookVideoUrl(finalUrl)) {
           steps.push(`【FACEBOOK】行動版備援已取得固定網址：${finalUrl.pathname}`);
           return finalUrl;
         }
@@ -656,29 +676,50 @@ async function resolveFacebookShareUrl(inputUrl, steps) {
   return current;
 }
 
-async function facebookResolve(value) {
+async function facebookResolve(value, env) {
   let pageUrl;
   try { pageUrl = validateFacebookPageUrl(value); }
   catch (error) { return json({ error: error.message, code: "INVALID_FACEBOOK_URL", version: VERSION }, 400); }
 
   const steps = [];
-  if (isFacebookSharePath(pageUrl)) {
-    pageUrl = await resolveFacebookShareUrl(pageUrl, steps);
+  const cookie = String(env && env.FB_COOKIE || "").trim();
+  const originalUrl = new URL(pageUrl.href);
+
+  async function resolveAndFetch(activeCookie, label) {
+    let target = new URL(originalUrl.href);
+    if (isFacebookSharePath(target)) {
+      target = await resolveFacebookShareUrl(target, steps, activeCookie);
+    }
+    let result = await fetchFacebookPage(target, { mobile: true, redirect: "follow", cookie: activeCookie });
+    steps.push(`【FACEBOOK】${label}影片頁面回傳 HTTP ${result.status}。`);
+    let resultUrl = new URL(result.url);
+    if ((!result.ok || isFacebookAuthPath(resultUrl)) && target.hostname !== "www.facebook.com") {
+      const desktopUrl = new URL(target.href);
+      desktopUrl.hostname = "www.facebook.com";
+      result = await fetchFacebookPage(desktopUrl, { redirect: "follow", cookie: activeCookie });
+      resultUrl = new URL(result.url);
+      steps.push(`【FACEBOOK】${label}桌面版備援回傳 HTTP ${result.status}。`);
+    }
+    return { response: result, finalUrl: resultUrl };
   }
 
-  let response = await fetchFacebookPage(pageUrl, { mobile: true, redirect: "follow" });
-  steps.push(`【FACEBOOK】影片頁面回傳 HTTP ${response.status}。`);
+  let attempt = await resolveAndFetch("", "訪客");
+  let response = attempt.response;
+  let finalUrlObject = attempt.finalUrl;
 
-  if (!response.ok && pageUrl.hostname !== "www.facebook.com") {
-    const desktopUrl = new URL(pageUrl.href);
-    desktopUrl.hostname = "www.facebook.com";
-    response = await fetchFacebookPage(desktopUrl, { redirect: "follow" });
-    steps.push(`【FACEBOOK】桌面版備援回傳 HTTP ${response.status}。`);
+  if ((!response.ok || isFacebookAuthPath(finalUrlObject)) && cookie) {
+    steps.push("【FACEBOOK】訪客模式未取得影片頁面，開始使用 FB_COOKIE Secret 重試。");
+    attempt = await resolveAndFetch(cookie, "登入工作階段");
+    response = attempt.response;
+    finalUrlObject = attempt.finalUrl;
   }
 
+  if (isFacebookAuthPath(finalUrlObject)) {
+    return json({ error: cookie ? "FB_COOKIE 工作階段已失效或沒有影片觀看權限。" : "Facebook 將分享網址導向登入頁；尚未設定 FB_COOKIE Secret。", code: cookie ? "FB_SESSION_EXPIRED" : "FB_SESSION_REQUIRED", version: VERSION, steps }, 401);
+  }
   if (!response.ok) return json({ error: `Facebook 影片頁面回傳 HTTP ${response.status}。`, code: "FACEBOOK_PAGE_ERROR", version: VERSION, steps }, 502);
 
-  const finalUrl = response.url;
+  const finalUrl = finalUrlObject.href;
   const html = await response.text();
   steps.push(`【FACEBOOK】已取得公開頁面 HTML，共「${html.length}」個字元。`);
   const found = collectFacebookUrls(html);
@@ -713,7 +754,7 @@ async function facebookResolve(value) {
   return json({ platform: "facebook", id, canonicalUrl: finalUrl, source: "FACEBOOK", version: VERSION, code: "OK", title, thumbnail, lengthSeconds: "", formats, steps, note: "" });
 }
 
-async function facebookMedia(request, target) {
+async function facebookMedia(request, target, env) {
   let url;
   try { url = new URL(target); }
   catch { return json({ error: "Facebook 媒體網址無效。", code: "INVALID_FACEBOOK_MEDIA_URL", version: VERSION }, 400); }
@@ -728,6 +769,8 @@ async function facebookMedia(request, target) {
     "Accept": "*/*",
     "Accept-Encoding": "identity"
   });
+  const cookie = String(env && env.FB_COOKIE || "").trim();
+  if (cookie) headers.set("Cookie", cookie);
   const range = request.headers.get("Range");
   if (range) headers.set("Range", range);
 
@@ -858,15 +901,15 @@ async function media(request, target, id, itag, sourceLabel) {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors() });
     const url = new URL(request.url);
     try {
       if (url.pathname === "/youtube" && request.method === "GET") return await youtube(url.searchParams.get("id"), url.searchParams.get("mode") === "hq" ? "hq" : "quick");
-      if (url.pathname === "/facebook" && request.method === "GET") return await facebookResolve(url.searchParams.get("url"));
-      if (url.pathname === "/facebook-media" && ["GET", "HEAD"].includes(request.method)) return await facebookMedia(request, url.searchParams.get("url"));
+      if (url.pathname === "/facebook" && request.method === "GET") return await facebookResolve(url.searchParams.get("url"), env);
+      if (url.pathname === "/facebook-media" && ["GET", "HEAD"].includes(request.method)) return await facebookMedia(request, url.searchParams.get("url"), env);
       if (url.pathname === "/media" && ["GET", "HEAD"].includes(request.method)) return await media(request, url.searchParams.get("url"), url.searchParams.get("id"), url.searchParams.get("itag"), url.searchParams.get("source"));
-      return json({ service: SERVICE, version: VERSION, architecture: "GitHub Pages + Cloudflare Worker Free", endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
+      return json({ service: SERVICE, version: VERSION, architecture: "GitHub Pages + Cloudflare Worker Free", facebookSession: Boolean(env && env.FB_COOKIE), endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
     } catch (error) {
       return json({ error: error.message || "Worker 執行失敗", code: "WORKER_INTERNAL_ERROR", version: VERSION }, 500);
     }
