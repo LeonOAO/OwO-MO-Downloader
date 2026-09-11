@@ -1,14 +1,16 @@
-# OwO MO Downloader A3.3.10 Platform Pills
+# OwO MO Downloader A3.3.12 Instagram GraphQL
 
-版本：2026.09.11-A3.3.10-Platform-Pills
+版本：2026.09.11-A3.3.12-Instagram-GraphQL
 
-## 本次調整
+## 修正內容
 
-- 移除首頁完整支援說明句子。
-- 首頁只保留四個圓角平台標籤：YouTube、Facebook、Instagram、Threads。
-- 第一個操作區塊仍只顯示「貼上影片網址」。
-- MP4、M4A、MP3 位元率、WAV、四平台解析、Cookie 與手機介面保持不變。
+- Instagram 公開 Reel／貼文的靜態 HTML 沒有媒體時，改用 shortcode 執行 PolarisPostRootQuery。
+- 使用目前 2026 年資料結構 `xdt_api__v1__media__shortcode__web_info`，遞迴提取 `video_url` 與 `video_versions`。
+- 從頁面、Set-Cookie 或 IG_COOKIE 取得 CSRF Token。
+- GraphQL 匿名查詢失敗且已提供 IG_COOKIE 時，再使用登入工作階段查詢一次。
+- 媒體依 CDN 路徑去重，避免首頁或預載區塊造成重複格式。
+- 保留 Threads 嚴格分享網址判定、四平台標籤、MP4、M4A、MP3 位元率與 WAV 功能。
 
 ## 部署
 
-本次顯示調整需要更新 `index.html` 與 `app.css`。若要同步版本資訊，再更新 `worker.js`。
+本次核心修正位於 `worker.js`，可只更新 Worker。完整 ZIP 同步提供全部最新版檔案。
