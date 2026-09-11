@@ -1,25 +1,27 @@
-# OwO MO Downloader A3.4.3 Strict Deduplication
+# OwO MO Downloader A3.4.4 FB Story Fields + YouTube Client Matrix
 
-版本：2026.09.11-A3.4.3-Strict-Deduplication
+版本：2026.09.11-A3.4.4-FB-Story-Fields-YouTube-Client-Matrix
 
-## 嚴格去重
+## Facebook 限時動態
 
-- YouTube、Facebook、Instagram、Threads 全部套用嚴格媒體去重。
-- Meta 平台只有可靠的 media ID、輪播索引或資產 ID 不同時，才視為不同影片。
-- 缺少可靠媒體識別的相同畫質、容器、Codec 與媒體種類會合併為一筆。
-- 不再以不同 CDN 路徑、短效簽章、到期時間或預載 URL 判斷為不同影片。
-- 同一影片的不同畫質、不同 Codec、完整影片／僅視訊／僅音訊仍保留。
-- 真正多影片貼文會顯示「影片 1、影片 2……」。
-- 單一影片不顯示多餘序號。
-- 下載 MP4、M4A、MP3、WAV 檔名同步支援多影片序號。
+- 新增深層欄位辨識：`browser_native_hd_url`、`browser_native_sd_url`、`playable_url_quality_hd`、`playable_url`、`hd_src`、`sd_src`、`hdSrc`、`sdSrc`、`progressive_url`、`videoUrl`、`video_url`。
+- 支援字串欄位與 `{ url: ... }` 巢狀欄位。
+- 限時動態依 Story ID 建立資料錨點，縮小掃描範圍，降低誤抓推薦內容或下一位發布者媒體的機率。
+- HD 優先、SD 備援，保留 DASH 影音分離格式。
+- 完整保留 FB_COOKIE 分頁工作階段與 Worker Secret 流程。
 
-## 更新檔案
+## YouTube 高畫質
 
-本版核心去重位於 `app.js`，必須更新 `app.js`。
+- Client Matrix 納入：ANDROID、WEB、WEB_SAFARI、MWEB、WEB_EMBEDDED、IOS、VISIONOS、TVHTML5、TV_SIMPLY。
+- 各 Client 紀錄狀態、原始格式、可解析位址與 SABR 指標。
+- 分開顯示 PLAYER、GVS、SUBS PO Token 狀態。
+- 記錄 Visitor Data、Data Sync ID 與 `serverAbrStreamingUrl`。
+- 保留既有 Signature、N 參數靜態操作解析與即時媒體網址更新。
 
-版本同步建議一併更新：
+## 架構
 
-- `index.html`
-- `worker.js`
+維持 GitHub Pages + 單一 Cloudflare Worker，不加入 Cobalt、第三方下載 API、Node、Deno、Python、Docker 或外部 Token Provider。
 
-完整 ZIP 已包含全部最新版檔案。
+## 保留功能
+
+Instagram Crawler View、Instagram Media API、Threads 分享網址、A3.4.3 四平台嚴格去重、MP4、M4A、MP3、WAV 全部保留。

@@ -1,4 +1,4 @@
-const VERSION = "2026.09.11-A3.4.3-Strict-Deduplication";
+const VERSION = "2026.09.11-A3.4.4-FB-Story-Fields-YouTube-Client-Matrix";
 const SERVICE = "OwO MO Downloader Worker A3 Rolling";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -120,11 +120,13 @@ function sourceSummary(source) {
 const PLAYER_CLIENTS = [
   { label: "ANDROID", clientName: "ANDROID", clientVersion: "21.35.35", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
   { label: "WEB", clientName: "WEB", clientVersion: "2.20260909.00.00" },
+  { label: "WEB_SAFARI", clientName: "WEB", clientVersion: "2.20260909.00.00", browserName: "Safari", browserVersion: "18.6", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15" },
   { label: "MWEB", clientName: "MWEB", clientVersion: "2.20260909.00.00" },
   { label: "WEB_EMBEDDED", clientName: "WEB_EMBEDDED_PLAYER", clientVersion: "1.20260909.00.00", clientScreen: "EMBED", embed: true },
-  { label: "ANDROID_VR", clientName: "ANDROID_VR", clientVersion: "1.62.27", osName: "Android", osVersion: "12", androidSdkVersion: 32 },
   { label: "IOS", clientName: "IOS", clientVersion: "21.35.3", osName: "iPhone", osVersion: "18.6.2.22G100", deviceMake: "Apple", deviceModel: "iPhone16,2" },
-  { label: "TVHTML5", clientName: "TVHTML5", clientVersion: "7.20260909.18.00", platform: "TV" }
+  { label: "VISIONOS", clientName: "IOS", clientVersion: "21.35.3", osName: "visionOS", osVersion: "2.6", deviceMake: "Apple", deviceModel: "RealityDevice14,1" },
+  { label: "TVHTML5", clientName: "TVHTML5", clientVersion: "7.20260909.18.00", platform: "TV" },
+  { label: "TV_SIMPLY", clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER", clientVersion: "2.0", platform: "TV", clientScreen: "EMBED", embed: true }
 ];
 
 async function innertubePlayer(apiKey, visitorData, id, profile) {
@@ -141,7 +143,8 @@ async function innertubePlayer(apiKey, visitorData, id, profile) {
       "Origin": "https://www.youtube.com",
       "X-YouTube-Client-Name": profile.clientName,
       "X-YouTube-Client-Version": profile.clientVersion,
-      ...(visitorData ? { "X-Goog-Visitor-Id": visitorData } : {})
+      ...(visitorData ? { "X-Goog-Visitor-Id": visitorData } : {}),
+      ...(profile.userAgent ? { "User-Agent": profile.userAgent } : {})
     },
     body: JSON.stringify({ videoId: id, context, contentCheckOk: true, racyCheckOk: true }),
     cache: "no-store"
@@ -164,6 +167,11 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
 
   const apiKey = configValue(html, "INNERTUBE_API_KEY");
   const visitorData = configValue(html, "VISITOR_DATA");
+  const dataSyncId = configValue(html, "DATASYNC_ID");
+  const sabrUrl = watchPlayer?.streamingData?.serverAbrStreamingUrl || "";
+  steps.push(`【YOUTUBE CONTEXT】Visitor Data：${visitorData ? "存在" : "不存在"}；Data Sync ID：${dataSyncId ? "存在" : "不存在"}。`);
+  steps.push(`【PO TOKEN】PLAYER：未提供；GVS：未提供；SUBS：未提供。本版只記錄需求，不使用固定 Token。`);
+  if (sabrUrl) steps.push("【SABR】播放器已提供 serverAbrStreamingUrl；若傳統格式沒有媒體位址，判定為 SABR-only 候選。");
 
   if (!apiKey) {
     steps.push("【FALLBACK】找不到 INNERTUBE_API_KEY，無法執行多 Client 輪詢。");
@@ -195,7 +203,8 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
       addressCount = addressableFormats(player).length;
       if (state.status === "LOGIN_REQUIRED") authCount++;
 
-      steps.push(`【${profile.label}】狀態：${state.status}；原始格式：「${rawCount}」個；含網址或密文：「${addressCount}」個；原因：${state.reason}。`);
+      const clientSabr = Boolean(player?.streamingData?.serverAbrStreamingUrl);
+      steps.push(`【${profile.label}】狀態：${state.status}；原始格式：「${rawCount}」個；含網址或密文：「${addressCount}」個；SABR：${clientSabr ? "存在" : "無"}；原因：${state.reason}。`);
       output.push({ label: profile.label, player });
 
       if (mode === "quick" && addressCount) {
@@ -561,8 +570,45 @@ function parseDashManifest(value) {
   return candidates;
 }
 
-function collectFacebookUrls(html) {
+const FACEBOOK_VIDEO_FIELD_QUALITY = {
+  browser_native_hd_url: "HD", playable_url_quality_hd: "HD", hd_src: "HD", hdSrc: "HD",
+  hd_src_no_ratelimit: "HD", video_hd_url: "HD", hdUrl: "HD",
+  browser_native_sd_url: "SD", playable_url: "SD", sd_src: "SD", sdSrc: "SD",
+  sd_src_no_ratelimit: "SD", progressive_url: "SD", video_url: "SD", videoUrl: "SD", sdUrl: "SD"
+};
+function collectFacebookDeepFields(source) {
   const candidates = [];
+  for (const [field, quality] of Object.entries(FACEBOOK_VIDEO_FIELD_QUALITY)) {
+    const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const patterns = [
+      new RegExp(`["']${escaped}["']\\s*:\\s*["']((?:\\\\.|[^"'])+)["']`, "g"),
+      new RegExp(`["']${escaped}["']\\s*:\\s*\\{[^{}]{0,1200}?["']url["']\\s*:\\s*["']((?:\\\\.|[^"'])+)["']`, "g")
+    ];
+    for (const pattern of patterns) {
+      let match;
+      while ((match = pattern.exec(source))) {
+        const url = decodeFacebookValue(match[1]);
+        if (!/^https:\/\//i.test(url) || !/(?:fbcdn\.net|facebook\.com)/i.test(url)) continue;
+        candidates.push({ quality, height: inferFacebookHeight(url, quality), bitrate: quality === "HD" ? 2000000 : 700000, kind: "影音合一", mimeType: "video/mp4", codec: "", url, field });
+      }
+    }
+  }
+  return candidates;
+}
+function facebookStoryScope(html, pageUrl) {
+  let id = "";
+  try { id = (new URL(pageUrl).pathname.match(/^\/stories\/[^/]+\/([^/?#]+)/i) || [])[1] || ""; } catch {}
+  if (!id) return { html, anchored: false, id: "" };
+  const positions = [];
+  let at = html.indexOf(id);
+  while (at >= 0 && positions.length < 12) { positions.push(at); at = html.indexOf(id, at + id.length); }
+  if (!positions.length) return { html, anchored: false, id };
+  const chunks = positions.map(pos => html.slice(Math.max(0, pos - 180000), Math.min(html.length, pos + 420000)));
+  return { html: chunks.join("\n"), anchored: true, id };
+}
+
+function collectFacebookUrls(html) {
+  const candidates = [...collectFacebookDeepFields(html)];
   const definitions = [
     { quality: "HD", patterns: [
       /"browser_native_hd_url"\s*:\s*"([^"]+)"/g,
@@ -893,7 +939,9 @@ async function facebookResolve(value, env, request) {
   const finalUrl = finalUrlObject.href;
   let html = await response.text();
   steps.push(`【FACEBOOK】已取得影片頁面 HTML，共「${html.length}」個字元。`);
-  let found = collectFacebookUrls(html);
+  const storyScope = storyMode ? facebookStoryScope(html, finalUrl) : { html, anchored: false, id: "" };
+  if (storyMode) steps.push(`【FACEBOOK STORY】Story ID：${storyScope.id || "未取得"}；資料錨點：${storyScope.anchored ? "找到" : "未找到，使用完整頁面"}。`);
+  let found = collectFacebookUrls(storyScope.html);
 
   const hasHighQuality = found.some(item => item.kind === "僅視訊" || Number(item.height || 0) >= 720 || item.quality === "HD");
   if (!hasHighQuality && cookie) {
@@ -903,8 +951,9 @@ async function facebookResolve(value, env, request) {
     if (authenticated.ok && !isFacebookAuthPath(new URL(authenticated.url))) {
       const authenticatedHtml = await authenticated.text();
       steps.push(`【FACEBOOK】已取得登入工作階段 HTML，共「${authenticatedHtml.length}」個字元。`);
+      const authenticatedScope = storyMode ? facebookStoryScope(authenticatedHtml, authenticated.url) : { html: authenticatedHtml };
       const merged = new Map();
-      for (const item of [...found, ...collectFacebookUrls(authenticatedHtml)]) {
+      for (const item of [...found, ...collectFacebookUrls(authenticatedScope.html)]) {
         merged.set(`${item.kind}|${item.height || item.quality}|${item.url}`, item);
       }
       found = [...merged.values()];
@@ -913,6 +962,8 @@ ${authenticatedHtml}`;
     }
   }
 
+  const fieldCount = found.filter(item => item.field).length;
+  if (storyMode) steps.push(`【FACEBOOK STORY】深層欄位解析取得「${fieldCount}」個候選來源。`);
   const muxedCount = found.filter(item => item.kind === "影音合一").length;
   const videoCount = found.filter(item => item.kind === "僅視訊").length;
   const audioCount = found.filter(item => item.kind === "僅音訊").length;
