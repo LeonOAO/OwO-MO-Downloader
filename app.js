@@ -1,6 +1,6 @@
 "use strict";
 const $ = id => document.getElementById(id);
-const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "" };
+const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "" };
 const MAX_BROWSER_WORK_BYTES = 700 * 1024 * 1024;
 
 function log(message) {
@@ -39,15 +39,23 @@ function detectPlatform(value) {
     const host = new URL(value.trim()).hostname.toLowerCase().replace(/^www\./, "");
     if (["youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"].includes(host)) return "youtube";
     if (["facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"].includes(host)) return "facebook";
+    if (["instagram.com", "m.instagram.com", "instagr.am"].includes(host)) return "instagram";
+    if (["threads.com", "threads.net"].includes(host)) return "threads";
     return "";
   } catch { return ""; }
 }
 
-function fbRequestHeaders() {
+function platformRequestHeaders(platform = state.platform) {
   const headers = { "Cache-Control": "no-cache" };
-  if (state.fbCookie) headers["X-FB-Session"] = state.fbCookie;
+  if (platform === "facebook" && state.fbCookie) headers["X-FB-Session"] = state.fbCookie;
+  if (platform === "instagram" && state.igCookie) headers["X-IG-Session"] = state.igCookie;
+  if (platform === "threads") {
+    if (state.thCookie) headers["X-TH-Session"] = state.thCookie;
+    else if (state.igCookie) headers["X-IG-Session"] = state.igCookie;
+  }
   return headers;
 }
+
 function setFbSessionUi(applied, message = "") {
   const badge = $("fbSessionBadge");
   badge.textContent = applied ? "此分頁已套用" : "未套用";
@@ -79,6 +87,52 @@ function clearFbCookie() {
   setFbSessionUi(false, "Cookie 已從目前分頁記憶體清除，不會影響 Cloudflare Secret。 ");
   status("Facebook 登入工作階段已從目前分頁清除。", "idle");
   log("Facebook 登入工作階段已從目前分頁清除。");
+}
+function setSocialSessionUi(platform, applied, message = "") {
+  const prefix = platform === "instagram" ? "ig" : "th";
+  const badge = $(`${prefix}SessionBadge`);
+  badge.textContent = applied ? "此分頁已套用" : "未套用";
+  badge.className = `session-badge ${applied ? "on" : "off"}`;
+  document.querySelector(`.${prefix}-session-card`).classList.toggle("applied", applied);
+  if (message) $(`${prefix}SessionHelp`).textContent = message;
+}
+function applySocialCookie(platform) {
+  const prefix = platform === "instagram" ? "ig" : "th";
+  const value = normalizeCookieInput($(`${prefix}Cookie`).value);
+  const valid = platform === "instagram" ? /(?:^|;\s*)sessionid=/.test(value) : value.length >= 20;
+  if (!valid) {
+    setSocialSessionUi(platform, false, platform === "instagram" ? "格式不完整，Instagram Cookie 至少需要 sessionid。" : "Threads Cookie 格式過短，請貼上完整 Header String。");
+    status(`${platform === "instagram" ? "Instagram" : "Threads"} Cookie 格式不完整。`, "error");
+    return;
+  }
+  state[platform === "instagram" ? "igCookie" : "thCookie"] = value;
+  $(`${prefix}Cookie`).value = "";
+  setSocialSessionUi(platform, true, "已套用至目前分頁，重新整理或關閉分頁後會自動清除。");
+  status(`${platform === "instagram" ? "Instagram" : "Threads"} 登入工作階段已套用。`, "success");
+}
+function clearSocialCookie(platform) {
+  const prefix = platform === "instagram" ? "ig" : "th";
+  state[platform === "instagram" ? "igCookie" : "thCookie"] = "";
+  $(`${prefix}Cookie`).value = "";
+  setSocialSessionUi(platform, false, "Cookie 已從目前分頁記憶體清除。");
+  status(`${platform === "instagram" ? "Instagram" : "Threads"} 登入工作階段已清除。`, "idle");
+}
+async function analyzeSocial(url, platform) {
+  const label = platform === "instagram" ? "Instagram" : "Threads";
+  log(`已辨識平台：${label}，開始解析影片頁面。`);
+  const response = await fetch(endpoint(`/${platform}`, { url }), { cache: "no-store", headers: platformRequestHeaders(platform) });
+  const data = await response.json().catch(() => ({}));
+  if (Array.isArray(data.steps)) data.steps.forEach(log);
+  if (!response.ok) throw Error(data.error || data.note || `Worker 回傳 HTTP ${response.status}。`);
+  const formats = Array.isArray(data.formats) ? data.formats : [];
+  if (data.canonicalUrl) log(`${label} 固定內容網址：${data.canonicalUrl}`);
+  if (!formats.length) throw Error(data.note || `目前沒有取得 ${label} 影片格式。`);
+  state.formats = mergeFormats([], formats);
+  state.videoId = data.id || platform;
+  state.baseReady = true;
+  applyVideoData(data, state.videoId);
+  setMode(lists().videoOnly.length && lists().audioOnly.length ? "hq" : "direct");
+  status(`${label} 解析完成，共取得「${state.formats.length}」個影片格式。`, "success");
 }
 function endpoint(path, params = {}) {
   const base = $("worker").value.trim().replace(/\/$/, "");
@@ -197,7 +251,7 @@ async function searchHighQuality(id) {
 
 async function analyzeFacebook(url) {
   log("已辨識平台：Facebook，開始解析公開影片頁面。");
-  const response = await fetch(endpoint("/facebook", { url }), { cache: "no-store", headers: fbRequestHeaders() });
+  const response = await fetch(endpoint("/facebook", { url }), { cache: "no-store", headers: platformRequestHeaders("facebook") });
   const data = await response.json().catch(() => ({}));
   if (Array.isArray(data.steps)) data.steps.forEach(log);
   if (!response.ok) throw Error(data.error || `Worker 回傳 HTTP ${response.status}。`);
@@ -245,8 +299,9 @@ async function analyze() {
     if (!platform) throw Error("目前僅支援 YouTube 與 Facebook 網址。");
     state.platform = platform;
     localStorage.setItem("workerUrl", $("worker").value.trim());
-    status(platform === "facebook" ? "正在解析 Facebook 公開影片…" : "正在尋找可直接下載的基本格式…", "working");
+    status(platform === "youtube" ? "正在尋找可直接下載的基本格式…" : `正在解析 ${platform === "facebook" ? "Facebook" : platform === "instagram" ? "Instagram" : "Threads"} 影片…`, "working");
     if (platform === "facebook") await analyzeFacebook(input);
+    else if (platform === "instagram" || platform === "threads") await analyzeSocial(input, platform);
     else await analyzeYouTube(input);
   } catch (error) {
     if (state.baseReady && state.formats.length) {
@@ -264,13 +319,15 @@ async function fetchMedia(format, label, from, to) {
   setProgress(from, `正在下載${label}…`);
   const mediaEndpoint = state.platform === "facebook"
     ? endpoint("/facebook-media", { url: format.url })
-    : endpoint("/media", {
+    : ["instagram", "threads"].includes(state.platform)
+      ? endpoint("/social-media", { platform: state.platform, url: format.url })
+      : endpoint("/media", {
         id: state.videoId,
         itag: format.itag,
         source: format.source || "ANDROID",
         ext: format.container || "bin"
       });
-  const response = await fetch(mediaEndpoint, { cache: "no-store", headers: state.platform === "facebook" ? fbRequestHeaders() : undefined });
+  const response = await fetch(mediaEndpoint, { cache: "no-store", headers: ["facebook", "instagram", "threads"].includes(state.platform) ? platformRequestHeaders() : undefined });
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
     if (Array.isArray(detail.steps)) detail.steps.forEach(log);
@@ -372,5 +429,15 @@ $("toggleFbCookie").onclick = () => {
   $("toggleFbCookie").textContent = input.type === "password" ? "顯示" : "隱藏";
 };
 $("fbCookie").onkeydown = event => { if (event.key === "Enter") applyFbCookie(); };
+$("applyIgCookie").onclick = () => applySocialCookie("instagram");
+$("clearIgCookie").onclick = () => clearSocialCookie("instagram");
+$("applyThCookie").onclick = () => applySocialCookie("threads");
+$("clearThCookie").onclick = () => clearSocialCookie("threads");
+for (const prefix of ["ig", "th"]) {
+  $(`toggle${prefix === "ig" ? "Ig" : "Th"}Cookie`).onclick = () => {
+    const input = $(`${prefix}Cookie`);
+    input.type = input.type === "password" ? "text" : "password";
+  };
+}
 document.querySelectorAll(".mode").forEach(button => button.onclick = () => setMode(button.dataset.mode));
 $("worker").value = localStorage.getItem("workerUrl") || "";
