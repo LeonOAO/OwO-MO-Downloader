@@ -1,6 +1,8 @@
-const VERSION = "2026.09.10-A3.1.1-HQ-Auto";
+const VERSION = "2026.09.11-A3.2.0-FB-Public";
 const SERVICE = "OwO MO Downloader Worker A3 Rolling";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
+const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
+const FACEBOOK_MEDIA_SUFFIXES = [".fbcdn.net", ".facebook.com"];
 
 function cors(origin = "*") {
   return {
@@ -460,23 +462,268 @@ async function youtube(id, mode = "quick") {
     lengthSeconds: details.lengthSeconds || "", formats, steps,
     note: formats.length ? "" : "播放器已回傳格式，但格式都只有加密 signatureCipher。此執行環境需要更新播放器規則解析器。" });
 }
-async function media(request, target) {
-  let url;
-  try { url = new URL(target); } catch { return json({ error: "媒體網址無效" }, 400); }
-  if (url.protocol !== "https:" || !MEDIA_SUFFIXES.some(suffix => url.hostname.endsWith(suffix))) {
-    return json({ error: "此媒體網域未列入允許清單" }, 403);
+
+
+function decodeHtml(value) {
+  return String(value || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;|&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function decodeFacebookValue(value) {
+  let output = decodeHtml(value);
+  try { output = JSON.parse(`"${output.replace(/"/g, '\\"')}"`); } catch {}
+  return output
+    .replace(/\\u0025/g, "%")
+    .replace(/\\u0026/g, "&")
+    .replace(/\\u003D/g, "=")
+    .replace(/\\u003F/g, "?")
+    .replace(/\\\//g, "/");
+}
+
+function metaContent(html, property) {
+  const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patterns = [
+    new RegExp(`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["']`, "i"),
+    new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${escaped}["']`, "i")
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) return decodeHtml(match[1]);
   }
+  return "";
+}
+
+function collectFacebookUrls(html) {
+  const candidates = [];
+  const definitions = [
+    { quality: "HD", patterns: [/"browser_native_hd_url"\s*:\s*"([^"]+)"/g, /"hd_src"\s*:\s*"([^"]+)"/g, /"playable_url_quality_hd"\s*:\s*"([^"]+)"/g] },
+    { quality: "SD", patterns: [/"browser_native_sd_url"\s*:\s*"([^"]+)"/g, /"sd_src"\s*:\s*"([^"]+)"/g, /"playable_url"\s*:\s*"([^"]+)"/g] }
+  ];
+  for (const definition of definitions) {
+    for (const pattern of definition.patterns) {
+      let match;
+      while ((match = pattern.exec(html))) {
+        const url = decodeFacebookValue(match[1]);
+        if (/^https:\/\//i.test(url)) candidates.push({ quality: definition.quality, url });
+      }
+    }
+  }
+  const ogVideo = metaContent(html, "og:video") || metaContent(html, "og:video:url") || metaContent(html, "og:video:secure_url");
+  if (/^https:\/\//i.test(ogVideo)) candidates.push({ quality: "SD", url: ogVideo });
+  const unique = new Map();
+  for (const candidate of candidates) {
+    const key = `${candidate.quality}|${candidate.url}`;
+    if (!unique.has(key)) unique.set(key, candidate);
+  }
+  return [...unique.values()];
+}
+
+function validateFacebookPageUrl(value) {
+  const url = new URL(value);
+  if (url.protocol !== "https:" || !FACEBOOK_PAGE_HOSTS.includes(url.hostname.toLowerCase())) {
+    throw new Error("僅接受 Facebook 或 fb.watch 的 HTTPS 網址。");
+  }
+  return url;
+}
+
+async function facebookResolve(value) {
+  let pageUrl;
+  try { pageUrl = validateFacebookPageUrl(value); }
+  catch (error) { return json({ error: error.message, code: "INVALID_FACEBOOK_URL", version: VERSION }, 400); }
+
+  const steps = [];
+  const response = await fetch(pageUrl, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36",
+      "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.7",
+      "Accept": "text/html,application/xhtml+xml"
+    },
+    redirect: "follow",
+    cache: "no-store"
+  });
+  steps.push(`【FACEBOOK】頁面回傳 HTTP ${response.status}。`);
+  if (!response.ok) return json({ error: `Facebook 頁面回傳 HTTP ${response.status}。`, code: "FACEBOOK_PAGE_ERROR", version: VERSION, steps }, 502);
+
+  const finalUrl = response.url;
+  const html = await response.text();
+  steps.push(`【FACEBOOK】已取得公開頁面 HTML，共「${html.length}」個字元。`);
+  const found = collectFacebookUrls(html);
+  steps.push(`【FACEBOOK】找到「${found.length}」個公開媒體候選網址。`);
+
+  const formats = found.map((item, index) => ({
+    itag: `fb-${item.quality.toLowerCase()}-${index + 1}`,
+    quality: item.quality === "HD" ? "HD" : "SD",
+    kind: "影音合一",
+    container: "mp4",
+    mimeType: "video/mp4",
+    codec: "",
+    bitrate: item.quality === "HD" ? 2000000 : 700000,
+    contentLength: "",
+    source: "FACEBOOK",
+    url: item.url
+  })).sort((a, b) => b.bitrate - a.bitrate);
+
+  const title = metaContent(html, "og:title") || metaContent(html, "twitter:title") || "Facebook 公開影片";
+  const thumbnail = metaContent(html, "og:image") || metaContent(html, "twitter:image");
+  const idMatch = finalUrl.match(/(?:videos|reel)\/(\d+)/) || finalUrl.match(/[?&]v=(\d+)/);
+  const id = idMatch ? idMatch[1] : `fb-${Date.now()}`;
+
+  if (!formats.length) {
+    return json({
+      platform: "facebook", id, title, thumbnail, formats: [], steps,
+      code: "FACEBOOK_MEDIA_NOT_FOUND", retryable: false, version: VERSION,
+      note: "頁面中沒有找到公開 HD／SD 媒體網址。影片可能需要登入、不是公開內容，或 Facebook 已調整頁面資料格式。"
+    });
+  }
+
+  return json({ platform: "facebook", id, source: "FACEBOOK", version: VERSION, code: "OK", title, thumbnail, lengthSeconds: "", formats, steps, note: "" });
+}
+
+async function facebookMedia(request, target) {
+  let url;
+  try { url = new URL(target); }
+  catch { return json({ error: "Facebook 媒體網址無效。", code: "INVALID_FACEBOOK_MEDIA_URL", version: VERSION }, 400); }
+
+  if (url.protocol !== "https:" || !FACEBOOK_MEDIA_SUFFIXES.some(suffix => url.hostname === suffix.slice(1) || url.hostname.endsWith(suffix))) {
+    return json({ error: "此 Facebook 媒體網域未列入允許清單。", code: "FACEBOOK_MEDIA_DOMAIN_DENIED", version: VERSION }, 403);
+  }
+
+  const headers = new Headers({
+    "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36",
+    "Referer": "https://www.facebook.com/",
+    "Accept": "*/*",
+    "Accept-Encoding": "identity"
+  });
+  const range = request.headers.get("Range");
+  if (range) headers.set("Range", range);
+
+  const upstream = await fetch(url, { method: request.method, headers, redirect: "follow", cache: "no-store" });
+  const output = new Headers(upstream.headers);
+  Object.entries(cors()).forEach(([key, value]) => output.set(key, value));
+  output.set("Cache-Control", "no-store");
+  output.set("X-OwO-Version", VERSION);
+  output.set("Content-Disposition", 'attachment; filename="facebook-video.mp4"');
+  return new Response(upstream.body, { status: upstream.status, headers: output });
+}
+
+function clientProfileByLabel(label) {
+  return PLAYER_CLIENTS.find(profile => profile.label === label) || PLAYER_CLIENTS.find(profile => profile.label === "ANDROID");
+}
+
+async function freshMediaUrl(id, itag, sourceLabel, steps) {
+  if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) throw new Error("影片 ID 格式錯誤。");
+  const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW&gl=TW`;
+  const watchResponse = await fetch(watchUrl, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36",
+      "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.6"
+    },
+    cache: "no-store"
+  });
+  if (!watchResponse.ok) throw new Error(`重新解析 watch 頁面失敗：HTTP ${watchResponse.status}。`);
+  const html = await watchResponse.text();
+  const apiKey = configValue(html, "INNERTUBE_API_KEY");
+  const visitorData = configValue(html, "VISITOR_DATA");
+  if (!apiKey) throw new Error("重新解析時找不到 INNERTUBE_API_KEY。");
+
+  const profile = clientProfileByLabel(sourceLabel);
+  let player;
+  if (sourceLabel === "WATCH_PAGE") {
+    player = extractJsonObject(html, "ytInitialPlayerResponse");
+  } else {
+    player = await innertubePlayer(apiKey, visitorData, id, profile);
+  }
+  if (!player) throw new Error("重新解析時沒有取得播放器回應。");
+
+  let format = addressableFormats(player).find(item => String(item.itag) === String(itag));
+  if (!format && sourceLabel !== "ANDROID") {
+    const android = clientProfileByLabel("ANDROID");
+    const androidPlayer = await innertubePlayer(apiKey, visitorData, id, android);
+    format = addressableFormats(androidPlayer).find(item => String(item.itag) === String(itag));
+    if (format) sourceLabel = "ANDROID";
+  }
+  if (!format) throw new Error(`重新解析後找不到 itag ${itag} 的可下載位址。`);
+
+  const needsRules = Boolean(format.signatureCipher || format.cipher || (() => {
+    try { return new URL(format.url || "").searchParams.has("n"); } catch { return false; }
+  })());
+  const rules = needsRules ? await loadPlayerRules(html, steps) : { signature: null, n: null };
+  const counters = { signature: 0, signatureFailed: 0, n: 0, nFailed: 0 };
+  const url = resolveFormatUrl(format, rules, counters);
+  if (!url) throw new Error(`itag ${itag} 的即時媒體網址解析失敗。`);
+  steps.push(`【即時媒體】已使用 ${sourceLabel} 重新取得 itag ${itag} 的媒體網址。`);
+  return { url, sourceLabel };
+}
+
+function mediaRequestHeaders(request, sourceLabel) {
   const headers = new Headers();
   const range = request.headers.get("Range");
   if (range) headers.set("Range", range);
-  const upstream = await fetch(url, { method: request.method, headers, redirect: "follow" });
+  headers.set("Accept", "*/*");
+  headers.set("Accept-Encoding", "identity");
+  headers.set("Origin", "https://www.youtube.com");
+  headers.set("Referer", "https://www.youtube.com/");
+  headers.set(
+    "User-Agent",
+    sourceLabel === "ANDROID"
+      ? "com.google.android.youtube/21.35.35 (Linux; U; Android 14) gzip"
+      : "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36"
+  );
+  return headers;
+}
+
+async function media(request, target, id, itag, sourceLabel) {
+  let resolvedTarget = target || "";
+  const steps = [];
+
+  if (id && itag) {
+    const fresh = await freshMediaUrl(id, itag, sourceLabel || "ANDROID", steps);
+    resolvedTarget = fresh.url;
+    sourceLabel = fresh.sourceLabel;
+  }
+
+  let url;
+  try {
+    url = new URL(resolvedTarget);
+  } catch {
+    return json({ error: "媒體網址無效。", code: "INVALID_MEDIA_URL", version: VERSION, steps }, 400);
+  }
+
+  if (url.protocol !== "https:" || !MEDIA_SUFFIXES.some(suffix => url.hostname.endsWith(suffix))) {
+    return json({ error: "此媒體網域未列入允許清單。", code: "MEDIA_DOMAIN_DENIED", version: VERSION, steps }, 403);
+  }
+
+  const upstream = await fetch(url, {
+    method: request.method,
+    headers: mediaRequestHeaders(request, sourceLabel),
+    redirect: "follow",
+    cache: "no-store"
+  });
+
+  if (upstream.status === 403 && id && itag) {
+    return json({
+      error: "即時重新解析後，Google Video Server 仍拒絕媒體請求。這通常表示目前 Worker 出口或 Client 驗證受到限制。",
+      code: "MEDIA_URL_FORBIDDEN",
+      version: VERSION,
+      steps
+    }, 403);
+  }
+
   const output = new Headers(upstream.headers);
   Object.entries(cors()).forEach(([key, value]) => output.set(key, value));
-  if (new URL(request.url).searchParams.get("download") === "1") {
-    const ext = new URL(request.url).searchParams.get("ext") || "bin";
-    output.set("Content-Disposition", `attachment; filename="youtube-media.${ext.replace(/[^a-z0-9]/gi, "")}"`);
-  }
   output.set("Cache-Control", "no-store");
+  output.set("X-OwO-Media-Mode", id && itag ? "fresh" : "legacy");
+  output.set("X-OwO-Version", VERSION);
+
+  if (new URL(request.url).searchParams.get("download") === "1") {
+    const ext = (new URL(request.url).searchParams.get("ext") || "bin").replace(/[^a-z0-9]/gi, "");
+    output.set("Content-Disposition", `attachment; filename="youtube-media.${ext}"`);
+  }
+
   return new Response(upstream.body, { status: upstream.status, headers: output });
 }
 
@@ -486,8 +733,10 @@ export default {
     const url = new URL(request.url);
     try {
       if (url.pathname === "/youtube" && request.method === "GET") return await youtube(url.searchParams.get("id"), url.searchParams.get("mode") === "hq" ? "hq" : "quick");
-      if (url.pathname === "/media" && ["GET", "HEAD"].includes(request.method)) return await media(request, url.searchParams.get("url"));
-      return json({ service: SERVICE, version: VERSION, architecture: "GitHub Pages + Cloudflare Worker Free", endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq", "GET /media?url=MEDIA_URL"] });
+      if (url.pathname === "/facebook" && request.method === "GET") return await facebookResolve(url.searchParams.get("url"));
+      if (url.pathname === "/facebook-media" && ["GET", "HEAD"].includes(request.method)) return await facebookMedia(request, url.searchParams.get("url"));
+      if (url.pathname === "/media" && ["GET", "HEAD"].includes(request.method)) return await media(request, url.searchParams.get("url"), url.searchParams.get("id"), url.searchParams.get("itag"), url.searchParams.get("source"));
+      return json({ service: SERVICE, version: VERSION, architecture: "GitHub Pages + Cloudflare Worker Free", endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
     } catch (error) {
       return json({ error: error.message || "Worker 執行失敗", code: "WORKER_INTERNAL_ERROR", version: VERSION }, 500);
     }

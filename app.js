@@ -1,6 +1,6 @@
 "use strict";
 const $ = id => document.getElementById(id);
-const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, busy: false, videoId: "", baseReady: false };
+const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, busy: false, videoId: "", baseReady: false, platform: "youtube" };
 const MAX_BROWSER_WORK_BYTES = 700 * 1024 * 1024;
 
 function log(message) {
@@ -34,6 +34,15 @@ function videoId(value) {
     return null;
   } catch { return null; }
 }
+function detectPlatform(value) {
+  try {
+    const host = new URL(value.trim()).hostname.toLowerCase().replace(/^www\./, "");
+    if (["youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"].includes(host)) return "youtube";
+    if (["facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"].includes(host)) return "facebook";
+    return "";
+  } catch { return ""; }
+}
+
 function endpoint(path, params = {}) {
   const base = $("worker").value.trim().replace(/\/$/, "");
   if (!base) throw Error("請先在進階設定輸入 Cloudflare Worker 網址。");
@@ -149,6 +158,41 @@ async function searchHighQuality(id) {
   }
 }
 
+async function analyzeFacebook(url) {
+  log("已辨識平台：Facebook，開始解析公開影片頁面。");
+  const response = await fetch(endpoint("/facebook", { url }), { cache: "no-store" });
+  const data = await response.json().catch(() => ({}));
+  if (Array.isArray(data.steps)) data.steps.forEach(log);
+  if (!response.ok) throw Error(data.error || `Worker 回傳 HTTP ${response.status}。`);
+  const formats = Array.isArray(data.formats) ? data.formats : [];
+  if (!formats.length) throw Error(data.note || "目前沒有取得 Facebook 公開影片格式。");
+  state.formats = mergeFormats([], formats);
+  state.videoId = data.id || "facebook";
+  state.baseReady = true;
+  applyVideoData(data, state.videoId);
+  setMode("direct");
+  status(`Facebook 解析完成，共取得「${state.formats.length}」個公開影片格式。`, "success");
+  log(`Facebook 解析完成，共取得「${state.formats.length}」個格式。`);
+}
+
+async function analyzeYouTube(url) {
+  const id = videoId(url);
+  if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id)) throw Error("這不是可辨識的 YouTube 網址。");
+  state.videoId = id;
+  log(`開始解析影片 ID：${id}`);
+  const { response, data } = await requestPhase(id, "quick");
+  if (!response.ok) throw Error(data.error || `Worker 回傳 HTTP ${response.status}。`);
+  const quickFormats = Array.isArray(data.formats) ? data.formats : [];
+  if (!quickFormats.length) throw Error(data.note || "目前沒有取得可直接下載的基本格式。");
+  state.formats = mergeFormats([], quickFormats);
+  state.baseReady = true;
+  applyVideoData(data, id);
+  setMode("direct");
+  status(`已取得「${state.formats.length}」個基本格式，正在自動搜尋高畫質…`, "success");
+  log(`基本解析完成，已先保留「${state.formats.length}」個可下載格式。`);
+  await searchHighQuality(id);
+}
+
 async function analyze() {
   const button = $("analyze");
   try {
@@ -156,26 +200,14 @@ async function analyze() {
     state.formats = [];
     state.baseReady = false;
     $("progressBox").classList.add("hidden");
-    status("正在尋找可直接下載的基本格式…", "working");
-    const id = videoId($("youtubeUrl").value);
-    if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id)) throw Error("這不是可辨識的 YouTube 網址。");
-    state.videoId = id;
+    const input = $("youtubeUrl").value.trim();
+    const platform = detectPlatform(input);
+    if (!platform) throw Error("目前僅支援 YouTube 與 Facebook 網址。");
+    state.platform = platform;
     localStorage.setItem("workerUrl", $("worker").value.trim());
-    log(`開始解析影片 ID：${id}`);
-
-    const { response, data } = await requestPhase(id, "quick");
-    if (!response.ok) throw Error(data.error || `Worker 回傳 HTTP ${response.status}。`);
-    const quickFormats = Array.isArray(data.formats) ? data.formats : [];
-    if (!quickFormats.length) throw Error(data.note || "目前沒有取得可直接下載的基本格式。");
-
-    state.formats = mergeFormats([], quickFormats);
-    state.baseReady = true;
-    applyVideoData(data, id);
-    setMode("direct");
-    status(`已取得「${state.formats.length}」個基本格式，正在自動搜尋高畫質…`, "success");
-    log(`基本解析完成，已先保留「${state.formats.length}」個可下載格式。`);
-
-    await searchHighQuality(id);
+    status(platform === "facebook" ? "正在解析 Facebook 公開影片…" : "正在尋找可直接下載的基本格式…", "working");
+    if (platform === "facebook") await analyzeFacebook(input);
+    else await analyzeYouTube(input);
   } catch (error) {
     if (state.baseReady && state.formats.length) {
       setMode("direct");
@@ -185,15 +217,25 @@ async function analyze() {
       status(error.message, "error");
       log(`解析失敗：${error.message}`);
     }
-  } finally {
-    button.disabled = false;
-  }
+  } finally { button.disabled = false; }
 }
 
 async function fetchMedia(format, label, from, to) {
   setProgress(from, `正在下載${label}…`);
-  const response = await fetch(endpoint("/media", { url: format.url }), { cache: "no-store" });
-  if (!response.ok) throw Error(`${label}下載失敗：HTTP ${response.status}。`);
+  const mediaEndpoint = state.platform === "facebook"
+    ? endpoint("/facebook-media", { url: format.url })
+    : endpoint("/media", {
+        id: state.videoId,
+        itag: format.itag,
+        source: format.source || "ANDROID",
+        ext: format.container || "bin"
+      });
+  const response = await fetch(mediaEndpoint, { cache: "no-store" });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    if (Array.isArray(detail.steps)) detail.steps.forEach(log);
+    throw Error(detail.error || `${label}下載失敗：HTTP ${response.status}。`);
+  }
   const total = Number(response.headers.get("Content-Length")) || bytes(format);
   if (!response.body) return new Uint8Array(await response.arrayBuffer());
   const reader = response.body.getReader();
@@ -260,7 +302,7 @@ async function directDownload() {
   if (!format) throw Error("沒有可直接下載的格式。");
   const data = await fetchMedia(format, "影片", 2, 95);
   setProgress(100, "下載完成，正在儲存檔案…");
-  saveBlob(data, `youtube-${format.quality}.${format.container || "mp4"}`, format.mimeType || "video/mp4");
+  saveBlob(data, `${state.platform === "facebook" ? "facebook" : "youtube"}-${format.quality}.${format.container || "mp4"}`, format.mimeType || "video/mp4");
   log(`直接下載完成：${format.quality}/${format.container}。`);
 }
 async function download() {

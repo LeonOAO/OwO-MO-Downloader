@@ -1,6 +1,6 @@
 # OwO MO Downloader A3.1 HQ
 
-版本：2026.09.10-A3.1.1-HQ-Auto
+版本：2026.09.11-A3.2.0-FB-Public
 
 ## 部署
 
@@ -32,3 +32,20 @@
 3. 前端自動呼叫高畫質階段。
 4. 高畫質階段成功時，追加分離視訊與音訊格式。
 5. 高畫質階段失敗、429、403 或要求登入時，保留原有基本格式及影片資訊。
+
+## A3.1.2 媒體 403 修正
+
+- 前端下載時不再直接重用解析階段產生的 googlevideo URL。
+- `/media` 改以 `id + itag + source` 即時重新解析。
+- 在同一個 Worker 請求內取得新媒體網址並立即向 Google Video Server 串流。
+- 依播放器來源補上 Android 或瀏覽器 User-Agent、Origin、Referer 與 Range。
+- 若即時重新解析後仍為 403，回傳 `MEDIA_URL_FORBIDDEN` 與明確診斷。
+
+## A3.2 Facebook 公開影片
+
+- 自動辨識 YouTube 與 Facebook 網址。
+- 支援 Facebook 公開影片、公開 Reels、fb.watch 與 share/v 重新導向。
+- 從公開頁面的 Open Graph 與影片資料尋找 HD／SD MP4。
+- Facebook 格式使用 Cloudflare Worker 代理下載。
+- 不接收 Facebook 帳號、密碼或 Cookie。
+- 私人、朋友限定、社團限定與需要登入的影片不在本版範圍。
