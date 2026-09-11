@@ -272,8 +272,6 @@ function strictFormatKey(format) {
     return `youtube:${format.itag || identity || "track"}:${kind}:${quality}:${container}:${codec}`;
   }
   if (identity) return `${platform}:${identity}:${kind}:${quality}:${container}:${codec}`;
-  // Meta results without a trustworthy media identity are ambiguous. Collapse
-  // equal-quality results into one item instead of treating CDN paths as videos.
   return `${platform}:unidentified:${kind}:${quality}:${container}:${codec}`;
 }
 function formatPreference(format) {
@@ -293,7 +291,6 @@ function annotateMediaGroups(formats) {
     const identity = explicitMediaIdentity(format);
     if (identity && !identities.includes(identity)) identities.push(identity);
   }
-  // Only show video numbering when two or more explicit media identities exist.
   const count = identities.length > 1 ? identities.length : 1;
   return formats.map(format => {
     const identity = explicitMediaIdentity(format);
@@ -327,9 +324,11 @@ function mediaFileStem(format) {
   return `${safeFileToken(state.platform)}${index}-${safeFileToken(format.quality, "original")}`;
 }
 
+// 修正重點：同步移除 downloadPanel 的 hidden 類別
 function applyVideoData(data, id) {
   const details = data || {};
   $("videoInfo").classList.remove("hidden");
+  $("downloadPanel").classList.remove("hidden"); // 👈 新增此行顯示下載區
   $("title").textContent = details.title || `${state.platform} 影片`;
   $("thumbnail").src = details.thumbnail || "";
   $("thumbnail").alt = details.title ? `${details.title} 縮圖` : "影片縮圖";
@@ -371,6 +370,8 @@ async function analyze() {
   if (!platform) { status("請貼上支援的 YouTube、Facebook、Instagram 或 Threads 網址。", "error"); return; }
   try {
     state.busy = true; state.platform = platform; state.formats = []; state.baseReady = false; updateButton();
+    $("videoInfo").classList.add("hidden");     // 👈 開始解析時重新隱藏舊面板
+    $("downloadPanel").classList.add("hidden");  // 👈 開始解析時重新隱藏舊面板
     status("正在解析影片頁面…", "working");
     if (platform === "youtube") {
       const id = videoId(value); if (!id) throw Error("無法辨識 YouTube 影片 ID。");
