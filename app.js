@@ -36,13 +36,39 @@ function videoId(value) {
 }
 function detectPlatform(value) {
   try {
-    const host = new URL(value.trim()).hostname.toLowerCase().replace(/^www\./, "");
-    if (["youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"].includes(host)) return "youtube";
-    if (["facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"].includes(host)) return "facebook";
-    if (["instagram.com", "m.instagram.com", "instagr.am"].includes(host)) return "instagram";
-    if (["threads.com", "threads.net"].includes(host)) return "threads";
+    const url = new URL(value.trim());
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+
+    if (
+      host === "youtu.be" ||
+      host === "youtube.com" ||
+      host.endsWith(".youtube.com")
+    ) return "youtube";
+
+    if (
+      host === "fb.watch" ||
+      host === "facebook.com" ||
+      host.endsWith(".facebook.com")
+    ) return "facebook";
+
+    if (
+      host === "instagr.am" ||
+      host.endsWith(".instagr.am") ||
+      host === "instagram.com" ||
+      host.endsWith(".instagram.com")
+    ) return "instagram";
+
+    if (
+      host === "threads.com" ||
+      host.endsWith(".threads.com") ||
+      host === "threads.net" ||
+      host.endsWith(".threads.net")
+    ) return "threads";
+
     return "";
-  } catch { return ""; }
+  } catch {
+    return "";
+  }
 }
 
 function platformRequestHeaders(platform = state.platform) {
@@ -296,7 +322,7 @@ async function analyze() {
     $("progressBox").classList.add("hidden");
     const input = $("youtubeUrl").value.trim();
     const platform = detectPlatform(input);
-    if (!platform) throw Error("目前僅支援 YouTube 與 Facebook 網址。");
+    if (!platform) throw Error("目前支援 YouTube、Facebook、Instagram 與 Threads 的影片網址。");
     state.platform = platform;
     localStorage.setItem("workerUrl", $("worker").value.trim());
     status(platform === "youtube" ? "正在尋找可直接下載的基本格式…" : `正在解析 ${platform === "facebook" ? "Facebook" : platform === "instagram" ? "Instagram" : "Threads"} 影片…`, "working");
@@ -391,7 +417,7 @@ async function mergeDownload() {
   const output = await ffmpeg.readFile(outputName);
   await Promise.allSettled([ffmpeg.deleteFile(videoName), ffmpeg.deleteFile(audioName), ffmpeg.deleteFile(outputName)]);
   setProgress(100, "合併完成，正在儲存 MP4…");
-  saveBlob(output, `${state.platform === "facebook" ? "facebook" : "youtube"}-${video.quality}.mp4`, "video/mp4");
+  saveBlob(output, `${state.platform}-${video.quality}.mp4`, "video/mp4");
   log(`合併完成：${video.quality} MP4。`);
 }
 async function directDownload() {
@@ -399,7 +425,7 @@ async function directDownload() {
   if (!format) throw Error("沒有可直接下載的格式。");
   const data = await fetchMedia(format, "影片", 2, 95);
   setProgress(100, "下載完成，正在儲存檔案…");
-  saveBlob(data, `${state.platform === "facebook" ? "facebook" : "youtube"}-${format.quality}.${format.container || "mp4"}`, format.mimeType || "video/mp4");
+  saveBlob(data, `${state.platform}-${format.quality}.${format.container || "mp4"}`, format.mimeType || "video/mp4");
   log(`直接下載完成：${format.quality}/${format.container}。`);
 }
 async function download() {
