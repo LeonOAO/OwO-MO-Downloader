@@ -1,27 +1,24 @@
-# OwO MO Downloader A3.4.4 FB Story Fields + YouTube Client Matrix
+# OwO MO Downloader A3.4.5 Runtime Compatibility + Codec HLS Fallback
 
-版本：2026.09.11-A3.4.4-FB-Story-Fields-YouTube-Client-Matrix
+版本：2026.09.11-A3.4.5-Runtime-Compatibility-Codec-HLS-Fallback
 
-## Facebook 限時動態
+## 修正
 
-- 新增深層欄位辨識：`browser_native_hd_url`、`browser_native_sd_url`、`playable_url_quality_hd`、`playable_url`、`hd_src`、`sd_src`、`hdSrc`、`sdSrc`、`progressive_url`、`videoUrl`、`video_url`。
-- 支援字串欄位與 `{ url: ... }` 巢狀欄位。
-- 限時動態依 Story ID 建立資料錨點，縮小掃描範圍，降低誤抓推薦內容或下一位發布者媒體的機率。
-- HD 優先、SD 備援，保留 DASH 影音分離格式。
-- 完整保留 FB_COOKIE 分頁工作階段與 Worker Secret 流程。
+- 移除會造成 `exports is not defined` 的 FFmpeg UMD util 全域腳本。
+- 第一次使用合併或音訊轉換時，才以 ES Module 延遲載入 FFmpeg。
+- 使用單執行緒 `@ffmpeg/core`，不要求 SharedArrayBuffer。
+- 補回完整 `analyze`、`applyVideoData`、`fetchMedia`、`ensureFFmpeg`、`directDownload`、`mergeDownload` 與 `saveBlob` 執行流程。
+- Facebook、Instagram、Threads Cookie 密碼欄位均置於獨立表單，消除瀏覽器 DOM 警告。
+- 表單 Submit 只套用至目前分頁，不重新整理頁面。
+- JS 與 CSS 加入 A3.4.5 快取版本參數。
 
-## YouTube 高畫質
+## YouTube
 
-- Client Matrix 納入：ANDROID、WEB、WEB_SAFARI、MWEB、WEB_EMBEDDED、IOS、VISIONOS、TVHTML5、TV_SIMPLY。
-- 各 Client 紀錄狀態、原始格式、可解析位址與 SABR 指標。
-- 分開顯示 PLAYER、GVS、SUBS PO Token 狀態。
-- 記錄 Visitor Data、Data Sync ID 與 `serverAbrStreamingUrl`。
-- 保留既有 Signature、N 參數靜態操作解析與即時媒體網址更新。
+- 保留 A3.4.4 Client Matrix、SABR、PO Token Context、Visitor Data 與 Data Sync ID 診斷。
+- 新增 YTSTUDIO_ANDROID、YTMUSIC_ANDROID Client 候選。
+- 每個 Client 額外記錄 HLS、DASH、SABR 是否存在。
+- 保留 Signature、N 參數、即時 Google Video URL 更新及高畫質瀏覽器端合併。
 
-## 架構
+## 保留
 
-維持 GitHub Pages + 單一 Cloudflare Worker，不加入 Cobalt、第三方下載 API、Node、Deno、Python、Docker 或外部 Token Provider。
-
-## 保留功能
-
-Instagram Crawler View、Instagram Media API、Threads 分享網址、A3.4.3 四平台嚴格去重、MP4、M4A、MP3、WAV 全部保留。
+Facebook Story 深層欄位與 Story ID 錨定、Instagram Crawler View、Instagram Media API、Threads 分享網址、四平台嚴格去重、MP4、M4A、MP3、WAV 全部保留。

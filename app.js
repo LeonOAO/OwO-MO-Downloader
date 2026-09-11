@@ -1,6 +1,10 @@
 "use strict";
 const $ = id => document.getElementById(id);
-const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "" };
+const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "" };
+const APP_VERSION = "A3.4.5 Runtime Compatibility + Codec HLS Fallback";
+const FFMPEG_MODULE_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
+const FFMPEG_UTIL_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
+const FFMPEG_CORE_BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
 const MAX_BROWSER_WORK_BYTES = 700 * 1024 * 1024;
 
 function log(message) {
@@ -236,8 +240,8 @@ function explicitMediaIdentity(format) {
   return "";
 }
 function normalizedKind(format) {
-  const kind = String(format?.kind || "完整影片");
-  return kind === "影音合一" ? "完整影片" : kind;
+  const kind = String(format?.kind || "影音合一");
+  return kind === "完整影片" ? "影音合一" : kind;
 }
 function qualityBucket(format) {
   const height = Number(format?.height || qualityNumber(format) || 0);
@@ -321,6 +325,145 @@ function safeFileToken(value, fallback = "media") {
 function mediaFileStem(format) {
   const index = Number(format?.mediaCount || 1) > 1 ? `-video-${String(format.mediaIndex).padStart(2, "0")}` : "";
   return `${safeFileToken(state.platform)}${index}-${safeFileToken(format.quality, "original")}`;
+}
+
+function applyVideoData(data, id) {
+  const details = data || {};
+  $("videoInfo").classList.remove("hidden");
+  $("title").textContent = details.title || `${state.platform} 影片`;
+  $("thumbnail").src = details.thumbnail || "";
+  $("thumbnail").alt = details.title ? `${details.title} 縮圖` : "影片縮圖";
+  const length = details.lengthSeconds ? ` · ${details.lengthSeconds} 秒` : "";
+  $("meta").textContent = `影片 ID：${id || "未知"} · 來源：${String(details.source || state.platform).toUpperCase()} · 可用格式：${state.formats.length} 個${length}`;
+  populate();
+}
+async function analyzeYoutube(id) {
+  log(`開始解析影片 ID：${id}`);
+  const quickResponse = await fetch(endpoint("/youtube", { id, mode: "quick" }), { cache: "no-store" });
+  const quick = await quickResponse.json().catch(() => ({}));
+  if (Array.isArray(quick.steps)) quick.steps.forEach(log);
+  if (!quickResponse.ok) throw Error(quick.error || quick.note || `Worker 回傳 HTTP ${quickResponse.status}。`);
+  state.formats = mergeFormats([], Array.isArray(quick.formats) ? quick.formats : []);
+  let finalData = quick;
+  if (!state.formats.length || state.mode === "hq") {
+    log("【高畫質搜尋】正在蒐集分離視訊、音訊、Codec 與 HLS 備援資訊。");
+    const hqResponse = await fetch(endpoint("/youtube", { id, mode: "hq" }), { cache: "no-store" });
+    const hq = await hqResponse.json().catch(() => ({}));
+    if (Array.isArray(hq.steps)) hq.steps.forEach(log);
+    if (hqResponse.ok) {
+      state.formats = mergeFormats(state.formats, Array.isArray(hq.formats) ? hq.formats : []);
+      finalData = { ...quick, ...hq, title: hq.title || quick.title, thumbnail: hq.thumbnail || quick.thumbnail };
+    } else if (!state.formats.length) {
+      throw Error(hq.error || hq.note || `高畫質搜尋回傳 HTTP ${hqResponse.status}。`);
+    }
+  }
+  if (!state.formats.length) throw Error(finalData.note || finalData.error || "目前沒有取得可下載的 YouTube 格式。");
+  state.videoId = id;
+  state.baseReady = true;
+  applyVideoData(finalData, id);
+  setMode(lists().videoOnly.length && lists().audioOnly.length ? "hq" : "direct");
+  status(`YouTube 解析完成，共取得「${state.formats.length}」個格式。`, "success");
+}
+async function analyze() {
+  if (state.busy) return;
+  const value = $("youtubeUrl").value.trim();
+  const platform = detectPlatform(value);
+  if (!platform) { status("請貼上支援的 YouTube、Facebook、Instagram 或 Threads 網址。", "error"); return; }
+  try {
+    state.busy = true; state.platform = platform; state.formats = []; state.baseReady = false; updateButton();
+    status("正在解析影片頁面…", "working");
+    if (platform === "youtube") {
+      const id = videoId(value); if (!id) throw Error("無法辨識 YouTube 影片 ID。");
+      await analyzeYoutube(id);
+    } else if (platform === "facebook") {
+      log("已辨識平台：Facebook，開始解析影片頁面。");
+      const response = await fetch(endpoint("/facebook", { url: value }), { cache: "no-store", headers: platformRequestHeaders("facebook") });
+      const data = await response.json().catch(() => ({}));
+      if (Array.isArray(data.steps)) data.steps.forEach(log);
+      if (!response.ok) throw Error(data.error || data.note || `Worker 回傳 HTTP ${response.status}。`);
+      state.formats = mergeFormats([], Array.isArray(data.formats) ? data.formats : []);
+      if (!state.formats.length) throw Error(data.note || "目前沒有取得 Facebook 影片格式。");
+      state.videoId = data.id || "facebook"; state.baseReady = true; applyVideoData(data, state.videoId);
+      setMode(lists().videoOnly.length && lists().audioOnly.length ? "hq" : "direct");
+      status(`Facebook 解析完成，共取得「${state.formats.length}」個格式。`, "success");
+    } else await analyzeSocial(value, platform);
+  } catch (error) {
+    status(String(error.message || error), "error"); log(`解析失敗：${String(error.message || error)}`);
+  } finally { state.busy = false; updateButton(); }
+}
+function mediaEndpoint(format, download = false) {
+  if (state.platform === "youtube") return endpoint("/media", { id: state.videoId, itag: format.itag, source: format.source || "ANDROID", ext: format.container || "bin", download: download ? "1" : "0" });
+  if (state.platform === "facebook") return endpoint("/facebook-media", { url: format.url });
+  return endpoint("/social-media", { url: format.url, platform: state.platform });
+}
+async function fetchMedia(format, label = "媒體", start = 5, end = 65) {
+  const response = await fetch(mediaEndpoint(format), { cache: "no-store", headers: platformRequestHeaders() });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw Error(data.error || `${label}下載失敗：HTTP ${response.status}。`);
+  }
+  const length = Number(response.headers.get("Content-Length") || format.contentLength || 0);
+  if (length > MAX_BROWSER_WORK_BYTES) throw Error(`${label}大小 ${humanBytes(length)} 超過瀏覽器安全處理上限。`);
+  setProgress(start, `正在下載${label}…`);
+  const reader = response.body?.getReader();
+  if (!reader) { const data = new Uint8Array(await response.arrayBuffer()); setProgress(end, `${label}下載完成。`); return data; }
+  const chunks=[]; let received=0;
+  while (true) {
+    const {done,value}=await reader.read(); if (done) break;
+    chunks.push(value); received += value.byteLength;
+    if (received > MAX_BROWSER_WORK_BYTES) { await reader.cancel(); throw Error(`${label}超過瀏覽器安全處理上限。`); }
+    if (length) setProgress(start + (end-start)*(received/length), `正在下載${label}：${humanBytes(received)} / ${humanBytes(length)}`);
+  }
+  const output=new Uint8Array(received); let offset=0; for (const chunk of chunks) { output.set(chunk,offset); offset+=chunk.byteLength; }
+  setProgress(end, `${label}下載完成。`); return output;
+}
+function saveBlob(data, filename, type = "application/octet-stream") {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
+  const anchor = document.createElement("a"); anchor.href=url; anchor.download=filename; anchor.hidden=true;
+  document.body.append(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+async function loadFFmpegModules() {
+  const [ffmpegModule, utilModule] = await Promise.all([import(FFMPEG_MODULE_URL), import(FFMPEG_UTIL_URL)]);
+  if (!ffmpegModule.FFmpeg || !utilModule.toBlobURL) throw Error("FFmpeg ES Module 載入內容不完整。");
+  return { FFmpeg: ffmpegModule.FFmpeg, toBlobURL: utilModule.toBlobURL };
+}
+async function ensureFFmpeg() {
+  if (state.ffmpegLoaded && state.ffmpeg) return state.ffmpeg;
+  if (state.ffmpegLoading) return state.ffmpegLoading;
+  state.ffmpegLoading = (async () => {
+    status("首次使用，正在載入 FFmpeg WebAssembly…", "working"); log("【FFMPEG】以 ES Module 延遲載入，不使用會觸發 exports 錯誤的 CommonJS UMD util。");
+    const { FFmpeg, toBlobURL } = await loadFFmpegModules();
+    const ffmpeg = new FFmpeg();
+    ffmpeg.on("log", ({ message }) => message && log(`【FFMPEG】${message}`));
+    ffmpeg.on("progress", ({ progress }) => Number.isFinite(progress) && setProgress(65 + Math.max(0,Math.min(1,progress))*30, "正在執行瀏覽器影音處理…"));
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${FFMPEG_CORE_BASE}/ffmpeg-core.js`, "text/javascript"),
+      wasmURL: await toBlobURL(`${FFMPEG_CORE_BASE}/ffmpeg-core.wasm`, "application/wasm")
+    });
+    state.ffmpeg=ffmpeg; state.ffmpegLoaded=true; log("【FFMPEG】單執行緒核心載入完成。"); return ffmpeg;
+  })();
+  try { return await state.ffmpegLoading; } finally { state.ffmpegLoading=null; }
+}
+async function directDownload() {
+  const format=selected("directFormat"); if (!format) throw Error("沒有可下載的完整影片格式。");
+  const data=await fetchMedia(format,"完整影片",5,92); setProgress(100,"下載完成，正在儲存檔案…");
+  saveBlob(data,`${mediaFileStem(format)}.${format.container || "mp4"}`,format.mimeType || "video/mp4"); log(`直接下載完成：${format.quality}/${format.container}。`);
+}
+async function mergeDownload() {
+  const video=selected("videoFormat"), audio=selected("audioFormat");
+  if (!video || !audio) throw Error("高畫質合併需要視訊與音訊格式。");
+  const estimated=(bytes(video)+bytes(audio))*3; if (estimated > MAX_BROWSER_WORK_BYTES) throw Error(`預估合併記憶體 ${humanBytes(estimated)} 超過安全上限。`);
+  const [videoData,audioData]=await Promise.all([fetchMedia(video,"高畫質視訊",3,31),fetchMedia(audio,"音訊",32,58)]);
+  const ffmpeg=await ensureFFmpeg(); const videoExt=video.container || "mp4", audioExt=audio.container || "m4a";
+  const v=`input-video.${videoExt}`, a=`input-audio.${audioExt}`, o="merged-video.mp4";
+  await ffmpeg.writeFile(v,videoData); await ffmpeg.writeFile(a,audioData);
+  setProgress(65,"正在合併視訊與音訊…");
+  let copied=true;
+  try { await ffmpeg.exec(["-i",v,"-i",a,"-map","0:v:0","-map","1:a:0","-c:v","copy","-c:a","aac","-b:a","192k","-movflags","+faststart",o]); }
+  catch { copied=false; await ffmpeg.exec(["-i",v,"-i",a,"-map","0:v:0","-map","1:a:0","-c:v","libx264","-preset","veryfast","-c:a","aac","-b:a","192k","-movflags","+faststart",o]); }
+  const output=await ffmpeg.readFile(o); await Promise.allSettled([ffmpeg.deleteFile(v),ffmpeg.deleteFile(a),ffmpeg.deleteFile(o)]);
+  setProgress(100,"高畫質合併完成，正在儲存檔案…"); saveBlob(output,`${mediaFileStem(video)}.mp4`,"video/mp4"); log(`高畫質合併完成：${copied ? "保留原始視訊" : "相容性轉碼"}。`);
 }
 
 async function prepareCompleteVideoForAudio(format, start = 2, end = 56) {
@@ -517,17 +660,16 @@ $("clearLog").onclick = () => $("log").textContent = "尚未執行。";
 $("videoFormat").onchange = updateButton;
 $("audioFormat").onchange = updateButton;
 $("directFormat").onchange = updateButton;
-$("applyFbCookie").onclick = applyFbCookie;
+$("fbCookieForm").onsubmit = event => { event.preventDefault(); applyFbCookie(); };
 $("clearFbCookie").onclick = clearFbCookie;
 $("toggleFbCookie").onclick = () => {
   const input = $("fbCookie");
   input.type = input.type === "password" ? "text" : "password";
   $("toggleFbCookie").textContent = input.type === "password" ? "顯示" : "隱藏";
 };
-$("fbCookie").onkeydown = event => { if (event.key === "Enter") applyFbCookie(); };
-$("applyIgCookie").onclick = () => applySocialCookie("instagram");
+$("igCookieForm").onsubmit = event => { event.preventDefault(); applySocialCookie("instagram"); };
 $("clearIgCookie").onclick = () => clearSocialCookie("instagram");
-$("applyThCookie").onclick = () => applySocialCookie("threads");
+$("thCookieForm").onsubmit = event => { event.preventDefault(); applySocialCookie("threads"); };
 $("clearThCookie").onclick = () => clearSocialCookie("threads");
 for (const prefix of ["ig", "th"]) {
   $(`toggle${prefix === "ig" ? "Ig" : "Th"}Cookie`).onclick = () => {

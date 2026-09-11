@@ -1,4 +1,4 @@
-const VERSION = "2026.09.11-A3.4.4-FB-Story-Fields-YouTube-Client-Matrix";
+const VERSION = "2026.09.11-A3.4.5-Runtime-Compatibility-Codec-HLS-Fallback";
 const SERVICE = "OwO MO Downloader Worker A3 Rolling";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -119,6 +119,8 @@ function sourceSummary(source) {
 
 const PLAYER_CLIENTS = [
   { label: "ANDROID", clientName: "ANDROID", clientVersion: "21.35.35", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
+  { label: "YTSTUDIO_ANDROID", clientName: "ANDROID_CREATOR", clientVersion: "24.35.100", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
+  { label: "YTMUSIC_ANDROID", clientName: "ANDROID_MUSIC", clientVersion: "7.18.52", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
   { label: "WEB", clientName: "WEB", clientVersion: "2.20260909.00.00" },
   { label: "WEB_SAFARI", clientName: "WEB", clientVersion: "2.20260909.00.00", browserName: "Safari", browserVersion: "18.6", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15" },
   { label: "MWEB", clientName: "MWEB", clientVersion: "2.20260909.00.00" },
@@ -204,7 +206,9 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
       if (state.status === "LOGIN_REQUIRED") authCount++;
 
       const clientSabr = Boolean(player?.streamingData?.serverAbrStreamingUrl);
-      steps.push(`【${profile.label}】狀態：${state.status}；原始格式：「${rawCount}」個；含網址或密文：「${addressCount}」個；SABR：${clientSabr ? "存在" : "無"}；原因：${state.reason}。`);
+      const clientHls = Boolean(player?.streamingData?.hlsManifestUrl);
+      const clientDash = Boolean(player?.streamingData?.dashManifestUrl);
+      steps.push(`【${profile.label}】狀態：${state.status}；原始格式：「${rawCount}」個；含網址或密文：「${addressCount}」個；HLS：${clientHls ? "存在" : "無"}；DASH：${clientDash ? "存在" : "無"}；SABR：${clientSabr ? "存在" : "無"}；原因：${state.reason}。`);
       output.push({ label: profile.label, player });
 
       if (mode === "quick" && addressCount) {
