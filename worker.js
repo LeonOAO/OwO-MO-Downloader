@@ -1,4 +1,4 @@
-const VERSION = "2026.09.11-A3.3.1-Platform-Fix";
+const VERSION = "2026.09.11-A3.3.10-Platform-Pills";
 const SERVICE = "OwO MO Downloader Worker A3 Rolling";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -1013,8 +1013,10 @@ function normalizeSocialUrl(value, platform) {
     url.hostname = "www.threads.com";
     const full = url.pathname.match(/^\/@([^/]+)\/post\/([^/?#]+)/i);
     const short = url.pathname.match(/^\/t\/([^/?#]+)/i);
+    const share = url.pathname.match(/^\/share\/([^/?#]+)/i);
     if (full) url.pathname = `/@${full[1]}/post/${full[2]}/`;
     else if (short) url.pathname = `/t/${short[1]}/`;
+    else if (share) url.pathname = `/share/${share[1]}/`;
   }
   return url;
 }
@@ -1027,17 +1029,44 @@ function socialContentType(url, platform) {
     if (/^\/p\//i.test(url.pathname)) return "post";
     return "unknown";
   }
+  if (/^\/share\/[^/?#]+\/?$/i.test(url.pathname)) return "share";
   return /^\/(?:@[^/]+\/post|t)\//i.test(url.pathname) ? "post" : "unknown";
 }
 
+function decodeSocialMediaUrl(value) {
+  let out = String(value || "");
+  for (let i = 0; i < 4; i++) {
+    const before = out;
+    out = decodeFacebookValue(out).replace(/\\u0026/gi, "&").replace(/\\u003d/gi, "=").replace(/\\u002f/gi, "/").replace(/&amp;/gi, "&");
+    if (out === before) break;
+  }
+  return out;
+}
+function socialMediaKey(value) {
+  try { const u = new URL(value); return `${u.hostname.toLowerCase()}${u.pathname}`; } catch { return value; }
+}
+function jsonLdVideos(html) {
+  const urls = []; let m;
+  const re = new RegExp(`<script[^>]+type=["']application/ld\\+json["'][^>]*>([\\s\\S]*?)</script>`, "gi");
+  while ((m = re.exec(html))) {
+    try {
+      const q = [JSON.parse(decodeHtml(m[1]))];
+      while (q.length) { const v=q.shift(); if (!v || typeof v!=="object") continue;
+        for (const [k,x] of Object.entries(v)) { if (typeof x==="string" && /^(?:https:).*?(?:\\.mp4|cdninstagram|fbcdn)/i.test(x)) urls.push(x); else if (x && typeof x==="object") q.push(...(Array.isArray(x)?x:[x])); }
+      }
+    } catch {}
+  }
+  return urls;
+}
 function collectMetaSocialMedia(html, platform) {
   const candidates = [];
   const add = (url, quality = "原始畫質", kind = "影音合一", mimeType = "video/mp4", bitrate = 0) => {
-    const decoded = decodeFacebookValue(url);
+    const decoded = decodeSocialMediaUrl(url);
     if (/^https:\/\//i.test(decoded)) candidates.push({ url: decoded, quality, kind, mimeType, bitrate });
   };
 
   [metaContent(html, "og:video"), metaContent(html, "og:video:url"), metaContent(html, "og:video:secure_url"), metaContent(html, "twitter:player:stream")].filter(Boolean).forEach(url => add(url));
+  jsonLdVideos(html).forEach(url => add(url));
 
   const videoPatterns = [
     /"video_url"\s*:\s*"((?:\\.|[^"])*)"/g,
@@ -1068,7 +1097,10 @@ function collectMetaSocialMedia(html, platform) {
 
   const images = [metaContent(html, "og:image"), metaContent(html, "twitter:image")].filter(Boolean);
   const unique = new Map();
-  for (const item of candidates) if (!unique.has(item.url)) unique.set(item.url, item);
+  for (const item of candidates) {
+    const key = socialMediaKey(item.url);
+    if (!unique.has(key)) unique.set(key, item);
+  }
   return { media: [...unique.values()], images };
 }
 
@@ -1094,6 +1126,22 @@ async function fetchSocialPage(url, platform, cookie = "") {
   return fetch(url, { headers, redirect: "follow", cache: "no-store" });
 }
 
+async function resolveThreadsShare(url, cookie, steps) {
+  for (const host of ["www.threads.com", "www.threads.net"]) {
+    try {
+      const target = new URL(url); target.hostname = host;
+      const response = await fetchSocialPage(target, "threads", cookie);
+      const finalUrl = new URL(response.url);
+      steps.push(`【THREADS】分享網址 ${host} 回傳 HTTP ${response.status}，最終路徑：${finalUrl.pathname}`);
+      if (/^\/@[^/]+\/post\/[^/?#]+/i.test(finalUrl.pathname) || /^\/t\/[^/?#]+/i.test(finalUrl.pathname)) { finalUrl.hostname="www.threads.com"; finalUrl.search=""; steps.push(`【THREADS】已轉為貼文永久網址：${finalUrl.pathname}`); return finalUrl; }
+      const html = await response.text();
+      for (const value of [metaContent(html,"og:url"),metaContent(html,"twitter:url"),(html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)/i)||[])[1]]) {
+        try { const u=new URL(decodeSocialMediaUrl(value),target); if (/^\/@[^/]+\/post\/[^/?#]+/i.test(u.pathname)) {u.hostname="www.threads.com";u.search="";steps.push(`【THREADS】已從分享頁取得貼文永久網址：${u.pathname}`);return u;} } catch {}
+      }
+    } catch(e) { steps.push(`【THREADS】分享網址備援失敗：${e.message}。`); }
+  }
+  return url;
+}
 async function resolveSocial(value, platform, request, env) {
   const label = platform === "instagram" ? "INSTAGRAM" : "THREADS";
   let url;
@@ -1104,6 +1152,7 @@ async function resolveSocial(value, platform, request, env) {
 
   const steps = [`【${label}】已辨識${type === "reel" ? " Reels" : type === "story" ? " Stories" : type === "highlight" ? " Highlights" : "貼文"}網址：${url.pathname}`];
   const cookie = requestMetaCookie(request, env, platform);
+  if (platform === "threads" && type === "share") url = await resolveThreadsShare(url, "", steps);
   let response = await fetchSocialPage(url, platform, "");
   let finalUrl = new URL(response.url);
   let html = await response.text();
@@ -1310,7 +1359,7 @@ export default {
       if (url.pathname === "/threads" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "threads", request, env);
       if (url.pathname === "/social-media" && ["GET", "HEAD"].includes(request.method)) return await metaSocialMedia(request, url.searchParams.get("url"), url.searchParams.get("platform") === "threads" ? "threads" : "instagram", env);
       if (url.pathname === "/media" && ["GET", "HEAD"].includes(request.method)) return await media(request, url.searchParams.get("url"), url.searchParams.get("id"), url.searchParams.get("itag"), url.searchParams.get("source"));
-      return json({ service: SERVICE, version: VERSION, architecture: "GitHub Pages + Cloudflare Worker Free", facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL", "GET /instagram?url=INSTAGRAM_URL", "GET /threads?url=THREADS_URL", "GET /social-media?platform=instagram|threads&url=MEDIA_URL"] });
+      return json({ service: SERVICE, version: VERSION, architecture: "GitHub Pages + Cloudflare Worker Free", facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
     } catch (error) {
       return json({ error: error.message || "Worker 執行失敗", code: "WORKER_INTERNAL_ERROR", version: VERSION }, 500);
     }
