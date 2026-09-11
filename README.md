@@ -1,60 +1,51 @@
-# OwO MO Downloader A3.1 HQ
+# OwO MO Downloader A3.2.8 FB Web Cookie
 
-版本：2026.09.11-A3.2.1-FB-Share
+版本：2026.09.11-A3.2.8-FB-Web-Cookie
+
+## 新增功能
+
+- 在 GitHub Pages 的「進階設定」加入 FB_COOKIE 輸入區。
+- 支援顯示／隱藏、套用至目前分頁與清除。
+- 至少檢查 `c_user` 與 `xs` 是否存在。
+- 自動移除誤貼的 `Cookie:` 前綴與外層引號。
+- Cookie 僅保存在目前分頁的 JavaScript 記憶體。
+- 不寫入網址、localStorage、sessionStorage、IndexedDB、GitHub、ZIP 或執行紀錄。
+- 重新整理或關閉分頁後自動清除。
+- Facebook 解析與媒體下載均透過 `X-FB-Session` Header 傳送同一工作階段。
+- Worker 優先使用網頁本次提供的 Cookie，未提供時才使用 Cloudflare Secret `FB_COOKIE`。
 
 ## 部署
 
-1. 將 `worker.js` 完整部署到 Cloudflare Worker。
-2. 將 `index.html`、`app.js`、`app.css` 放到 GitHub Pages 發布目錄。
-3. 開啟網站，在「進階設定」填入 Worker 根網址。
-4. 解析影片後，若同時取得「僅視訊」與「僅音訊」，即可使用高畫質合併。
+1. 完整部署 `worker.js` 至 Cloudflare Worker。
+2. 完整覆蓋 GitHub Pages 的 `index.html`、`app.js`、`app.css`。
+3. 清除網站快取並重新開啟頁面。
+4. 在「進階設定」貼上 Cookie，按「套用至此分頁」。
+5. 再解析 Facebook Stories 或登入限定影片。
 
-## 工作方式
+## Worker 驗證
 
-- Worker 蒐集各播放器 Client 的可用格式。
-- 高畫質通常為分離式視訊與音訊。
-- 前端分別下載兩條串流。
-- ffmpeg.wasm 在瀏覽器內合併並輸出 MP4。
-- 若只有影音合一格式，介面自動切換為直接下載。
+Worker 根網址應顯示：
 
-## 限制
+```json
+{
+  "version": "2026.09.11-A3.2.8-FB-Web-Cookie",
+  "facebookStories": true,
+  "webCookieInput": true
+}
+```
 
-- 手機瀏覽器不適合合併大型或長時間影片。
-- 預估工作記憶體超過 700 MiB 時，前端會停止並要求選擇較低畫質。
-- ffmpeg.wasm 核心由 unpkg CDN 載入。
-- Cloudflare Worker 的 YouTube 出口仍可能遇到 HTTP 429 或 LOGIN_REQUIRED。
-- 媒體網址有時效性，解析後應盡快下載。
+## Cookie 格式
 
-## A3.1.1 自動高畫質流程
+```text
+c_user=...; xs=...; datr=...; fr=...;
+```
 
-1. 先以快速階段尋找 360p 或其他影音合一格式。
-2. 成功後立即保存至前端狀態並顯示下載選項。
-3. 前端自動呼叫高畫質階段。
-4. 高畫質階段成功時，追加分離視訊與音訊格式。
-5. 高畫質階段失敗、429、403 或要求登入時，保留原有基本格式及影片資訊。
+不要加入 `Cookie:` 前綴。即使誤貼，前端也會嘗試自動移除。
 
-## A3.1.2 媒體 403 修正
+## 注意
 
-- 前端下載時不再直接重用解析階段產生的 googlevideo URL。
-- `/media` 改以 `id + itag + source` 即時重新解析。
-- 在同一個 Worker 請求內取得新媒體網址並立即向 Google Video Server 串流。
-- 依播放器來源補上 Android 或瀏覽器 User-Agent、Origin、Referer 與 Range。
-- 若即時重新解析後仍為 403，回傳 `MEDIA_URL_FORBIDDEN` 與明確診斷。
-
-## A3.2 Facebook 公開影片
-
-- 自動辨識 YouTube 與 Facebook 網址。
-- 支援 Facebook 公開影片、公開 Reels、fb.watch 與 share/v 重新導向。
-- 從公開頁面的 Open Graph 與影片資料尋找 HD／SD MP4。
-- Facebook 格式使用 Cloudflare Worker 代理下載。
-- 不接收 Facebook 帳號、密碼或 Cookie。
-- 私人、朋友限定、社團限定與需要登入的影片不在本版範圍。
-
-## A3.2.1 Facebook 分享網址
-
-- 新增 `facebook.com/share/r/`、`share/v/`、`share/reel/` 與 `fb.watch` 處理。
-- 自動移除 `mibextid` 等追蹤參數。
-- 先以手動重新導向讀取 `Location`，最多追蹤五層。
-- 無 `Location` 時會從 canonical、`og:url` 與 App Link 資料找固定網址。
-- HTTP 400／403 時自動嘗試 Facebook 行動版頁面。
-- 成功時回傳 `canonicalUrl` 並寫入前端執行紀錄。
+- Cookie 具有登入工作階段效力，只適合在自己控制的裝置與網站使用。
+- 瀏覽器開發者工具的 Network 面板仍能看到送往自己 Worker 的 Request Header。
+- 請勿在共用裝置上使用，離開前按「清除」並關閉分頁。
+- Cloudflare Worker 的一般請求標頭大小限制仍適用；Cookie 過長時可能遭平台拒絕。
+- 原有 YouTube、Facebook 公開影片、Reels、Stories、HD／SD、DASH 與 ffmpeg.wasm 功能均保留。
