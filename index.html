@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#eef3ff">
   <meta name="color-scheme" content="light">
-  <title>OwO MO Downloader A3.3.1 Platform Fix</title>
+  <title>OwO MO Downloader A3.3.10 Platform Pills</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -20,22 +20,24 @@
         </span>
         <span>OwO MO Downloader</span>
       </a>
-      <span class="version">A3.3.1 Platform Fix</span>
+      <span class="version">A3.3.10 Platform Pills</span>
     </nav>
 
     <section class="hero">
       <span class="eyebrow"><span class="eyebrow-dot"></span> GitHub Pages + Cloudflare Worker</span>
-      <h1>四平台影音下載<br><span>YouTube／Facebook／Instagram／Threads</span></h1>
-      <p>支援 YouTube、Facebook、Instagram 與 Threads 的公開影片、Reels、Stories、Highlights、貼文與分享網址。</p>
-      <div class="hero-pills" aria-label="支援平台">
-        <span>YouTube</span><span>Facebook</span><span>Instagram</span><span>Threads</span>
+      <h1>OwO 平台影音<span>｜小幫手</span></h1>
+      <div class="hero-pills platform-pills" aria-label="支援平台">
+        <span>YouTube</span>
+        <span>Facebook</span>
+        <span>Instagram</span>
+        <span>Threads</span>
       </div>
     </section>
 
     <section class="panel input-panel">
       <div class="step-title">
         <span class="step-number">1</span>
-        <div><h2>貼上影片網址</h2><p>支援 YouTube 影片、Shorts，以及 Facebook、Instagram、Threads 的影片、Reels、Stories、Highlights 與分享網址</p></div>
+        <div><h2>貼上影片網址</h2></div>
       </div>
 
       <div class="url-box">
@@ -107,7 +109,7 @@
           <span class="mode-icon">✦</span><div><b>高畫質合併</b><small>最高可用畫質 + 音訊</small></div><i>✓</i>
         </button>
         <button class="mode" data-mode="direct" type="button">
-          <span class="mode-icon">↓</span><div><b>直接下載</b><small>不合併的影音合一格式</small></div><i>✓</i>
+          <span class="mode-icon">↓</span><div><b>下載影片 MP4</b><small>下載已包含影片與音訊的完整影片</small></div><i>✓</i>
         </button>
       </div>
 
@@ -115,7 +117,7 @@
         <div><label for="videoFormat">視訊畫質</label><div class="select-wrap"><select id="videoFormat"></select></div></div>
         <div><label for="audioFormat">音訊來源</label><div class="select-wrap"><select id="audioFormat"></select></div></div>
       </div>
-      <div id="directOptions" class="hidden"><label for="directFormat">影音合一格式</label><div class="select-wrap"><select id="directFormat"></select></div></div>
+      <div id="directOptions" class="hidden"><label for="directFormat">影片格式</label><div class="select-wrap"><select id="directFormat"></select></div></div>
 
       <div id="formatNote" class="note"></div>
       <div id="progressBox" class="progress-box hidden">
@@ -123,8 +125,32 @@
         <div class="progress-track"><span id="progressBar"></span></div>
       </div>
       <button id="download" class="action-button download-button" type="button">
-        <span>下載並合併 MP4</span>
+        <span>下載影片 MP4</span>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg>
+      </button>
+      <button id="extractAudio" class="action-button audio-button hidden" type="button">
+        <span>提取音訊 M4A</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l10-2v13M9 9l10-2M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm10-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>
+      </button>
+      <div id="mp3Options" class="mp3-options hidden">
+        <label for="mp3Bitrate">MP3 位元率</label>
+        <div class="select-wrap">
+          <select id="mp3Bitrate" aria-label="MP3 位元率">
+            <option value="128">128 kbps｜節省容量</option>
+            <option value="192" selected>192 kbps｜平衡品質</option>
+            <option value="256">256 kbps｜高音質</option>
+            <option value="320">320 kbps｜最高音質</option>
+          </select>
+        </div>
+        <small id="mp3BitrateHelp">目前選擇：192 kbps，適合一般聆聽與檔案大小平衡。</small>
+      </div>
+      <button id="convertMp3" class="action-button mp3-button hidden" type="button">
+        <span>轉換音訊 MP3｜192 kbps</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l10-2v13M9 9l10-2M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm10-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>
+      </button>
+      <button id="convertWav" class="action-button wav-button hidden" type="button">
+        <span>轉換音訊 WAV</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h2l2-6 4 12 3-9 2 6h5M4 21h16"/></svg>
       </button>
     </section>
 
