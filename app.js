@@ -171,8 +171,10 @@ async function analyzeFacebook(url) {
   state.videoId = data.id || "facebook";
   state.baseReady = true;
   applyVideoData(data, state.videoId);
-  setMode("direct");
-  status(`Facebook 解析完成，共取得「${state.formats.length}」個公開影片格式。`, "success");
+  const facebookLists = lists();
+  if (facebookLists.videoOnly.length && facebookLists.audioOnly.length) setMode("hq");
+  else setMode("direct");
+  status(`Facebook 解析完成，共取得「${state.formats.length}」個影片格式。`, "success");
   log(`Facebook 解析完成，共取得「${state.formats.length}」個格式。`);
 }
 
@@ -295,7 +297,7 @@ async function mergeDownload() {
   const output = await ffmpeg.readFile(outputName);
   await Promise.allSettled([ffmpeg.deleteFile(videoName), ffmpeg.deleteFile(audioName), ffmpeg.deleteFile(outputName)]);
   setProgress(100, "合併完成，正在儲存 MP4…");
-  saveBlob(output, `youtube-${video.quality}.mp4`, "video/mp4");
+  saveBlob(output, `${state.platform === "facebook" ? "facebook" : "youtube"}-${video.quality}.mp4`, "video/mp4");
   log(`合併完成：${video.quality} MP4。`);
 }
 async function directDownload() {
