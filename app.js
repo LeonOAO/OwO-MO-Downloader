@@ -135,7 +135,6 @@ async function analyzeSocial(url, platform) {
   state.videoId = data.id || platform;
   state.baseReady = true;
   applyVideoData(data, state.videoId);
-  setMode(lists().videoOnly.length && lists().audioOnly.length ? "hq" : "direct");
   status(`${label} 解析完成，共取得「${state.formats.length}」個影片格式。`, "success");
 }
 function endpoint(path, params = {}) {
@@ -177,7 +176,7 @@ function populate() {
   audioOnly.forEach(f => appendOption(audio, f, displayFormat(f, true)));
   muxed.forEach(f => appendOption(direct, f, displayFormat(f)));
   const hqReady = videoOnly.length && audioOnly.length;
-  const directReady = muxed.length;
+  const directReady = muxed.length > 0;
   if (!hqReady && directReady) setMode("direct");
   else setMode("hq");
   $("formatNote").textContent = hqReady
@@ -239,9 +238,13 @@ function explicitMediaIdentity(format) {
   } catch {}
   return "";
 }
+
+// 強化社群平台 kind 容錯邏輯（非僅視訊/僅音訊一律預設為影音合一）
 function normalizedKind(format) {
-  const kind = String(format?.kind || "影音合一");
-  return kind === "完整影片" ? "影音合一" : kind;
+  const kind = String(format?.kind || "").trim().toLowerCase();
+  if (["僅視訊", "video_only", "video-only"].includes(kind)) return "僅視訊";
+  if (["僅音訊", "audio_only", "audio-only"].includes(kind)) return "僅音訊";
+  return "影音合一";
 }
 function qualityBucket(format) {
   const height = Number(format?.height || qualityNumber(format) || 0);
@@ -312,8 +315,8 @@ function mediaPrefix(format) {
   return Number(format?.mediaCount || 1) > 1 ? `影片 ${format.mediaIndex} · ` : "";
 }
 function displayFormat(format, audio = false) {
-  const quality = audio ? `${Math.round((format.bitrate || 0) / 1000) || "未知"} kbps` : format.quality;
-  return `${mediaPrefix(format)}${quality} · ${String(format.container || "bin").toUpperCase()} · ${humanBytes(bytes(format))}`;
+  const quality = audio ? `${Math.round((format.bitrate || 0) / 1000) || "未知"} kbps` : (format.quality || "標準畫質");
+  return `${mediaPrefix(format)}${quality} · ${String(format.container || "MP4").toUpperCase()} · ${humanBytes(bytes(format))}`;
 }
 function safeFileToken(value, fallback = "media") {
   const cleaned = String(value || "").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
@@ -324,11 +327,11 @@ function mediaFileStem(format) {
   return `${safeFileToken(state.platform)}${index}-${safeFileToken(format.quality, "original")}`;
 }
 
-// 修正重點：同步移除 downloadPanel 的 hidden 類別
+// 顯示面板並更新格式選單
 function applyVideoData(data, id) {
   const details = data || {};
   $("videoInfo").classList.remove("hidden");
-  $("downloadPanel").classList.remove("hidden"); // 👈 新增此行顯示下載區
+  $("downloadPanel").classList.remove("hidden"); // 確保下載區開啟
   $("title").textContent = details.title || `${state.platform} 影片`;
   $("thumbnail").src = details.thumbnail || "";
   $("thumbnail").alt = details.title ? `${details.title} 縮圖` : "影片縮圖";
@@ -360,7 +363,6 @@ async function analyzeYoutube(id) {
   state.videoId = id;
   state.baseReady = true;
   applyVideoData(finalData, id);
-  setMode(lists().videoOnly.length && lists().audioOnly.length ? "hq" : "direct");
   status(`YouTube 解析完成，共取得「${state.formats.length}」個格式。`, "success");
 }
 async function analyze() {
@@ -370,8 +372,8 @@ async function analyze() {
   if (!platform) { status("請貼上支援的 YouTube、Facebook、Instagram 或 Threads 網址。", "error"); return; }
   try {
     state.busy = true; state.platform = platform; state.formats = []; state.baseReady = false; updateButton();
-    $("videoInfo").classList.add("hidden");     // 👈 開始解析時重新隱藏舊面板
-    $("downloadPanel").classList.add("hidden");  // 👈 開始解析時重新隱藏舊面板
+    $("videoInfo").classList.add("hidden");
+    $("downloadPanel").classList.add("hidden");
     status("正在解析影片頁面…", "working");
     if (platform === "youtube") {
       const id = videoId(value); if (!id) throw Error("無法辨識 YouTube 影片 ID。");
@@ -385,7 +387,6 @@ async function analyze() {
       state.formats = mergeFormats([], Array.isArray(data.formats) ? data.formats : []);
       if (!state.formats.length) throw Error(data.note || "目前沒有取得 Facebook 影片格式。");
       state.videoId = data.id || "facebook"; state.baseReady = true; applyVideoData(data, state.videoId);
-      setMode(lists().videoOnly.length && lists().audioOnly.length ? "hq" : "direct");
       status(`Facebook 解析完成，共取得「${state.formats.length}」個格式。`, "success");
     } else await analyzeSocial(value, platform);
   } catch (error) {
