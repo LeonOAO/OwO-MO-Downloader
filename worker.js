@@ -1,14 +1,18 @@
-const VERSION = "2026.09.11-A3.2.8-FB-Web-Cookie";
+const VERSION = "2026.09.11-A3.3.0-IG-Threads";
 const SERVICE = "OwO MO Downloader Worker A3 Rolling";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
 const FACEBOOK_MEDIA_SUFFIXES = [".fbcdn.net", ".facebook.com"];
+const INSTAGRAM_PAGE_HOSTS = ["instagram.com", "www.instagram.com", "m.instagram.com", "instagr.am", "www.instagr.am"];
+const THREADS_PAGE_HOSTS = ["threads.com", "www.threads.com", "threads.net", "www.threads.net"];
+const META_MEDIA_SUFFIXES = [".cdninstagram.com", ".fbcdn.net", ".instagram.com", ".threads.com", ".threads.net"];
 
 function cors(origin = "*") {
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
-    "Access-Control-Allow-Headers": "Range,Content-Type,X-FB-Session",
+    "Access-Control-Allow-Headers": "Range,Content-Type,Cache-Control,X-FB-Session,X-IG-Session,X-TH-Session",
+    "Access-Control-Max-Age": "86400",
     "Access-Control-Expose-Headers": "Content-Length,Content-Range,Accept-Ranges,Content-Type,Content-Disposition",
     "Vary": "Origin"
   };
@@ -633,7 +637,8 @@ function validateFacebookPageUrl(value) {
 
 
 function isFacebookSharePath(url) {
-  return url.hostname.toLowerCase() === "fb.watch" || /^\/share\/(?:r|v|reel)\//i.test(url.pathname);
+  if (url.hostname.toLowerCase() === "fb.watch") return true;
+  return /^\/share\/(?:r\/|v\/|reel\/)?[^/?#]+\/?$/i.test(url.pathname);
 }
 
 function isFacebookAuthPath(url) {
@@ -679,13 +684,20 @@ function canonicalFacebookUrl(html, baseUrl) {
     metaContent(html, "og:url"),
     metaContent(html, "al:android:url"),
     metaContent(html, "al:ios:url"),
+    metaContent(html, "twitter:url"),
+    (html.match(/<meta[^>]+http-equiv=["']refresh["'][^>]+content=["'][^"']*url=([^"']+)["']/i) || [])[1] || "",
+    (html.match(/(?:window\.location(?:\.href)?|location\.replace)\s*(?:=|\()\s*["']([^"']+)["']/i) || [])[1] || "",
     (html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i) || [])[1] || "",
     (html.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["']/i) || [])[1] || "",
     (html.match(/"url"\s*:\s*"(https?:\\?\/\\?\/(?:www\.)?facebook\.com\\?\/(?:reel|watch|[^"\\]+\/videos)\\?\/[^"\\]+)"/i) || [])[1] || ""
   ];
+  const base = new URL(baseUrl);
   for (const candidate of candidates) {
     const result = absoluteFacebookUrl(candidate, baseUrl);
-    if (result && !isFacebookSharePath(new URL(result))) return result;
+    if (!result) continue;
+    const resolved = new URL(result);
+    if (resolved.href === base.href || isFacebookSharePath(resolved) || isFacebookAuthPath(resolved)) continue;
+    return resolved.href;
   }
   return "";
 }
@@ -717,76 +729,100 @@ async function fetchFacebookPage(url, options = {}) {
 }
 
 async function resolveFacebookShareUrl(inputUrl, steps, cookie = "") {
-  let current = cleanFacebookShareUrl(inputUrl);
-  steps.push(`【FACEBOOK】已辨識分享網址：${current.pathname}`);
+  const original = cleanFacebookShareUrl(inputUrl);
+  const genericShare = /^\/share\/[^/]+\/?$/i.test(original.pathname);
+  steps.push(`【FACEBOOK】已辨識${genericShare ? "通用" : "分類"}分享網址：${original.pathname}`);
   steps.push("【FACEBOOK】已移除分享追蹤參數。");
 
-  const visited = new Set();
-  for (let hop = 1; hop <= 5; hop++) {
-    if (visited.has(current.href)) break;
-    visited.add(current.href);
-
-    let response;
+  function validResolvedUrl(value) {
+    if (!value) return null;
     try {
-      response = await fetchFacebookPage(current, { redirect: "manual", cookie });
-    } catch (error) {
-      steps.push(`【FACEBOOK】第「${hop}」層重新導向請求失敗：${error.message}。`);
-      break;
+      const url = cleanFacebookShareUrl(new URL(value, original.href));
+      if (!FACEBOOK_PAGE_HOSTS.includes(url.hostname.toLowerCase())) return null;
+      if (isFacebookAuthPath(url) || isFacebookSharePath(url)) return null;
+      return url;
+    } catch {
+      return null;
     }
+  }
 
-    steps.push(`【FACEBOOK】分享網址第「${hop}」層回傳 HTTP ${response.status}。`);
+  async function inspectResponse(response, label, requestUrl) {
+    steps.push(`【FACEBOOK】${label}回傳 HTTP ${response.status}。`);
     const location = response.headers.get("Location");
     if (location) {
-      const next = absoluteFacebookUrl(location, current.href);
-      if (next) {
-        current = cleanFacebookShareUrl(new URL(next));
-        steps.push(`【FACEBOOK】已取得下一層 Facebook 網址：${current.pathname}`);
-        if (isFacebookAuthPath(current)) {
-          steps.push("【FACEBOOK】重新導向至登入頁，本層不視為固定影片網址。");
-          break;
+      const locationUrl = absoluteFacebookUrl(location, requestUrl.href);
+      const resolved = validResolvedUrl(locationUrl);
+      if (resolved) {
+        steps.push(`【FACEBOOK】${label}已取得固定網址：${resolved.pathname}`);
+        return resolved;
+      }
+      if (locationUrl) {
+        const rejected = new URL(locationUrl);
+        if (isFacebookAuthPath(rejected)) {
+          steps.push(`【FACEBOOK】${label}指向登入頁，忽略該位置並繼續匿名備援。`);
+        } else if (isFacebookSharePath(rejected)) {
+          steps.push(`【FACEBOOK】${label}仍指向分享中介頁，繼續匿名備援。`);
         }
-        if (isUsableFacebookVideoUrl(current)) return current;
-        continue;
       }
     }
 
     const html = await response.text().catch(() => "");
-    if (html) {
-      const canonical = canonicalFacebookUrl(html, current.href);
-      if (canonical) {
-        const result = cleanFacebookShareUrl(new URL(canonical));
-        steps.push(`【FACEBOOK】已從頁面資料取得固定網址：${result.pathname}`);
-        return result;
-      }
+    if (!html) return null;
+    const canonical = canonicalFacebookUrl(html, requestUrl.href);
+    const resolved = validResolvedUrl(canonical);
+    if (resolved) {
+      steps.push(`【FACEBOOK】${label}已從頁面資料取得固定網址：${resolved.pathname}`);
+      return resolved;
     }
-
-    if (response.status === 400 || response.status === 403 || !html) {
-      try {
-        const mobileResponse = await fetchFacebookPage(current, { mobile: true, redirect: "follow", cookie });
-        steps.push(`【FACEBOOK】行動版備援回傳 HTTP ${mobileResponse.status}。`);
-        const mobileHtml = await mobileResponse.text();
-        const finalUrl = new URL(mobileResponse.url);
-        if (isFacebookAuthPath(finalUrl)) {
-          steps.push("【FACEBOOK】行動版備援仍進入登入頁。");
-        } else if (isUsableFacebookVideoUrl(finalUrl)) {
-          steps.push(`【FACEBOOK】行動版備援已取得固定網址：${finalUrl.pathname}`);
-          return finalUrl;
-        }
-        const canonical = canonicalFacebookUrl(mobileHtml, finalUrl.href);
-        if (canonical) {
-          const result = cleanFacebookShareUrl(new URL(canonical));
-          steps.push(`【FACEBOOK】已從行動版頁面取得固定網址：${result.pathname}`);
-          return result;
-        }
-      } catch (error) {
-        steps.push(`【FACEBOOK】行動版備援失敗：${error.message}。`);
-      }
-    }
-    break;
+    return null;
   }
 
-  steps.push("【FACEBOOK】未取得固定 Reels／影片網址，改以清理後的分享網址直接解析。");
-  return current;
+  const variants = [];
+  const seen = new Set();
+  function addVariant(hostname, mobile, redirect, label) {
+    const url = new URL(original.href);
+    url.hostname = hostname;
+    const key = `${url.href}|${mobile}|${redirect}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    variants.push({ url, mobile, redirect, label });
+  }
+
+  addVariant(original.hostname, original.hostname === "m.facebook.com", "manual", "原始分享網址");
+  addVariant("m.facebook.com", true, "manual", "行動版手動轉址");
+  addVariant("www.facebook.com", false, "manual", "桌面版手動轉址");
+  addVariant("m.facebook.com", true, "follow", "行動版自動轉址");
+  addVariant("www.facebook.com", false, "follow", "桌面版自動轉址");
+
+  for (const variant of variants) {
+    try {
+      const response = await fetchFacebookPage(variant.url, {
+        mobile: variant.mobile,
+        redirect: variant.redirect,
+        cookie
+      });
+
+      if (variant.redirect === "follow") {
+        const finalUrl = validResolvedUrl(response.url);
+        if (finalUrl) {
+          steps.push(`【FACEBOOK】${variant.label}回傳 HTTP ${response.status}。`);
+          steps.push(`【FACEBOOK】${variant.label}已取得固定網址：${finalUrl.pathname}`);
+          return finalUrl;
+        }
+        if (isFacebookAuthPath(new URL(response.url))) {
+          steps.push(`【FACEBOOK】${variant.label}回傳 HTTP ${response.status}，最終仍進入登入頁。`);
+        }
+      }
+
+      const resolved = await inspectResponse(response, variant.label, variant.url);
+      if (resolved) return resolved;
+    } catch (error) {
+      steps.push(`【FACEBOOK】${variant.label}失敗：${error.message}。`);
+    }
+  }
+
+  steps.push("【FACEBOOK】匿名分享入口均未取得固定網址，保留原分享網址交由後續頁面解析或登入工作階段備援。");
+  return original;
 }
 
 function requestFacebookCookie(request, env) {
@@ -947,6 +983,198 @@ async function facebookMedia(request, target, env) {
   return new Response(upstream.body, { status: upstream.status, headers: output });
 }
 
+
+function requestMetaCookie(request, env, platform) {
+  const header = platform === "instagram" ? "X-IG-Session" : "X-TH-Session";
+  const secretName = platform === "instagram" ? "IG_COOKIE" : "TH_COOKIE";
+  const supplied = String(request.headers.get(header) || "").trim();
+  const secret = String(env && env[secretName] || "").trim();
+  const instagramFallback = platform === "threads" ? String(request.headers.get("X-IG-Session") || env && env.IG_COOKIE || "").trim() : "";
+  return supplied || secret || instagramFallback;
+}
+
+function normalizeSocialUrl(value, platform) {
+  const url = new URL(value);
+  const hosts = platform === "instagram" ? INSTAGRAM_PAGE_HOSTS : THREADS_PAGE_HOSTS;
+  if (url.protocol !== "https:" || !hosts.includes(url.hostname.toLowerCase())) throw new Error(`僅接受 ${platform === "instagram" ? "Instagram" : "Threads"} 的 HTTPS 網址。`);
+  url.hash = "";
+  ["igsh", "igshid", "utm_source", "utm_medium", "utm_campaign", "xmt", "share_id", "fbclid"].forEach(key => url.searchParams.delete(key));
+  if (platform === "instagram") {
+    url.hostname = "www.instagram.com";
+    const reel = url.pathname.match(/^\/(?:reels?|reel)\/([^/?#]+)/i);
+    const post = url.pathname.match(/^\/(?:p|tv)\/([^/?#]+)/i);
+    const story = url.pathname.match(/^\/stories\/([^/?#]+)\/([^/?#]+)/i);
+    const highlight = url.pathname.match(/^\/stories\/highlights\/([^/?#]+)/i);
+    if (reel) url.pathname = `/reel/${reel[1]}/`;
+    else if (post) url.pathname = `/p/${post[1]}/`;
+    else if (story) url.pathname = `/stories/${story[1]}/${story[2]}/`;
+    else if (highlight) url.pathname = `/stories/highlights/${highlight[1]}/`;
+  } else {
+    url.hostname = "www.threads.com";
+    const full = url.pathname.match(/^\/@([^/]+)\/post\/([^/?#]+)/i);
+    const short = url.pathname.match(/^\/t\/([^/?#]+)/i);
+    if (full) url.pathname = `/@${full[1]}/post/${full[2]}/`;
+    else if (short) url.pathname = `/t/${short[1]}/`;
+  }
+  return url;
+}
+
+function socialContentType(url, platform) {
+  if (platform === "instagram") {
+    if (/^\/stories\/highlights\//i.test(url.pathname)) return "highlight";
+    if (/^\/stories\//i.test(url.pathname)) return "story";
+    if (/^\/reel\//i.test(url.pathname)) return "reel";
+    if (/^\/p\//i.test(url.pathname)) return "post";
+    return "unknown";
+  }
+  return /^\/(?:@[^/]+\/post|t)\//i.test(url.pathname) ? "post" : "unknown";
+}
+
+function collectMetaSocialMedia(html, platform) {
+  const candidates = [];
+  const add = (url, quality = "原始畫質", kind = "影音合一", mimeType = "video/mp4", bitrate = 0) => {
+    const decoded = decodeFacebookValue(url);
+    if (/^https:\/\//i.test(decoded)) candidates.push({ url: decoded, quality, kind, mimeType, bitrate });
+  };
+
+  [metaContent(html, "og:video"), metaContent(html, "og:video:url"), metaContent(html, "og:video:secure_url"), metaContent(html, "twitter:player:stream")].filter(Boolean).forEach(url => add(url));
+
+  const videoPatterns = [
+    /"video_url"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"videoUrl"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"contentUrl"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"content_url"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"playable_url"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"playable_url_quality_hd"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"src"\s*:\s*"((?:\\.|[^"])*?(?:cdninstagram|fbcdn)[^"]*?\.mp4(?:[^"\\]*|\\.)*)"/g
+  ];
+  for (const pattern of videoPatterns) {
+    let match;
+    while ((match = pattern.exec(html))) add(match[1], /quality_hd|1080|720/i.test(match[0]) ? "HD" : "原始畫質");
+  }
+
+  const versionObjects = /"video_versions"\s*:\s*\[([\s\S]*?)\]/g;
+  let versions;
+  while ((versions = versionObjects.exec(html))) {
+    const itemPattern = /\{([\s\S]*?)\}/g;
+    let item;
+    while ((item = itemPattern.exec(versions[1]))) {
+      const url = (item[1].match(/"url"\s*:\s*"((?:\\.|[^"])*)"/) || [])[1];
+      const width = Number((item[1].match(/"width"\s*:\s*(\d+)/) || [])[1] || 0);
+      const height = Number((item[1].match(/"height"\s*:\s*(\d+)/) || [])[1] || 0);
+      if (url) add(url, height ? `${height}p` : width ? `${width}px` : "原始畫質", "影音合一", "video/mp4", height * width);
+    }
+  }
+
+  const images = [metaContent(html, "og:image"), metaContent(html, "twitter:image")].filter(Boolean);
+  const unique = new Map();
+  for (const item of candidates) if (!unique.has(item.url)) unique.set(item.url, item);
+  return { media: [...unique.values()], images };
+}
+
+function socialLoginPage(url, html, platform) {
+  if (/\/(?:accounts\/login|login|challenge|checkpoint)(?:\/|$)/i.test(url.pathname)) return true;
+  const markers = platform === "instagram"
+    ? ["Log in • Instagram", "loginForm", "accounts/login"]
+    : ["Log in • Threads", "LoginForm", "login"];
+  return markers.filter(marker => html.includes(marker)).length >= 2;
+}
+
+async function fetchSocialPage(url, platform, cookie = "") {
+  const referer = platform === "instagram" ? "https://www.instagram.com/" : "https://www.threads.com/";
+  const headers = new Headers({
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1",
+    "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.7",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Referer": referer,
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache"
+  });
+  if (cookie) headers.set("Cookie", cookie);
+  return fetch(url, { headers, redirect: "follow", cache: "no-store" });
+}
+
+async function resolveSocial(value, platform, request, env) {
+  const label = platform === "instagram" ? "INSTAGRAM" : "THREADS";
+  let url;
+  try { url = normalizeSocialUrl(value, platform); }
+  catch (error) { return json({ error: error.message, code: `${label}_INVALID_URL`, version: VERSION }, 400); }
+  const type = socialContentType(url, platform);
+  if (type === "unknown") return json({ error: `${platform === "instagram" ? "Instagram" : "Threads"} 網址不是可辨識的貼文、Reel、Story、Highlight 或短網址。`, code: `${label}_UNSUPPORTED_URL`, version: VERSION }, 400);
+
+  const steps = [`【${label}】已辨識${type === "reel" ? " Reels" : type === "story" ? " Stories" : type === "highlight" ? " Highlights" : "貼文"}網址：${url.pathname}`];
+  const cookie = requestMetaCookie(request, env, platform);
+  let response = await fetchSocialPage(url, platform, "");
+  let finalUrl = new URL(response.url);
+  let html = await response.text();
+  steps.push(`【${label}】訪客頁面回傳 HTTP ${response.status}，HTML「${html.length}」個字元。`);
+  let parsed = collectMetaSocialMedia(html, platform);
+
+  const loginRequiredType = type === "story" || type === "highlight";
+  if ((!response.ok || socialLoginPage(finalUrl, html, platform) || !parsed.media.length) && cookie) {
+    steps.push(`【${label}】訪客頁面未取得影片，使用分頁工作階段或 Worker Secret 再解析一次。`);
+    response = await fetchSocialPage(url, platform, cookie);
+    finalUrl = new URL(response.url);
+    html = await response.text();
+    steps.push(`【${label}】登入工作階段頁面回傳 HTTP ${response.status}，HTML「${html.length}」個字元。`);
+    parsed = collectMetaSocialMedia(html, platform);
+  }
+
+  if (!parsed.media.length) {
+    const needsSession = loginRequiredType || socialLoginPage(finalUrl, html, platform);
+    return json({
+      platform, contentType: type, canonicalUrl: finalUrl.href, formats: [], steps, version: VERSION,
+      code: needsSession ? `${label}_SESSION_REQUIRED` : `${label}_MEDIA_NOT_FOUND`,
+      error: needsSession && !cookie ? `${platform === "instagram" ? "Instagram" : "Threads"} 此內容需要登入工作階段，請在進階設定貼入對應 Cookie。` : undefined,
+      note: needsSession ? "登入工作階段不存在、已失效或帳戶沒有觀看權限。" : "頁面已載入，但沒有找到影片；內容可能是純文字、圖片、輪播圖片、已刪除或平台頁面格式已更新。"
+    }, needsSession && !cookie ? 401 : 200);
+  }
+
+  const formats = parsed.media.map((item, index) => ({
+    itag: `${platform}-${index + 1}`,
+    quality: item.quality,
+    kind: item.kind,
+    container: item.mimeType.includes("webm") ? "webm" : "mp4",
+    mimeType: item.mimeType,
+    codec: "",
+    bitrate: item.bitrate || 0,
+    contentLength: "",
+    source: label,
+    url: item.url
+  })).sort((a, b) => b.bitrate - a.bitrate);
+  const title = cleanFacebookTitle(metaContent(html, "og:title") || metaContent(html, "twitter:title") || `${platform === "instagram" ? "Instagram" : "Threads"} 影片`);
+  const thumbnail = parsed.images[0] || "";
+  const id = (url.pathname.match(/(?:reel|p|tv|post|t|stories\/[^/]+)\/([^/]+)/i) || [])[1] || `${platform}-${Date.now()}`;
+  steps.push(`【${label}】找到「${formats.length}」個影片格式。`);
+  return json({ platform, contentType: type, id, canonicalUrl: finalUrl.href, source: label, version: VERSION, code: "OK", title, thumbnail, formats, steps, note: "" });
+}
+
+async function metaSocialMedia(request, target, platform, env) {
+  let url;
+  try { url = new URL(target); } catch { return json({ error: "媒體網址無效。", code: "SOCIAL_MEDIA_INVALID_URL", version: VERSION }, 400); }
+  if (url.protocol !== "https:" || !META_MEDIA_SUFFIXES.some(suffix => url.hostname === suffix.slice(1) || url.hostname.endsWith(suffix))) {
+    return json({ error: "此 Instagram／Threads 媒體網域未列入允許清單。", code: "SOCIAL_MEDIA_DOMAIN_DENIED", version: VERSION }, 403);
+  }
+  const cookie = requestMetaCookie(request, env, platform);
+  const referer = platform === "instagram" ? "https://www.instagram.com/" : "https://www.threads.com/";
+  const headers = new Headers({
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1",
+    "Referer": referer,
+    "Accept": "*/*",
+    "Accept-Encoding": "identity"
+  });
+  if (cookie) headers.set("Cookie", cookie);
+  const range = request.headers.get("Range");
+  if (range) headers.set("Range", range);
+  const upstream = await fetch(url, { method: request.method, headers, redirect: "follow", cache: "no-store" });
+  const output = new Headers(upstream.headers);
+  Object.entries(cors()).forEach(([key, value]) => output.set(key, value));
+  output.set("Cache-Control", "no-store");
+  output.set("X-OwO-Version", VERSION);
+  output.set("Content-Disposition", `attachment; filename="${platform}-video.mp4"`);
+  return new Response(upstream.body, { status: upstream.status, headers: output });
+}
+
 function clientProfileByLabel(label) {
   return PLAYER_CLIENTS.find(profile => profile.label === label) || PLAYER_CLIENTS.find(profile => profile.label === "ANDROID");
 }
@@ -1066,14 +1294,23 @@ async function media(request, target, id, itag, sourceLabel) {
 
 export default {
   async fetch(request, env) {
-    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors() });
+    if (request.method === "OPTIONS") {
+      const headers = new Headers(cors());
+      const requestedHeaders = request.headers.get("Access-Control-Request-Headers");
+      if (requestedHeaders) headers.set("Access-Control-Allow-Headers", requestedHeaders);
+      headers.set("Content-Length", "0");
+      return new Response(null, { status: 204, headers });
+    }
     const url = new URL(request.url);
     try {
       if (url.pathname === "/youtube" && request.method === "GET") return await youtube(url.searchParams.get("id"), url.searchParams.get("mode") === "hq" ? "hq" : "quick");
       if (url.pathname === "/facebook" && request.method === "GET") return await facebookResolve(url.searchParams.get("url"), env, request);
       if (url.pathname === "/facebook-media" && ["GET", "HEAD"].includes(request.method)) return await facebookMedia(request, url.searchParams.get("url"), env);
+      if (url.pathname === "/instagram" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "instagram", request, env);
+      if (url.pathname === "/threads" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "threads", request, env);
+      if (url.pathname === "/social-media" && ["GET", "HEAD"].includes(request.method)) return await metaSocialMedia(request, url.searchParams.get("url"), url.searchParams.get("platform") === "threads" ? "threads" : "instagram", env);
       if (url.pathname === "/media" && ["GET", "HEAD"].includes(request.method)) return await media(request, url.searchParams.get("url"), url.searchParams.get("id"), url.searchParams.get("itag"), url.searchParams.get("source"));
-      return json({ service: SERVICE, version: VERSION, architecture: "GitHub Pages + Cloudflare Worker Free", facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, webCookieInput: true, endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
+      return json({ service: SERVICE, version: VERSION, architecture: "GitHub Pages + Cloudflare Worker Free", facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
     } catch (error) {
       return json({ error: error.message || "Worker 執行失敗", code: "WORKER_INTERNAL_ERROR", version: VERSION }, 500);
     }
