@@ -158,114 +158,54 @@ async function searchHighQuality(id) {
   }
 }
 
-function wait(milliseconds) {
-  return new Promise(resolve => setTimeout(resolve, milliseconds));
-}
-
 function facebookHasHighQuality() {
   const { videoOnly, audioOnly, muxed } = lists();
   const highMuxed = muxed.some(format => {
     const height = qualityNumber(format);
     return height >= 720 || /HD/i.test(String(format.quality || ""));
   });
-  return highMuxed || (videoOnly.some(format => qualityNumber(format) >= 720 || /HD/i.test(String(format.quality || ""))) && audioOnly.length > 0);
-}
-
-function facebookRetryDelay(attempt) {
-  const base = Math.min(3500, 450 * Math.pow(1.45, Math.max(0, attempt - 1)));
-  const jitter = Math.floor(Math.random() * 500);
-  return Math.round(base + jitter);
+  const highVideo = videoOnly.some(format => {
+    const height = qualityNumber(format);
+    return height >= 720 || /HD/i.test(String(format.quality || ""));
+  });
+  return highMuxed || (highVideo && audioOnly.length > 0);
 }
 
 async function analyzeFacebook(url) {
-  const maximumAttempts = 10;
-  let lastReason = "尚未取得可用格式。";
-  let canonicalUrl = url;
-  let latestData = null;
+  log("已辨識平台：Facebook，開始穩定解析影片頁面。");
+  status("正在解析 Facebook 影片…", "working");
 
-  log(`已辨識平台：Facebook，最多自動嘗試「${maximumAttempts}」次。`);
+  const response = await fetch(endpoint("/facebook", {
+    url,
+    nonce: `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  }), {
+    cache: "no-store",
+    headers: { "Cache-Control": "no-cache" }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (Array.isArray(data.steps)) data.steps.forEach(log);
+  if (!response.ok) throw Error(data.error || `Worker 回傳 HTTP ${response.status}。`);
 
-  for (let attempt = 1; attempt <= maximumAttempts; attempt++) {
-    status(`正在解析 Facebook，第「${attempt}/${maximumAttempts}」次…`, "working");
-    log(`【FACEBOOK】開始第「${attempt}/${maximumAttempts}」次解析。`);
+  const formats = Array.isArray(data.formats) ? data.formats : [];
+  if (data.canonicalUrl) log(`Facebook 固定影片網址：${data.canonicalUrl}`);
+  if (!formats.length) throw Error(data.note || "目前沒有取得 Facebook 影片格式。");
 
-    try {
-      const requestUrl = new URL(endpoint("/facebook", {
-        url: canonicalUrl,
-        attempt: String(attempt),
-        nonce: `${Date.now()}-${Math.random().toString(36).slice(2)}`
-      }));
-      const response = await fetch(requestUrl.href, {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache" }
-      });
-      const data = await response.json().catch(() => ({}));
-      latestData = data;
-      if (Array.isArray(data.steps)) data.steps.forEach(log);
-      if (data.canonicalUrl) {
-        canonicalUrl = data.canonicalUrl;
-        log(`Facebook 固定影片網址：${canonicalUrl}`);
-      }
+  state.formats = mergeFormats([], formats);
+  state.videoId = data.id || "facebook";
+  state.baseReady = true;
+  applyVideoData(data, state.videoId);
 
-      const incoming = Array.isArray(data.formats) ? data.formats : [];
-      if (incoming.length) {
-        const before = state.formats.length;
-        state.formats = mergeFormats(state.formats, incoming);
-        state.videoId = data.id || state.videoId || "facebook";
-        state.baseReady = true;
-        applyVideoData(data, state.videoId);
-        const added = state.formats.length - before;
-        log(`【FACEBOOK】第「${attempt}/${maximumAttempts}」次取得「${incoming.length}」個格式，新增「${Math.max(0, added)}」個，累計「${state.formats.length}」個。`);
+  const currentLists = lists();
+  if (currentLists.videoOnly.length && currentLists.audioOnly.length) setMode("hq");
+  else setMode("direct");
 
-        const currentLists = lists();
-        if (currentLists.videoOnly.length && currentLists.audioOnly.length) setMode("hq");
-        else setMode("direct");
-
-        if (facebookHasHighQuality()) {
-          status(`Facebook 解析完成，第「${attempt}」次已取得高畫質，累計「${state.formats.length}」個格式。`, "success");
-          log("【FACEBOOK】已取得可用高畫質，提前停止後續重試。");
-          return;
-        }
-
-        status(`已保留「${state.formats.length}」個格式，目前尚未找到高畫質，繼續嘗試…`, "success");
-        lastReason = data.note || "已取得基本格式，但尚未找到 HD 或可合併的高畫質格式。";
-      } else {
-        lastReason = data.error || data.note || `Worker 回傳 HTTP ${response.status}。`;
-        log(`【FACEBOOK】第「${attempt}/${maximumAttempts}」次未取得格式：${lastReason}`);
-      }
-
-      if (response.status === 429 || data.code === "FACEBOOK_RATE_LIMITED") {
-        log("【FACEBOOK】收到 HTTP 429，為避免延長限制，停止本輪自動重試。");
-        break;
-      }
-
-      if (["INVALID_FACEBOOK_URL", "FACEBOOK_MEDIA_DOMAIN_DENIED", "FB_STORY_SESSION_REQUIRED", "FB_SESSION_EXPIRED"].includes(data.code)) {
-        log(`【FACEBOOK】錯誤「${data.code}」需要先修正登入工作階段或網址，提前停止。`);
-        break;
-      }
-    } catch (error) {
-      lastReason = error.message;
-      log(`【FACEBOOK】第「${attempt}/${maximumAttempts}」次請求失敗：${error.message}`);
-    }
-
-    if (attempt < maximumAttempts) {
-      const delay = facebookRetryDelay(attempt);
-      log(`【FACEBOOK】等待「${delay}」毫秒後進行第「${attempt + 1}/${maximumAttempts}」次解析。`);
-      await wait(delay);
-    }
+  if (facebookHasHighQuality()) {
+    status(`Facebook 解析完成，已取得高畫質，共「${state.formats.length}」個格式。`, "success");
+    log(`Facebook 解析完成，已取得高畫質，共「${state.formats.length}」個格式。`);
+  } else {
+    status(`Facebook 解析完成，已保留「${state.formats.length}」個可下載格式。`, "success");
+    log(`Facebook 解析完成，已保留「${state.formats.length}」個格式；本次未取得額外高畫質。`);
   }
-
-  if (state.baseReady && state.formats.length) {
-    applyVideoData(latestData || {}, state.videoId);
-    const currentLists = lists();
-    if (currentLists.videoOnly.length && currentLists.audioOnly.length) setMode("hq");
-    else setMode("direct");
-    status(`Facebook 自動嘗試完成；已保留「${state.formats.length}」個可下載格式，目前未找到額外高畫質。`, "success");
-    log(`【FACEBOOK】最多「${maximumAttempts}」次流程結束，既有格式未清除。最後狀態：${lastReason}`);
-    return;
-  }
-
-  throw Error(`Facebook 已自動嘗試最多「${maximumAttempts}」次，仍未取得可下載格式。最後原因：${lastReason}`);
 }
 
 async function analyzeYouTube(url) {
