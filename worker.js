@@ -1,4 +1,4 @@
-const VERSION = "2026.09.11-A3.4.1-Instagram-Crawler-Media-API";
+const VERSION = "2026.09.11-A3.4.3-Strict-Deduplication";
 const SERVICE = "OwO MO Downloader Worker A3 Rolling";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
