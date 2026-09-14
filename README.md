@@ -1,24 +1,33 @@
-# OwO MO Downloader A3.4.5 Runtime Compatibility + Codec HLS Fallback
+# OwO 平台影音｜小幫手 v1.0.0
 
-版本：2026.09.11-A3.4.5-Runtime-Compatibility-Codec-HLS-Fallback
+公開版本：v1.0.0
 
-## 修正
+內部建置：2026.09.14-youtube-all-mode-router-fix
 
-- 移除會造成 `exports is not defined` 的 FFmpeg UMD util 全域腳本。
-- 第一次使用合併或音訊轉換時，才以 ES Module 延遲載入 FFmpeg。
-- 使用單執行緒 `@ffmpeg/core`，不要求 SharedArrayBuffer。
-- 補回完整 `analyze`、`applyVideoData`、`fetchMedia`、`ensureFFmpeg`、`directDownload`、`mergeDownload` 與 `saveBlob` 執行流程。
-- Facebook、Instagram、Threads Cookie 密碼欄位均置於獨立表單，消除瀏覽器 DOM 警告。
-- 表單 Submit 只套用至目前分頁，不重新整理頁面。
-- JS 與 CSS 加入 A3.4.5 快取版本參數。
+## 顯示調整
 
-## YouTube
+- 移除首頁的「GitHub Pages + Cloudflare Worker」架構文字。
+- 移除首頁的 A3.x 技術版本名稱。
+- 對外版本重新從 `v1.0.0` 開始。
+- 瀏覽器分頁標題只顯示「OwO 平台影音｜小幫手」。
+- Worker 根網址回傳公開版本 `1.0.0`，另保留 `build` 供維護時追查實際建置。
 
-- 保留 A3.4.4 Client Matrix、SABR、PO Token Context、Visitor Data 與 Data Sync ID 診斷。
-- 新增 YTSTUDIO_ANDROID、YTMUSIC_ANDROID Client 候選。
-- 每個 Client 額外記錄 HLS、DASH、SABR 是否存在。
-- 保留 Signature、N 參數、即時 Google Video URL 更新及高畫質瀏覽器端合併。
+## 功能基準
 
-## 保留
+本版完整保留原 A3.4.8 的功能：
 
-Facebook Story 深層欄位與 Story ID 錨定、Instagram Crawler View、Instagram Media API、Threads 分享網址、四平台嚴格去重、MP4、M4A、MP3、WAV 全部保留。
+- YouTube `mode=quick|hq|all` 路由修正
+- YouTube 單一工作階段 Client Matrix
+- Facebook 一般影片、Reels 與 Stories
+- Instagram Crawler View 與 Media API
+- Threads 分享網址處理
+- 四平台嚴格去重
+- MP4、M4A、MP3、WAV
+- FFmpeg ES Module 延遲載入
+- Cookie 表單與手機版介面
+
+## 後續版本規則
+
+- 功能修正：`v1.0.1`、`v1.0.2`
+- 向下相容的新功能：`v1.1.0`
+- 大型架構或不相容更新：`v2.0.0`
