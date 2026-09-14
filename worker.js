@@ -1,5 +1,6 @@
-const VERSION = "2026.09.11-A3.4.5-Runtime-Compatibility-Codec-HLS-Fallback";
-const SERVICE = "OwO MO Downloader Worker A3 Rolling";
+const VERSION = "1.0.1";
+const BUILD = "2026.09.14-youtube-anonymous-client-completion";
+const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
 const FACEBOOK_MEDIA_SUFFIXES = [".fbcdn.net", ".facebook.com"];
@@ -119,6 +120,7 @@ function sourceSummary(source) {
 
 const PLAYER_CLIENTS = [
   { label: "ANDROID", clientName: "ANDROID", clientVersion: "21.35.35", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
+  { label: "ANDROID_VR", clientName: "ANDROID_VR", clientVersion: "1.65.10", osName: "Android", osVersion: "14", androidSdkVersion: 34, deviceMake: "Oculus", deviceModel: "Quest 3" },
   { label: "YTSTUDIO_ANDROID", clientName: "ANDROID_CREATOR", clientVersion: "24.35.100", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
   { label: "YTMUSIC_ANDROID", clientName: "ANDROID_MUSIC", clientVersion: "7.18.52", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
   { label: "WEB", clientName: "WEB", clientVersion: "2.20260909.00.00" },
@@ -130,6 +132,26 @@ const PLAYER_CLIENTS = [
   { label: "TVHTML5", clientName: "TVHTML5", clientVersion: "7.20260909.18.00", platform: "TV" },
   { label: "TV_SIMPLY", clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER", clientVersion: "2.0", platform: "TV", clientScreen: "EMBED", embed: true }
 ];
+
+const ALL_MODE_CLIENT_ORDER = [
+  "ANDROID",
+  "WEB_EMBEDDED",
+  "WEB_SAFARI",
+  "ANDROID_VR",
+  "IOS",
+  "TV_SIMPLY",
+  "WEB",
+  "MWEB",
+  "VISIONOS",
+  "TVHTML5",
+  "YTSTUDIO_ANDROID",
+  "YTMUSIC_ANDROID"
+];
+
+function orderedAllModeProfiles() {
+  const byLabel = new Map(PLAYER_CLIENTS.map(profile => [profile.label, profile]));
+  return ALL_MODE_CLIENT_ORDER.map(label => byLabel.get(label)).filter(Boolean);
+}
 
 async function innertubePlayer(apiKey, visitorData, id, profile) {
   const client = { hl: "zh-TW", gl: "TW", ...profile };
@@ -191,11 +213,15 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
 
   steps.push(mode === "quick"
     ? "【快速解析】先使用 ANDROID 尋找可直接下載的影音合一格式。"
-    : "【高畫質搜尋】保留既有結果，繼續蒐集分離視訊與分離音訊格式。");
+    : mode === "all"
+      ? "【單一工作階段】先使用 ANDROID 保留基本格式，再沿用相同上下文搜尋高畫質 Client。"
+      : "【高畫質搜尋】保留既有結果，繼續蒐集分離視訊與分離音訊格式。");
   let authCount = state.status === "LOGIN_REQUIRED" ? 1 : 0;
   const profiles = mode === "quick"
     ? PLAYER_CLIENTS.filter(profile => profile.label === "ANDROID")
-    : PLAYER_CLIENTS.filter(profile => profile.label !== "ANDROID");
+    : mode === "all"
+      ? orderedAllModeProfiles()
+      : PLAYER_CLIENTS.filter(profile => profile.label !== "ANDROID");
 
   for (const profile of profiles) {
     try {
@@ -215,6 +241,9 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
         steps.push(`【快速解析】${profile.label} 已取得「${addressCount}」個可解析格式，先回傳基本結果。`);
         break;
       }
+      if (mode === "all" && profile.label === "ANDROID" && addressCount) {
+        steps.push(`【基本格式保留】ANDROID 已取得「${addressCount}」個可解析格式；繼續同一工作階段的高畫質搜尋。`);
+      }
 
       const all = output.flatMap(source => addressableFormats(source.player));
       const videoOnly = all.some(format => String(format.mimeType || "").startsWith("video/") && !format.audioQuality);
@@ -226,14 +255,18 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
         break;
       }
 
-      if (muxed && authCount >= 4) {
+      if (mode !== "all" && muxed && authCount >= 4) {
         steps.push("【快速停止】已有影音合一格式，且多個來源要求登入，停止其餘 Client 輪詢。");
         break;
       }
 
-      if (authCount >= 4 && !all.length) {
+      if (mode !== "all" && authCount >= 4 && !all.length) {
         steps.push(`【快速停止】已有「${authCount}」個來源要求登入，判定為 AUTH_REQUIRED。`);
         break;
+      }
+
+      if (mode === "all" && state.status === "LOGIN_REQUIRED") {
+        steps.push(`【登入限制】${profile.label} 要求登入；mode=all 繼續下一個匿名 Client。`);
       }
     } catch (error) {
       steps.push(`【${profile.label}】請求失敗：${error.message}。`);
@@ -244,6 +277,13 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
     }
   }
 
+  if (mode === "all") {
+    const completedFormats = output.flatMap(source => addressableFormats(source.player));
+    const completedVideoOnly = completedFormats.filter(format => String(format.mimeType || "").startsWith("video/") && !format.audioQuality).length;
+    const completedAudioOnly = completedFormats.filter(format => String(format.mimeType || "").startsWith("audio/") || (!String(format.mimeType || "").startsWith("video/") && format.audioQuality)).length;
+    const completedMuxed = completedFormats.filter(format => String(format.mimeType || "").startsWith("video/") && Boolean(format.audioQuality)).length;
+    steps.push(`【完整矩陣摘要】已測試「${output.length}」個來源；影音合一：「${completedMuxed}」；僅視訊：「${completedVideoOnly}」；僅音訊：「${completedAudioOnly}」；登入限制：「${authCount}」。`);
+  }
   return output;
 }
 
@@ -426,17 +466,53 @@ function resolveFormatUrl(format, rules, counters) {
   return target.href;
 }
 
+async function fetchYoutubeWatchPage(id, steps) {
+  const targets = [
+    `https://www.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW`,
+    `https://m.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW`,
+    `https://www.youtube.com/embed/${encodeURIComponent(id)}?hl=zh-TW`
+  ];
+  let lastStatus = 0;
+  for (let index = 0; index < targets.length; index++) {
+    const target = targets[index];
+    const response = await fetch(target, {
+      headers: {
+        "User-Agent": index === 1
+          ? "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36"
+          : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
+        "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.6",
+        "Cache-Control": "no-cache"
+      },
+      cache: "no-store"
+    });
+    lastStatus = response.status;
+    steps.push(`【WATCH FALLBACK ${index + 1}/${targets.length}】HTTP ${response.status}。`);
+    if (response.ok) {
+      const html = await response.text();
+      if (html.includes("ytInitialPlayerResponse") || html.includes("INNERTUBE_API_KEY")) return { response, html };
+      steps.push("【WATCH FALLBACK】頁面成功但缺少播放器初始化資料，繼續下一個入口。");
+    }
+    if (index < targets.length - 1) await new Promise(resolve => setTimeout(resolve, 350));
+  }
+  return { response: new Response(null, { status: lastStatus || 502 }), html: "" };
+}
+
 async function youtube(id, mode = "quick") {
   if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) return json({ error: "影片 ID 格式錯誤" }, 400);
   const steps = [];
-  const watch = `https://www.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW`;
-  const response = await fetch(watch, {
-    headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.6" },
-    cache: "no-store"
-  });
-  if (!response.ok) return json({ error: `YouTube 頁面回傳 HTTP ${response.status}` }, 502);
-  const html = await response.text();
-  steps.push("【解析】已取得 watch 頁面 HTML。");
+  const watchResult = await fetchYoutubeWatchPage(id, steps);
+  const response = watchResult.response;
+  if (!response.ok || !watchResult.html) {
+    return json({
+      error: `YouTube 頁面入口全部受限，最後回傳 HTTP ${response.status}`,
+      code: response.status === 429 ? "YOUTUBE_RATE_LIMITED" : "YOUTUBE_PAGE_UNAVAILABLE",
+      retryable: response.status === 429,
+      version: VERSION,
+      steps
+    }, response.status === 429 ? 429 : 502);
+  }
+  const html = watchResult.html;
+  steps.push("【解析】已取得可用的 YouTube 頁面 HTML。");
   const watchPlayer = extractJsonObject(html, "ytInitialPlayerResponse");
   if (!watchPlayer) return json({ error: "頁面中找不到 ytInitialPlayerResponse", steps }, 422);
   steps.push("【解析】已取得 ytInitialPlayerResponse。");
@@ -1759,14 +1835,18 @@ export default {
     }
     const url = new URL(request.url);
     try {
-      if (url.pathname === "/youtube" && request.method === "GET") return await youtube(url.searchParams.get("id"), url.searchParams.get("mode") === "hq" ? "hq" : "quick");
+      if (url.pathname === "/youtube" && request.method === "GET") {
+        const requestedMode = String(url.searchParams.get("mode") || "quick").toLowerCase();
+        const mode = ["quick", "hq", "all"].includes(requestedMode) ? requestedMode : "quick";
+        return await youtube(url.searchParams.get("id"), mode);
+      }
       if (url.pathname === "/facebook" && request.method === "GET") return await facebookResolve(url.searchParams.get("url"), env, request);
       if (url.pathname === "/facebook-media" && ["GET", "HEAD"].includes(request.method)) return await facebookMedia(request, url.searchParams.get("url"), env);
       if (url.pathname === "/instagram" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "instagram", request, env);
       if (url.pathname === "/threads" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "threads", request, env);
       if (url.pathname === "/social-media" && ["GET", "HEAD"].includes(request.method)) return await metaSocialMedia(request, url.searchParams.get("url"), url.searchParams.get("platform") === "threads" ? "threads" : "instagram", env);
       if (url.pathname === "/media" && ["GET", "HEAD"].includes(request.method)) return await media(request, url.searchParams.get("url"), url.searchParams.get("id"), url.searchParams.get("itag"), url.searchParams.get("source"));
-      return json({ service: SERVICE, version: VERSION, architecture: "GitHub Pages + Cloudflare Worker Free", facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
+      return json({ service: SERVICE, version: VERSION, build: BUILD, facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq|all", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
     } catch (error) {
       return json({ error: error.message || "Worker 執行失敗", code: "WORKER_INTERNAL_ERROR", version: VERSION }, 500);
     }
