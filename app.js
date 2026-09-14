@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "" };
-const APP_VERSION = "A3.4.6 Stable 360p No Cobalt";
+const APP_VERSION = "A3.4.7 YouTube Single Session Test";
 const FFMPEG_MODULE_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
 const FFMPEG_UTIL_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
 const FFMPEG_CORE_BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
@@ -340,70 +340,41 @@ function applyVideoData(data, id) {
   $("meta").textContent = `影片 ID：${id || "未知"} · 來源：${String(details.source || state.platform).toUpperCase()} · 可用格式：${state.formats.length} 個${length}`;
   populate();
 }
-function wait(milliseconds) {
-  return new Promise(resolve => setTimeout(resolve, milliseconds));
-}
-async function requestYoutubePhase(id, mode, attempts = 3) {
-  let lastResponse = null;
-  let lastData = {};
+function wait(milliseconds) { return new Promise(resolve => setTimeout(resolve, milliseconds)); }
+async function requestYoutubeAll(id, attempts = 3) {
+  let lastResponse = null, lastData = {};
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    const response = await fetch(endpoint("/youtube", {
-      id,
-      mode,
-      nonce: `${Date.now()}-${attempt}`
-    }), {
-      cache: "no-store",
-      headers: { "Cache-Control": "no-cache" }
-    });
+    const response = await fetch(endpoint("/youtube", { id, mode: "all", nonce: `${Date.now()}-${attempt}` }), { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
     const data = await response.json().catch(() => ({}));
     if (Array.isArray(data.steps)) data.steps.forEach(log);
-    lastResponse = response;
-    lastData = data;
+    lastResponse = response; lastData = data;
     if (response.ok) return { response, data };
-    const retryable = response.status === 429 || response.status === 502 || response.status === 503 || response.status === 504;
+    const retryable = [429, 502, 503, 504].includes(response.status);
     if (!retryable || attempt === attempts) break;
-    const delay = attempt * 900;
-    log(`【${mode === "quick" ? "快速解析" : "高畫質搜尋"}】HTTP ${response.status}，等待 ${delay} 毫秒後進行第 ${attempt + 1}/${attempts} 次嘗試。`);
+    const delay = attempt * 1200;
+    log(`【單一工作階段】HTTP ${response.status}，等待 ${delay} 毫秒後進行第 ${attempt + 1}/${attempts} 次完整嘗試。`);
     await wait(delay);
   }
   return { response: lastResponse, data: lastData };
 }
 async function analyzeYoutube(id) {
   log(`開始解析影片 ID：${id}`);
-  const quickResult = await requestYoutubePhase(id, "quick", 3);
-  const quickResponse = quickResult.response;
-  const quick = quickResult.data;
-  if (!quickResponse || !quickResponse.ok) {
-    throw Error(quick.error || quick.note || `YouTube 快速解析回傳 HTTP ${quickResponse?.status || "未知"}。`);
-  }
-  state.formats = mergeFormats([], Array.isArray(quick.formats) ? quick.formats : []);
-  let finalData = quick;
-  if (state.formats.length) {
-    log(`【基本格式保留】快速解析已取得「${state.formats.length}」個格式，後續搜尋不會清除。`);
-  }
-  if (!state.formats.length || state.mode === "hq") {
-    log("【高畫質搜尋】正在蒐集分離視訊、音訊、Codec 與 HLS 備援資訊。");
-    const hqResult = await requestYoutubePhase(id, "hq", 2);
-    const hqResponse = hqResult.response;
-    const hq = hqResult.data;
-    if (hqResponse && hqResponse.ok) {
-      state.formats = mergeFormats(state.formats, Array.isArray(hq.formats) ? hq.formats : []);
-      finalData = { ...quick, ...hq, title: hq.title || quick.title, thumbnail: hq.thumbnail || quick.thumbnail };
-    } else if (state.formats.length) {
-      log(`【高畫質搜尋】HTTP ${hqResponse?.status || "未知"}／${hq.error || hq.note || "未取得高畫質"}；已保留快速解析的基本格式。`);
-    } else {
-      throw Error(hq.error || hq.note || `高畫質搜尋回傳 HTTP ${hqResponse?.status || "未知"}。`);
-    }
-  }
-  if (!state.formats.length) throw Error(finalData.note || finalData.error || "目前沒有取得可下載的 YouTube 格式。");
-  state.videoId = id;
-  state.baseReady = true;
-  applyVideoData(finalData, id);
-  const hasHqPair = lists().videoOnly.length && lists().audioOnly.length;
+  log("【單一工作階段】基本格式與高畫質 Client 共用同一次 watch 頁面、API Key、Visitor Data 與 Player Response。");
+  const { response, data } = await requestYoutubeAll(id, 3);
+  if (!response || !response.ok) throw Error(data.error || data.note || `YouTube 單一工作階段回傳 HTTP ${response?.status || "未知"}。`);
+  state.formats = mergeFormats([], Array.isArray(data.formats) ? data.formats : []);
+  if (!state.formats.length) throw Error(data.note || data.error || "目前沒有取得可下載的 YouTube 格式。");
+  state.videoId = id; state.baseReady = true; applyVideoData(data, id);
+  const { videoOnly, audioOnly, muxed } = lists();
+  const hasHqPair = videoOnly.length > 0 && audioOnly.length > 0;
   setMode(hasHqPair ? "hq" : "direct");
-  status(hasHqPair
-    ? `YouTube 解析完成，共取得「${state.formats.length}」個格式。`
-    : `已取得「${state.formats.length}」個基本影片格式；高畫質來源目前不可用。`, "success");
+  if (hasHqPair) {
+    status(`YouTube 單一工作階段解析完成，共取得「${state.formats.length}」個格式。`, "success");
+    log(`【高畫質】已取得分離視訊「${videoOnly.length}」個與音訊「${audioOnly.length}」個。`);
+  } else {
+    status(`已取得「${muxed.length || state.formats.length}」個基本影片格式；本次沒有額外高畫質來源。`, "success");
+    log("【基本格式保留】本次沒有取得完整高畫質配對，基本格式仍可直接下載。");
+  }
 }
 async function analyze() {
   if (state.busy) return;
