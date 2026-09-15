@@ -1,5 +1,5 @@
-const VERSION = "1.6.0";
-const BUILD = "2026.09.15-v160-isolated-media-20-cycles";
+const VERSION = "1.6.1";
+const BUILD = "2026.09.15-v161-isolated-media-15-cycles";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -525,8 +525,8 @@ function resolveFormatUrl(format, rules, counters) {
 }
 
 async function fetchYoutubeWatchPage(id, steps, youtubeCookie = "") {
-  const MAX_WATCH_CYCLES = 20;
-  const watchRetryDelay = cycle => cycle <= 5 ? 1000 : cycle <= 10 ? 2000 : cycle <= 15 ? 3000 : 5000;
+  const MAX_WATCH_CYCLES = 15;
+  const watchRetryDelay = cycle => cycle <= 5 ? 1000 : cycle <= 10 ? 2000 : cycle <= 15 ? 3000 : 3000;
   let lastStatus = 0;
   let lastHtml = "";
 
@@ -598,7 +598,7 @@ async function youtube(id, mode = "quick", youtubeCookie = "") {
   const html = watchResult.html;
   steps.push("【解析】已取得可用的 YouTube 頁面 HTML。");
   const watchPlayer = watchResult.player || extractJsonObject(html, "ytInitialPlayerResponse");
-  if (!watchPlayer) return json({ error: "已完成二十輪 WATCH 重試，仍找不到 ytInitialPlayerResponse。", code: "YOUTUBE_PLAYER_RESPONSE_MISSING", retryable: true, version: VERSION, steps }, 422);
+  if (!watchPlayer) return json({ error: "已完成十五輪 WATCH 重試，仍找不到 ytInitialPlayerResponse。", code: "YOUTUBE_PLAYER_RESPONSE_MISSING", retryable: true, version: VERSION, steps }, 422);
   steps.push("【解析】已取得 ytInitialPlayerResponse。");
 
   if (youtubeCookie) steps.push("【YOUTUBE SESSION】已套用目前請求的登入工作階段（內容已隱藏）。");
@@ -2008,7 +2008,7 @@ function mediaRequestHeaders(request, sourceLabel) {
 }
 
 async function freshMediaUrlWithRetry(id, itag, sourceLabel, steps, wanted = {}) {
-  steps.push(`【即時媒體重試】${sourceLabel} / itag ${itag} 使用單一二十輪刷新工作；不再外層重複啟動完整 WATCH 掃描。`);
+  steps.push(`【即時媒體重試】${sourceLabel} / itag ${itag} 使用單一十五輪刷新工作；不再外層重複啟動完整 WATCH 掃描。`);
   return freshMediaUrl(id, itag, sourceLabel, steps, wanted);
 }
 
