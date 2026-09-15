@@ -1,5 +1,5 @@
-const VERSION = "1.5.0";
-const BUILD = "2026.09.15-v150-stable-media-refresh";
+const VERSION = "1.6.0";
+const BUILD = "2026.09.15-v160-isolated-media-20-cycles";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -525,8 +525,8 @@ function resolveFormatUrl(format, rules, counters) {
 }
 
 async function fetchYoutubeWatchPage(id, steps, youtubeCookie = "") {
-  const MAX_WATCH_CYCLES = 4;
-  const RETRY_DELAYS_MS = [1000, 2000, 4000];
+  const MAX_WATCH_CYCLES = 20;
+  const watchRetryDelay = cycle => cycle <= 5 ? 1000 : cycle <= 10 ? 2000 : cycle <= 15 ? 3000 : 5000;
   let lastStatus = 0;
   let lastHtml = "";
 
@@ -568,7 +568,7 @@ async function fetchYoutubeWatchPage(id, steps, youtubeCookie = "") {
     }
 
     if (cycle < MAX_WATCH_CYCLES) {
-      const delay = RETRY_DELAYS_MS[cycle - 1];
+      const delay = watchRetryDelay(cycle);
       steps.push(`【WATCH 重試】本輪未取得完整 Player Response，等待 ${delay} 毫秒後重新輪詢三個入口。`);
       await waitFor(delay);
     }
@@ -598,7 +598,7 @@ async function youtube(id, mode = "quick", youtubeCookie = "") {
   const html = watchResult.html;
   steps.push("【解析】已取得可用的 YouTube 頁面 HTML。");
   const watchPlayer = watchResult.player || extractJsonObject(html, "ytInitialPlayerResponse");
-  if (!watchPlayer) return json({ error: "已完成四輪 WATCH 重試，仍找不到 ytInitialPlayerResponse。", code: "YOUTUBE_PLAYER_RESPONSE_MISSING", retryable: true, version: VERSION, steps }, 422);
+  if (!watchPlayer) return json({ error: "已完成二十輪 WATCH 重試，仍找不到 ytInitialPlayerResponse。", code: "YOUTUBE_PLAYER_RESPONSE_MISSING", retryable: true, version: VERSION, steps }, 422);
   steps.push("【解析】已取得 ytInitialPlayerResponse。");
 
   if (youtubeCookie) steps.push("【YOUTUBE SESSION】已套用目前請求的登入工作階段（內容已隱藏）。");
@@ -2008,13 +2008,8 @@ function mediaRequestHeaders(request, sourceLabel) {
 }
 
 async function freshMediaUrlWithRetry(id, itag, sourceLabel, steps, wanted = {}) {
-  try {
-    return await freshMediaUrl(id, itag, sourceLabel, steps, wanted);
-  } catch (firstError) {
-    steps.push(`【即時媒體重試】第一次重新解析失敗：${firstError.message}；等待 800 毫秒後再試一次。`);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return freshMediaUrl(id, itag, sourceLabel, steps, wanted);
-  }
+  steps.push(`【即時媒體重試】${sourceLabel} / itag ${itag} 使用單一二十輪刷新工作；不再外層重複啟動完整 WATCH 掃描。`);
+  return freshMediaUrl(id, itag, sourceLabel, steps, wanted);
 }
 
 async function media(request, target, id, itag, sourceLabel, wanted = {}) {
@@ -2074,7 +2069,7 @@ async function media(request, target, id, itag, sourceLabel, wanted = {}) {
     }
   }
   if (upstream.status === 403 && id && itag && resolutionMode !== "fresh") {
-    steps.push(`【媒體工作階段】${resolutionMode || "既有"}網址回傳 HTTP 403，清除快取並即時重新解析一次。`);
+    steps.push(`【媒體工作階段隔離】${sourceLabel || "ANDROID"} / itag ${itag} 的 ${resolutionMode || "既有"} 網址回傳 HTTP 403；只清除此單一格式快取，其他 ANDROID 360p 或高畫質格式保持不變。`);
     await deleteYoutubeFormatCache(id, itag, sourceLabel || "ANDROID");
     try {
       const fresh = await freshMediaUrlWithRetry(id, itag, sourceLabel || "ANDROID", steps, wanted);
