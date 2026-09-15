@@ -1,5 +1,5 @@
-const VERSION = "1.0.7";
-const BUILD = "2026.09.15-mobile-log-layout-fix";
+const VERSION = "1.2.0";
+const BUILD = "2026.09.15-v120-multi-engine-final";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
