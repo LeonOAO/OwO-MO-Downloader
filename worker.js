@@ -1,5 +1,5 @@
-const VERSION = "1.2.1";
-const BUILD = "2026.09.15-v121-stable-complete";
+const VERSION = "1.3.1";
+const BUILD = "2026.09.15-v131-session-media-refresh";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -84,6 +84,7 @@ function normalize(format, resolvedUrl = "") {
     height: Number(format.height || 0),
     fps: Number(format.fps || 0),
     source: format._source || format.source || "",
+    generatedAt: Date.now(),
     url
   };
 }
@@ -152,6 +153,17 @@ const ALL_MODE_CLIENT_ORDER = [
 ];
 
 const CLIENT_REQUEST_INTERVAL_MS = 650;
+const VISITOR_DATA_TTL_MS = 45 * 60 * 1000;
+let rememberedVisitorData = { value: "", storedAt: 0 };
+
+function stableVisitorData(current) {
+  const now = Date.now();
+  if (rememberedVisitorData.value && now - rememberedVisitorData.storedAt < VISITOR_DATA_TTL_MS) {
+    return rememberedVisitorData.value;
+  }
+  if (current) rememberedVisitorData = { value: current, storedAt: now };
+  return current || "";
+}
 
 function waitFor(milliseconds) {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -199,7 +211,7 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
   }
 
   const apiKey = configValue(html, "INNERTUBE_API_KEY");
-  const visitorData = configValue(html, "VISITOR_DATA");
+  const visitorData = stableVisitorData(configValue(html, "VISITOR_DATA"));
   const dataSyncId = configValue(html, "DATASYNC_ID");
   const sabrUrl = watchPlayer?.streamingData?.serverAbrStreamingUrl || "";
   steps.push(`【YOUTUBE CONTEXT】Visitor Data：${visitorData ? "存在" : "不存在"}；Data Sync ID：${dataSyncId ? "存在" : "不存在"}。`);
@@ -1760,6 +1772,7 @@ async function cacheYoutubeFormats(id, formats, steps) {
         fps: Number(format.fps || 0),
         codec: format.codec || "",
         kind: format.kind || "",
+        generatedAt: Number(format.generatedAt || Date.now()),
         storedAt: Date.now()
       }), {
         headers: {
@@ -1843,7 +1856,7 @@ async function freshMediaUrl(id, itag, sourceLabel, steps, wanted = {}) {
   }
   const html = await watchResponse.text();
   const apiKey = configValue(html, "INNERTUBE_API_KEY");
-  const visitorData = configValue(html, "VISITOR_DATA");
+  const visitorData = stableVisitorData(configValue(html, "VISITOR_DATA"));
   if (!apiKey) throw new Error("重新解析時找不到 INNERTUBE_API_KEY。");
 
   const profile = clientProfileByLabel(sourceLabel);
@@ -1901,23 +1914,45 @@ function mediaRequestHeaders(request, sourceLabel) {
   return headers;
 }
 
+async function freshMediaUrlWithRetry(id, itag, sourceLabel, steps, wanted = {}) {
+  try {
+    return await freshMediaUrl(id, itag, sourceLabel, steps, wanted);
+  } catch (firstError) {
+    steps.push(`【即時媒體重試】第一次重新解析失敗：${firstError.message}；等待 800 毫秒後再試一次。`);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    return freshMediaUrl(id, itag, sourceLabel, steps, wanted);
+  }
+}
+
 async function media(request, target, id, itag, sourceLabel, wanted = {}) {
   const steps = [];
   let resolvedTarget = String(target || "");
   let resolutionMode = resolvedTarget ? "analysis-url" : "";
+  const suppliedGeneratedAt = Number(new URL(request.url).searchParams.get("generatedAt") || 0);
+  const suppliedAgeMs = suppliedGeneratedAt ? Date.now() - suppliedGeneratedAt : 0;
+  if (resolvedTarget && suppliedAgeMs > 60000 && id && itag) {
+    steps.push(`【媒體網址刷新】解析網址已產生約 ${Math.round(suppliedAgeMs / 1000)} 秒，下載前直接重新取得。`);
+    resolvedTarget = "";
+    resolutionMode = "";
+  }
 
   if (!resolvedTarget && id && itag) {
     const cached = await readYoutubeFormatCache(id, itag, sourceLabel || "ANDROID");
     if (cached?.url) {
-      resolvedTarget = cached.url;
-      sourceLabel = cached.source || sourceLabel;
-      resolutionMode = "session-cache";
+      const cachedAgeMs = Date.now() - Number(cached.generatedAt || cached.storedAt || 0);
+      if (cachedAgeMs <= 60000) {
+        resolvedTarget = cached.url;
+        sourceLabel = cached.source || sourceLabel;
+        resolutionMode = "session-cache";
+      } else {
+        steps.push(`【媒體網址刷新】短效快取網址已產生約 ${Math.round(cachedAgeMs / 1000)} 秒，改用即時重新解析。`);
+      }
       steps.push(`【媒體工作階段】命中 ${sourceLabel} / itag ${itag} 短效快取。`);
     }
   }
 
   if (!resolvedTarget && id && itag) {
-    const fresh = await freshMediaUrl(id, itag, sourceLabel || "ANDROID", steps, wanted);
+    const fresh = await freshMediaUrlWithRetry(id, itag, sourceLabel || "ANDROID", steps, wanted);
     resolvedTarget = fresh.url;
     sourceLabel = fresh.sourceLabel;
     resolutionMode = "fresh";
@@ -1949,7 +1984,7 @@ async function media(request, target, id, itag, sourceLabel, wanted = {}) {
     steps.push(`【媒體工作階段】${resolutionMode || "既有"}網址回傳 HTTP 403，清除快取並即時重新解析一次。`);
     await deleteYoutubeFormatCache(id, itag, sourceLabel || "ANDROID");
     try {
-      const fresh = await freshMediaUrl(id, itag, sourceLabel || "ANDROID", steps, wanted);
+      const fresh = await freshMediaUrlWithRetry(id, itag, sourceLabel || "ANDROID", steps, wanted);
       url = new URL(fresh.url); sourceLabel = fresh.sourceLabel; resolutionMode = "fresh";
       upstream = await fetch(url, { method: request.method, headers: mediaRequestHeaders(request, sourceLabel), redirect: "follow", cache: "no-store" });
       steps.push(`【媒體請求】即時重新解析網址回傳 HTTP ${upstream.status}。`);
