@@ -1,5 +1,5 @@
-const VERSION = "1.0.3";
-const BUILD = "2026.09.15-meta-quality-labels-default-worker";
+const VERSION = "1.0.4";
+const BUILD = "2026.09.15-youtube-client-media-identity-diagnostics";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -1812,7 +1812,11 @@ async function freshMediaUrl(id, itag, sourceLabel, steps, wanted = {}) {
     },
     cache: "no-store"
   });
-  if (!watchResponse.ok) throw new Error(`重新解析 watch 頁面失敗：HTTP ${watchResponse.status}。`);
+  if (!watchResponse.ok) {
+    const error = new Error(watchResponse.status === 429 ? "即時重新解析遭 YouTube 限速：HTTP 429。請停止重試一段時間後，再重新解析影片。" : `重新解析 watch 頁面失敗：HTTP ${watchResponse.status}。`);
+    error.httpStatus = watchResponse.status;
+    throw error;
+  }
   const html = await watchResponse.text();
   const apiKey = configValue(html, "INNERTUBE_API_KEY");
   const visitorData = configValue(html, "VISITOR_DATA");
@@ -1851,6 +1855,16 @@ async function freshMediaUrl(id, itag, sourceLabel, steps, wanted = {}) {
   return { url, sourceLabel };
 }
 
+function youtubeMediaUserAgent(sourceLabel) {
+  const source = String(sourceLabel || "").toUpperCase();
+  if (source === "ANDROID") return "com.google.android.youtube/21.35.35 (Linux; U; Android 14) gzip";
+  if (source === "ANDROID_VR") return "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 14) gzip";
+  if (source === "YTSTUDIO_ANDROID") return "com.google.android.apps.youtube.creator/24.35.100 (Linux; U; Android 14) gzip";
+  if (source === "YTMUSIC_ANDROID") return "com.google.android.apps.youtube.music/7.18.52 (Linux; U; Android 14) gzip";
+  if (source === "IOS" || source === "VISIONOS") return "com.google.ios.youtube/21.35.3 (iPhone16,2; U; CPU iOS 18_6_2 like Mac OS X)";
+  if (source === "WEB_SAFARI") return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15";
+  return "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36";
+}
 function mediaRequestHeaders(request, sourceLabel) {
   const headers = new Headers();
   const range = request.headers.get("Range");
@@ -1859,12 +1873,7 @@ function mediaRequestHeaders(request, sourceLabel) {
   headers.set("Accept-Encoding", "identity");
   headers.set("Origin", "https://www.youtube.com");
   headers.set("Referer", "https://www.youtube.com/");
-  headers.set(
-    "User-Agent",
-    sourceLabel === "ANDROID"
-      ? "com.google.android.youtube/21.35.35 (Linux; U; Android 14) gzip"
-      : "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36"
-  );
+  headers.set("User-Agent", youtubeMediaUserAgent(sourceLabel));
   return headers;
 }
 
@@ -1900,29 +1909,31 @@ async function media(request, target, id, itag, sourceLabel, wanted = {}) {
     return json({ error: "此媒體網域未列入允許清單。", code: "MEDIA_DOMAIN_DENIED", version: VERSION, steps }, 403);
   }
 
-  let upstream = await fetch(url, {
-    method: request.method,
-    headers: mediaRequestHeaders(request, sourceLabel),
-    redirect: "follow",
-    cache: "no-store"
-  });
-
+  steps.push(`【媒體請求】使用 ${sourceLabel || "UNKNOWN"} Client 身分存取 ${resolutionMode || "legacy"} 網址。`);
+  let upstream = await fetch(url, { method: request.method, headers: mediaRequestHeaders(request, sourceLabel), redirect: "follow", cache: "no-store" });
+  steps.push(`【媒體請求】${sourceLabel || "UNKNOWN"} 回傳 HTTP ${upstream.status}。`);
+  if (upstream.status === 403 && id && itag && resolutionMode === "analysis-url") {
+    const cached = await readYoutubeFormatCache(id, itag, sourceLabel || "ANDROID");
+    if (cached?.url && cached.url !== url.href) {
+      steps.push(`【媒體工作階段】解析網址遭拒，改用 ${sourceLabel} / itag ${itag} 的短效快取網址。`);
+      url = new URL(cached.url); resolutionMode = "session-cache";
+      upstream = await fetch(url, { method: request.method, headers: mediaRequestHeaders(request, sourceLabel), redirect: "follow", cache: "no-store" });
+      steps.push(`【媒體請求】短效快取網址回傳 HTTP ${upstream.status}。`);
+    }
+  }
   if (upstream.status === 403 && id && itag && resolutionMode !== "fresh") {
-    steps.push(`【媒體工作階段】${resolutionMode || "既有"}網址回傳 HTTP 403，清除快取並重新解析一次。`);
+    steps.push(`【媒體工作階段】${resolutionMode || "既有"}網址回傳 HTTP 403，清除快取並即時重新解析一次。`);
     await deleteYoutubeFormatCache(id, itag, sourceLabel || "ANDROID");
     try {
       const fresh = await freshMediaUrl(id, itag, sourceLabel || "ANDROID", steps, wanted);
-      url = new URL(fresh.url);
-      sourceLabel = fresh.sourceLabel;
-      resolutionMode = "fresh";
-      upstream = await fetch(url, {
-        method: request.method,
-        headers: mediaRequestHeaders(request, sourceLabel),
-        redirect: "follow",
-        cache: "no-store"
-      });
+      url = new URL(fresh.url); sourceLabel = fresh.sourceLabel; resolutionMode = "fresh";
+      upstream = await fetch(url, { method: request.method, headers: mediaRequestHeaders(request, sourceLabel), redirect: "follow", cache: "no-store" });
+      steps.push(`【媒體請求】即時重新解析網址回傳 HTTP ${upstream.status}。`);
     } catch (error) {
-      return json({ error: error.message, code: "MEDIA_REFRESH_FAILED", version: VERSION, steps }, 422);
+      const responseStatus = Number(error.httpStatus || 0) === 429 ? 429 : 422;
+      const code = responseStatus === 429 ? "YOUTUBE_RATE_LIMITED" : "MEDIA_REFRESH_FAILED";
+      steps.push(`【即時媒體】${error.message}`);
+      return json({ error: error.message, code, version: VERSION, steps }, responseStatus);
     }
   }
 

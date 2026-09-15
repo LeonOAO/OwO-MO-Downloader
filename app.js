@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "" };
-const APP_VERSION = "v1.0.3";
+const APP_VERSION = "v1.0.4";
 const FFMPEG_MODULE_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
 const FFMPEG_UTIL_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
 const FFMPEG_CORE_BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
@@ -430,7 +430,11 @@ async function fetchMedia(format, label = "媒體", start = 5, end = 65) {
   const response = await fetch(mediaEndpoint(format), { cache: "no-store", headers: platformRequestHeaders() });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw Error(data.error || `${label}下載失敗：HTTP ${response.status}。`);
+    if (Array.isArray(data.steps)) data.steps.forEach(step => log(step));
+    const error = new Error(data.error || `${label}下載失敗：HTTP ${response.status}。`);
+    error.code = data.code || "MEDIA_DOWNLOAD_FAILED";
+    error.httpStatus = response.status;
+    throw error;
   }
   const length = Number(response.headers.get("Content-Length") || format.contentLength || 0);
   if (length > MAX_BROWSER_WORK_BYTES) throw Error(`${label}大小 ${humanBytes(length)} 超過瀏覽器安全處理上限。`);
