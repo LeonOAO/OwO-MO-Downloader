@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "", ytCookie: "" };
-const APP_VERSION = "v1.4.3";
+const APP_VERSION = "v1.5.0";
 const FFMPEG_MODULE_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
 const FFMPEG_UTIL_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
 const FFMPEG_CORE_BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
@@ -519,7 +519,9 @@ async function mergeDownload() {
   const video=selected("videoFormat"), audio=selected("audioFormat");
   if (!video || !audio) throw Error("高畫質合併需要視訊與音訊格式。");
   const estimated=(bytes(video)+bytes(audio))*3; if (estimated > MAX_BROWSER_WORK_BYTES) throw Error(`預估合併記憶體 ${humanBytes(estimated)} 超過安全上限。`);
-  const [videoData,audioData]=await Promise.all([fetchMedia(video,"高畫質視訊",3,31),fetchMedia(audio,"音訊",32,58)]);
+  log("【高畫質下載】採循序下載，避免視訊與音訊同時觸發媒體網址刷新與 HTTP 429。");
+  const videoData = await fetchMedia(video,"高畫質視訊",3,31);
+  const audioData = await fetchMedia(audio,"音訊",32,58);
   const ffmpeg=await ensureFFmpeg(); const videoExt=video.container || "mp4", audioExt=audio.container || "m4a";
   const v=`input-video.${videoExt}`, a=`input-audio.${audioExt}`, o="merged-video.mp4";
   await ffmpeg.writeFile(v,videoData); await ffmpeg.writeFile(a,audioData);

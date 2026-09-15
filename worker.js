@@ -1,5 +1,5 @@
-const VERSION = "1.4.3";
-const BUILD = "2026.09.15-v143-clean-client-matrix-ui";
+const VERSION = "1.5.0";
+const BUILD = "2026.09.15-v150-stable-media-refresh";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -525,35 +525,60 @@ function resolveFormatUrl(format, rules, counters) {
 }
 
 async function fetchYoutubeWatchPage(id, steps, youtubeCookie = "") {
-  const targets = [
-    `https://www.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW`,
-    `https://m.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW`,
-    `https://www.youtube.com/embed/${encodeURIComponent(id)}?hl=zh-TW`
-  ];
+  const MAX_WATCH_CYCLES = 4;
+  const RETRY_DELAYS_MS = [1000, 2000, 4000];
   let lastStatus = 0;
-  for (let index = 0; index < targets.length; index++) {
-    const target = targets[index];
-    const response = await fetch(target, {
-      headers: {
-        "User-Agent": index === 1
-          ? "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36"
-          : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
-        "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.6",
-        "Cache-Control": "no-cache",
-        ...(youtubeCookie ? { "Cookie": youtubeCookie } : {})
-      },
-      cache: "no-store"
-    });
-    lastStatus = response.status;
-    steps.push(`【WATCH FALLBACK ${index + 1}/${targets.length}】HTTP ${response.status}。`);
-    if (response.ok) {
-      const html = await response.text();
-      if (html.includes("ytInitialPlayerResponse") || html.includes("INNERTUBE_API_KEY")) return { response, html };
-      steps.push("【WATCH FALLBACK】頁面成功但缺少播放器初始化資料，繼續下一個入口。");
+  let lastHtml = "";
+
+  for (let cycle = 1; cycle <= MAX_WATCH_CYCLES; cycle++) {
+    const nonce = `${Date.now()}-${cycle}`;
+    const targets = [
+      `https://www.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW&gl=TW&owo_retry=${nonce}`,
+      `https://m.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW&gl=TW&owo_retry=${nonce}`,
+      `https://www.youtube.com/embed/${encodeURIComponent(id)}?hl=zh-TW&gl=TW&owo_retry=${nonce}`
+    ];
+
+    for (let index = 0; index < targets.length; index++) {
+      const response = await fetch(targets[index], {
+        headers: {
+          "User-Agent": index === 1
+            ? "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36"
+            : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
+          "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.6",
+          "Cache-Control": "no-cache, no-store, max-age=0",
+          "Pragma": "no-cache",
+          ...(youtubeCookie ? { "Cookie": youtubeCookie } : {})
+        },
+        redirect: "follow",
+        cache: "no-store"
+      });
+      lastStatus = response.status;
+      steps.push(`【WATCH CYCLE ${cycle}/${MAX_WATCH_CYCLES} · FALLBACK ${index + 1}/3】HTTP ${response.status}。`);
+      if (response.ok) {
+        const html = await response.text();
+        lastHtml = html;
+        const player = extractJsonObject(html, "ytInitialPlayerResponse");
+        if (player) {
+          steps.push(`【WATCH 重試】第 ${cycle} 輪第 ${index + 1} 個入口取得完整 ytInitialPlayerResponse。`);
+          return { response, html, player };
+        }
+        steps.push("【WATCH 重試】頁面 HTTP 200，但缺少可解析的 ytInitialPlayerResponse，繼續下一個入口。");
+      }
+      if (index < targets.length - 1) await waitFor(350);
     }
-    if (index < targets.length - 1) await new Promise(resolve => setTimeout(resolve, 350));
+
+    if (cycle < MAX_WATCH_CYCLES) {
+      const delay = RETRY_DELAYS_MS[cycle - 1];
+      steps.push(`【WATCH 重試】本輪未取得完整 Player Response，等待 ${delay} 毫秒後重新輪詢三個入口。`);
+      await waitFor(delay);
+    }
   }
-  return { response: new Response(null, { status: lastStatus || 502 }), html: "" };
+
+  return {
+    response: new Response(null, { status: lastStatus || 502 }),
+    html: lastHtml,
+    player: null
+  };
 }
 
 async function youtube(id, mode = "quick", youtubeCookie = "") {
@@ -572,8 +597,8 @@ async function youtube(id, mode = "quick", youtubeCookie = "") {
   }
   const html = watchResult.html;
   steps.push("【解析】已取得可用的 YouTube 頁面 HTML。");
-  const watchPlayer = extractJsonObject(html, "ytInitialPlayerResponse");
-  if (!watchPlayer) return json({ error: "頁面中找不到 ytInitialPlayerResponse", steps }, 422);
+  const watchPlayer = watchResult.player || extractJsonObject(html, "ytInitialPlayerResponse");
+  if (!watchPlayer) return json({ error: "已完成四輪 WATCH 重試，仍找不到 ytInitialPlayerResponse。", code: "YOUTUBE_PLAYER_RESPONSE_MISSING", retryable: true, version: VERSION, steps }, 422);
   steps.push("【解析】已取得 ytInitialPlayerResponse。");
 
   if (youtubeCookie) steps.push("【YOUTUBE SESSION】已套用目前請求的登入工作階段（內容已隱藏）。");
@@ -1908,20 +1933,18 @@ function clientProfileByLabel(label) {
 
 async function freshMediaUrl(id, itag, sourceLabel, steps, wanted = {}) {
   if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) throw new Error("影片 ID 格式錯誤。");
-  const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW&gl=TW`;
-  const watchResponse = await fetch(watchUrl, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36",
-      "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.6"
-    },
-    cache: "no-store"
-  });
-  if (!watchResponse.ok) {
-    const error = new Error(watchResponse.status === 429 ? "即時重新解析遭 YouTube 限速：HTTP 429。請停止重試一段時間後，再重新解析影片。" : `重新解析 watch 頁面失敗：HTTP ${watchResponse.status}。`);
-    error.httpStatus = watchResponse.status;
+  const watchSteps = [];
+  const watchResult = await fetchYoutubeWatchPage(id, watchSteps, "");
+  steps.push(...watchSteps.map(step => `【即時媒體刷新】${step}`));
+  if (!watchResult.response.ok || !watchResult.html || !watchResult.player) {
+    const status = Number(watchResult.response.status || 0);
+    const error = new Error(status === 429
+      ? "即時媒體刷新已完成多入口退避重試，但仍遭 YouTube 限速：HTTP 429。"
+      : "即時媒體刷新未取得完整 ytInitialPlayerResponse。");
+    error.httpStatus = status;
     throw error;
   }
-  const html = await watchResponse.text();
+  const html = watchResult.html;
   const apiKey = configValue(html, "INNERTUBE_API_KEY");
   const visitorData = stableVisitorData(configValue(html, "VISITOR_DATA"));
   if (!apiKey) throw new Error("重新解析時找不到 INNERTUBE_API_KEY。");
@@ -1929,7 +1952,7 @@ async function freshMediaUrl(id, itag, sourceLabel, steps, wanted = {}) {
   const profile = clientProfileByLabel(sourceLabel);
   let player;
   if (sourceLabel === "WATCH_PAGE") {
-    player = extractJsonObject(html, "ytInitialPlayerResponse");
+    player = watchResult.player;
   } else {
     player = await innertubePlayer(apiKey, visitorData, id, profile);
   }
