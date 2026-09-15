@@ -1,5 +1,5 @@
-const VERSION = "1.4.0";
-const BUILD = "2026.09.15-v140-youtube-session-resilience";
+const VERSION = "1.4.1";
+const BUILD = "2026.09.15-v141-expanded-client-matrix";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -126,33 +126,40 @@ function sourceSummary(source) {
 const PLAYER_CLIENTS = [
   { label: "ANDROID", clientName: "ANDROID", clientVersion: "21.35.35", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
   { label: "ANDROID_VR", clientName: "ANDROID_VR", clientVersion: "1.65.10", osName: "Android", osVersion: "14", androidSdkVersion: 34, deviceMake: "Oculus", deviceModel: "Quest 3" },
-  { label: "YTSTUDIO_ANDROID", clientName: "ANDROID_CREATOR", clientVersion: "24.35.100", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
-  { label: "YTMUSIC_ANDROID", clientName: "ANDROID_MUSIC", clientVersion: "7.18.52", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
+  { label: "ANDROID_CREATOR", clientName: "ANDROID_CREATOR", clientVersion: "24.35.100", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
+  { label: "ANDROID_MUSIC", clientName: "ANDROID_MUSIC", clientVersion: "7.18.52", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
+  { label: "ANDROID_TESTSUITE", clientName: "ANDROID_TESTSUITE", clientVersion: "1.9", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
+  { label: "IOS", clientName: "IOS", clientVersion: "21.35.3", osName: "iPhone", osVersion: "18.6.2.22G100", deviceMake: "Apple", deviceModel: "iPhone16,2" },
+  { label: "IOS_CREATOR", clientName: "IOS_CREATOR", clientVersion: "24.35.100", osName: "iPhone", osVersion: "18.6.2.22G100", deviceMake: "Apple", deviceModel: "iPhone16,2" },
+  { label: "IOS_MUSIC", clientName: "IOS_MUSIC", clientVersion: "7.18.0", osName: "iPhone", osVersion: "18.6.2.22G100", deviceMake: "Apple", deviceModel: "iPhone16,2" },
+  { label: "VISIONOS", clientName: "IOS", clientVersion: "21.35.3", osName: "visionOS", osVersion: "2.6", deviceMake: "Apple", deviceModel: "RealityDevice14,1" },
+  { label: "WEB_EMBEDDED", clientName: "WEB_EMBEDDED_PLAYER", clientVersion: "1.20260909.00.00", clientScreen: "EMBED", embed: true },
   { label: "WEB", clientName: "WEB", clientVersion: "2.20260909.00.00" },
   { label: "WEB_SAFARI", clientName: "WEB", clientVersion: "2.20260909.00.00", browserName: "Safari", browserVersion: "18.6", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15" },
   { label: "MWEB", clientName: "MWEB", clientVersion: "2.20260909.00.00" },
-  { label: "WEB_EMBEDDED", clientName: "WEB_EMBEDDED_PLAYER", clientVersion: "1.20260909.00.00", clientScreen: "EMBED", embed: true },
-  { label: "IOS", clientName: "IOS", clientVersion: "21.35.3", osName: "iPhone", osVersion: "18.6.2.22G100", deviceMake: "Apple", deviceModel: "iPhone16,2" },
-  { label: "VISIONOS", clientName: "IOS", clientVersion: "21.35.3", osName: "visionOS", osVersion: "2.6", deviceMake: "Apple", deviceModel: "RealityDevice14,1" },
+  { label: "WEB_REMIX", clientName: "WEB_REMIX", clientVersion: "1.20260909.01.00" },
+  { label: "WEB_CREATOR", clientName: "WEB_CREATOR", clientVersion: "1.20260909.00.00" },
+  { label: "WEB_KIDS", clientName: "WEB_KIDS", clientVersion: "2.20260909.00.00" },
   { label: "TV", clientName: "TVHTML5", clientVersion: "7.20260311.12.00", platform: "TV", userAgent: "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version" },
+  { label: "TV_KIDS", clientName: "TVHTML5_KIDS", clientVersion: "7.20260311.12.00", platform: "TV" },
   { label: "TV_EMBEDDED", clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER", clientVersion: "2.0", platform: "TV", clientScreen: "EMBED", embed: true },
-  { label: "TV_SIMPLY", clientName: "TVHTML5_SIMPLY", clientVersion: "1.0", platform: "TV" }
+  { label: "TV_SIMPLY", clientName: "TVHTML5_SIMPLY", clientVersion: "1.0", platform: "TV" },
+  { label: "TV_ALT", clientName: "TVHTML5", clientVersion: "8.0", platform: "TV", userAgent: "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version" }
 ];
 
 const ALL_MODE_CLIENT_ORDER = [
-  "ANDROID",
-  "ANDROID_VR",
-  "WEB_EMBEDDED",
-  "IOS",
-  "WEB_SAFARI",
-  "WEB",
-  "MWEB",
-  "TV",
-  "TV_EMBEDDED",
-  "TV_SIMPLY"
+  "ANDROID", "ANDROID_VR", "WEB_EMBEDDED", "IOS", "WEB_KIDS",
+  "WEB_SAFARI", "WEB", "MWEB", "TV", "TV_KIDS",
+  "ANDROID_CREATOR", "ANDROID_MUSIC", "IOS_CREATOR", "IOS_MUSIC",
+  "VISIONOS", "WEB_REMIX", "WEB_CREATOR", "TV_EMBEDDED",
+  "TV_SIMPLY", "ANDROID_TESTSUITE", "TV_ALT"
 ];
 
-const CLIENT_REQUEST_INTERVAL_MS = 650;
+const CLIENT_REQUEST_MIN_INTERVAL_MS = 3000;
+const CLIENT_REQUEST_MAX_INTERVAL_MS = 8000;
+function nextClientDelay() {
+  return CLIENT_REQUEST_MIN_INTERVAL_MS + Math.floor(Math.random() * (CLIENT_REQUEST_MAX_INTERVAL_MS - CLIENT_REQUEST_MIN_INTERVAL_MS + 1));
+}
 const VISITOR_DATA_TTL_MS = 45 * 60 * 1000;
 let rememberedVisitorData = { value: "", storedAt: 0 };
 
@@ -273,8 +280,9 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
     const profile = profiles[profileIndex];
     try {
       if (profileIndex > 0) {
-        steps.push(`【請求節流】等待 ${CLIENT_REQUEST_INTERVAL_MS} 毫秒後再呼叫 ${profile.label}。`);
-        await waitFor(CLIENT_REQUEST_INTERVAL_MS);
+        const delay = nextClientDelay();
+        steps.push(`【請求節流】等待 ${delay} 毫秒後再呼叫 ${profile.label}。`);
+        await waitFor(delay);
       }
       const player = await innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie);
       state = playState(player);
@@ -1962,6 +1970,9 @@ function youtubeMediaUserAgent(sourceLabel) {
   const source = String(sourceLabel || "").toUpperCase();
   if (source === "ANDROID") return "com.google.android.youtube/21.35.35 (Linux; U; Android 14) gzip";
   if (source === "ANDROID_VR") return "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 14) gzip";
+  if (source === "ANDROID_CREATOR") return "com.google.android.apps.youtube.creator/24.35.100 (Linux; U; Android 14) gzip";
+  if (source === "ANDROID_MUSIC") return "com.google.android.apps.youtube.music/7.18.52 (Linux; U; Android 14) gzip";
+  if (source === "ANDROID_TESTSUITE") return "com.google.android.youtube/1.9 (Linux; U; Android 14) gzip";
   if (source === "YTSTUDIO_ANDROID") return "com.google.android.apps.youtube.creator/24.35.100 (Linux; U; Android 14) gzip";
   if (source === "YTMUSIC_ANDROID") return "com.google.android.apps.youtube.music/7.18.52 (Linux; U; Android 14) gzip";
   if (source === "IOS" || source === "VISIONOS") return "com.google.ios.youtube/21.35.3 (iPhone16,2; U; CPU iOS 18_6_2 like Mac OS X)";
