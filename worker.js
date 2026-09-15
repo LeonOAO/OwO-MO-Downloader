@@ -1,5 +1,5 @@
-const VERSION = "1.4.1";
-const BUILD = "2026.09.15-v141-expanded-client-matrix";
+const VERSION = "1.4.2";
+const BUILD = "2026.09.15-v142-one-second-full-matrix";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -155,11 +155,7 @@ const ALL_MODE_CLIENT_ORDER = [
   "TV_SIMPLY", "ANDROID_TESTSUITE", "TV_ALT"
 ];
 
-const CLIENT_REQUEST_MIN_INTERVAL_MS = 3000;
-const CLIENT_REQUEST_MAX_INTERVAL_MS = 8000;
-function nextClientDelay() {
-  return CLIENT_REQUEST_MIN_INTERVAL_MS + Math.floor(Math.random() * (CLIENT_REQUEST_MAX_INTERVAL_MS - CLIENT_REQUEST_MIN_INTERVAL_MS + 1));
-}
+const CLIENT_REQUEST_INTERVAL_MS = 1000;
 const VISITOR_DATA_TTL_MS = 45 * 60 * 1000;
 let rememberedVisitorData = { value: "", storedAt: 0 };
 
@@ -280,9 +276,8 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
     const profile = profiles[profileIndex];
     try {
       if (profileIndex > 0) {
-        const delay = nextClientDelay();
-        steps.push(`【請求節流】等待 ${delay} 毫秒後再呼叫 ${profile.label}。`);
-        await waitFor(delay);
+        steps.push(`【請求節流】等待 ${CLIENT_REQUEST_INTERVAL_MS} 毫秒後再呼叫 ${profile.label}。`);
+        await waitFor(CLIENT_REQUEST_INTERVAL_MS);
       }
       const player = await innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie);
       state = playState(player);
