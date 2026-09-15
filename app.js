@@ -702,7 +702,7 @@ async function copyCompleteLog() {
       textarea.remove();
       if (!copied) throw Error("瀏覽器未完成複製動作。");
     }
-    status("完整執行紀錄已複製。", "success");
+    status("「執行紀錄」已複製。", "success");
   } catch (error) {
     status(`複製執行紀錄失敗：${String(error.message || error)}`, "error");
   }
