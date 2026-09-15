@@ -1,5 +1,5 @@
-const VERSION = "1.0.4";
-const BUILD = "2026.09.15-youtube-client-media-identity-diagnostics";
+const VERSION = "1.0.7";
+const BUILD = "2026.09.15-mobile-log-layout-fix";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -133,24 +133,29 @@ const PLAYER_CLIENTS = [
   { label: "WEB_EMBEDDED", clientName: "WEB_EMBEDDED_PLAYER", clientVersion: "1.20260909.00.00", clientScreen: "EMBED", embed: true },
   { label: "IOS", clientName: "IOS", clientVersion: "21.35.3", osName: "iPhone", osVersion: "18.6.2.22G100", deviceMake: "Apple", deviceModel: "iPhone16,2" },
   { label: "VISIONOS", clientName: "IOS", clientVersion: "21.35.3", osName: "visionOS", osVersion: "2.6", deviceMake: "Apple", deviceModel: "RealityDevice14,1" },
-  { label: "TVHTML5", clientName: "TVHTML5", clientVersion: "7.20260909.18.00", platform: "TV" },
-  { label: "TV_SIMPLY", clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER", clientVersion: "2.0", platform: "TV", clientScreen: "EMBED", embed: true }
+  { label: "TV", clientName: "TVHTML5", clientVersion: "7.20260311.12.00", platform: "TV", userAgent: "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version" },
+  { label: "TV_EMBEDDED", clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER", clientVersion: "2.0", platform: "TV", clientScreen: "EMBED", embed: true },
+  { label: "TV_SIMPLY", clientName: "TVHTML5_SIMPLY", clientVersion: "1.0", platform: "TV" }
 ];
 
 const ALL_MODE_CLIENT_ORDER = [
   "ANDROID",
-  "WEB_EMBEDDED",
-  "WEB_SAFARI",
   "ANDROID_VR",
+  "WEB_SAFARI",
   "IOS",
-  "TV_SIMPLY",
+  "WEB_EMBEDDED",
   "WEB",
   "MWEB",
-  "VISIONOS",
-  "TVHTML5",
-  "YTSTUDIO_ANDROID",
-  "YTMUSIC_ANDROID"
+  "TV",
+  "TV_EMBEDDED",
+  "TV_SIMPLY"
 ];
+
+const CLIENT_REQUEST_INTERVAL_MS = 650;
+
+function waitFor(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
 
 function orderedAllModeProfiles() {
   const byLabel = new Map(PLAYER_CLIENTS.map(profile => [profile.label, profile]));
@@ -221,19 +226,28 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
       ? "【單一工作階段】先使用 ANDROID 保留基本格式，再沿用相同上下文搜尋高畫質 Client。"
       : "【高畫質搜尋】保留既有結果，繼續蒐集分離視訊與分離音訊格式。");
   let authCount = state.status === "LOGIN_REQUIRED" ? 1 : 0;
+  const challengedPriorityClients = new Set();
   const profiles = mode === "quick"
     ? PLAYER_CLIENTS.filter(profile => profile.label === "ANDROID")
     : mode === "all"
       ? orderedAllModeProfiles()
       : PLAYER_CLIENTS.filter(profile => profile.label !== "ANDROID");
 
-  for (const profile of profiles) {
+  for (let profileIndex = 0; profileIndex < profiles.length; profileIndex++) {
+    const profile = profiles[profileIndex];
     try {
+      if (profileIndex > 0) {
+        steps.push(`【請求節流】等待 ${CLIENT_REQUEST_INTERVAL_MS} 毫秒後再呼叫 ${profile.label}。`);
+        await waitFor(CLIENT_REQUEST_INTERVAL_MS);
+      }
       const player = await innertubePlayer(apiKey, visitorData, id, profile);
       state = playState(player);
       rawCount = rawFormats(player).length;
       addressCount = addressableFormats(player).length;
-      if (state.status === "LOGIN_REQUIRED") authCount++;
+      if (state.status === "LOGIN_REQUIRED") {
+        authCount++;
+        if (["ANDROID_VR", "WEB_SAFARI", "IOS"].includes(profile.label)) challengedPriorityClients.add(profile.label);
+      }
 
       const clientSabr = Boolean(player?.streamingData?.serverAbrStreamingUrl);
       const clientHls = Boolean(player?.streamingData?.hlsManifestUrl);
@@ -286,7 +300,7 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
     const completedVideoOnly = completedFormats.filter(format => String(format.mimeType || "").startsWith("video/") && !format.audioQuality).length;
     const completedAudioOnly = completedFormats.filter(format => String(format.mimeType || "").startsWith("audio/") || (!String(format.mimeType || "").startsWith("video/") && format.audioQuality)).length;
     const completedMuxed = completedFormats.filter(format => String(format.mimeType || "").startsWith("video/") && Boolean(format.audioQuality)).length;
-    steps.push(`【完整矩陣摘要】已測試「${output.length}」個來源；影音合一：「${completedMuxed}」；僅視訊：「${completedVideoOnly}」；僅音訊：「${completedAudioOnly}」；登入限制：「${authCount}」。`);
+    steps.push(`【完整節流矩陣摘要】已測試「${output.length}」個來源；影音合一：「${completedMuxed}」；僅視訊：「${completedVideoOnly}」；僅音訊：「${completedAudioOnly}」；登入限制：「${authCount}」。`);
   }
   return output;
 }
