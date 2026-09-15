@@ -153,6 +153,8 @@ details[open] > summary .summary-chevron { transform: rotate(180deg); }
 .log-panel summary { padding-top: 0; }
 .log-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 15px 0 9px; color: #66738c; font-size: 13px; }
 .clear-log { min-height: 34px; padding: 7px 10px; font-size: 12px; }
+.log-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.copy-log { min-height: 34px; padding: 7px 12px; color: #3e5fd9; border-color: #b8c7f5; font-size: 12px; }
 pre { margin: 0; max-height: 330px; overflow: auto; padding: 15px; color: #52627f; background: #f7f9fc; border: 1px solid #e4e9f2; border-radius: 13px; white-space: pre-wrap; word-break: break-word; font: 12px/1.75 ui-monospace, SFMono-Regular, Consolas, monospace; }
 footer { display: flex; justify-content: center; gap: 12px; padding: 26px 0 48px; color: #929bae; font-size: 12px; }
 footer strong { color: #75819a; }
@@ -437,8 +439,14 @@ input, select, button, textarea {
     min-width: 0;
     font-size: 13px;
   }
+  .log-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+  .copy-log,
   .clear-log {
-    flex: 0 0 auto;
+    width: 100%;
     min-height: 38px;
     padding: 8px 10px;
   }

@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "" };
-const APP_VERSION = "v1.0.1";
+const APP_VERSION = "v1.0.2";
 const FFMPEG_MODULE_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
 const FFMPEG_UTIL_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
 const FFMPEG_CORE_BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
@@ -378,6 +378,7 @@ async function analyzeYoutube(id) {
 }
 async function analyze() {
   if (state.busy) return;
+  $("log").textContent = "尚未執行。";
   const value = $("youtubeUrl").value.trim();
   const platform = detectPlatform(value);
   if (!platform) { status("請貼上支援的 YouTube、Facebook、Instagram 或 Threads 網址。", "error"); return; }
@@ -406,7 +407,21 @@ async function analyze() {
   } finally { state.busy = false; updateButton(); }
 }
 function mediaEndpoint(format, download = false) {
-  if (state.platform === "youtube") return endpoint("/media", { id: state.videoId, itag: format.itag, source: format.source || "ANDROID", ext: format.container || "bin", download: download ? "1" : "0" });
+  if (state.platform === "youtube") {
+    return endpoint("/media", {
+      id: state.videoId,
+      itag: format.itag,
+      source: format.source || "ANDROID",
+      url: format.url || "",
+      quality: format.quality || "",
+      height: format.height || qualityNumber(format) || "",
+      fps: format.fps || "",
+      codec: format.codec || "",
+      kind: format.kind || "",
+      ext: format.container || "bin",
+      download: download ? "1" : "0"
+    });
+  }
   if (state.platform === "facebook") return endpoint("/facebook-media", { url: format.url });
   return endpoint("/social-media", { url: format.url, platform: state.platform });
 }
@@ -670,6 +685,29 @@ $("convertWav").onclick = convertWav;
 $("mp3Bitrate").onchange = updateMp3BitrateUi;
 updateMp3BitrateUi();
 $("youtubeUrl").onkeydown = event => { if (event.key === "Enter") analyze(); };
+async function copyCompleteLog() {
+  const text = $("log").textContent || "";
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.append(textarea);
+      textarea.select();
+      const copied = document.execCommand("copy");
+      textarea.remove();
+      if (!copied) throw Error("瀏覽器未完成複製動作。");
+    }
+    status("完整執行紀錄已複製。", "success");
+  } catch (error) {
+    status(`複製執行紀錄失敗：${String(error.message || error)}`, "error");
+  }
+}
+$("copyLog").onclick = copyCompleteLog;
 $("clearLog").onclick = () => $("log").textContent = "尚未執行。";
 $("videoFormat").onchange = updateButton;
 $("audioFormat").onchange = updateButton;

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#eef3ff">
   <meta name="color-scheme" content="light">
   <title>OwO 平台影音｜小幫手</title>
-  <link rel="stylesheet" href="app.css?v=20260914-v100">
+  <link rel="stylesheet" href="app.css?v=20260915-v102">
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -20,7 +20,7 @@
         </span>
         <span>OwO MO Downloader</span>
       </a>
-      <span class="version">v1.0.0</span>
+      <span class="version">v1.0.2</span>
     </nav>
 
     <section class="hero">
@@ -162,13 +162,19 @@
     <section class="panel log-panel">
       <details open>
         <summary><span class="summary-icon">≡</span><span>執行紀錄</span><span class="summary-chevron">⌄</span></summary>
-        <div class="log-head"><span>解析、下載與合併記錄</span><button id="clearLog" class="soft-button clear-log" type="button">清除紀錄</button></div>
+        <div class="log-head">
+          <span>若有任何異常訊息，再請協助反饋，謝謝！</span>
+          <div class="log-actions">
+            <button id="copyLog" class="soft-button copy-log" type="button">複製</button>
+            <button id="clearLog" class="soft-button clear-log" type="button">清除紀錄</button>
+          </div>
+        </div>
         <pre id="log">尚未執行。</pre>
       </details>
     </section>
 
     <footer><strong>OwO MO Downloader</strong><span>請只保存你有權下載的內容</span></footer>
   </main>
-  <script src="app.js?v=20260914-v100"></script>
+  <script src="app.js?v=20260915-v102"></script>
 </body>
 </html>
