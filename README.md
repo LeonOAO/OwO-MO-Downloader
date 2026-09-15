@@ -1,3 +1,3 @@
-# OwO 平台影音｜小幫手 v1.4.0
+# OwO 平台影音｜小幫手 v1.4.1
 
-新增 YouTube 分頁工作階段橋接，並延後匿名 Client 熔斷。請完整覆蓋原本 GitHub Pages 檔案；Cloudflare Worker 也需更新 `worker.js`。
+擴充匿名 Client 矩陣並加入每次 3 至 8 秒隨機節流。完整覆蓋前端及 Worker。
