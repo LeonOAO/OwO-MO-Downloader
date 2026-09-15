@@ -1,5 +1,5 @@
-const VERSION = "1.0.2";
-const BUILD = "2026.09.15-youtube-media-session-cache";
+const VERSION = "1.0.3";
+const BUILD = "2026.09.15-meta-quality-labels-default-worker";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -616,11 +616,10 @@ function cleanFacebookTitle(value) {
   return title;
 }
 
-function inferFacebookHeight(url, quality) {
+function inferFacebookHeight(url) {
   const decoded = decodeURIComponent(url);
   const match = decoded.match(/(?:height|_nc_ohc|dimensions?)[=_-](\d{3,4})/i) || decoded.match(/(2160|1440|1080|720|540|480|360)p/i);
-  if (match) return Number(match[1]);
-  return quality === "HD" ? 720 : 360;
+  return match ? Number(match[1]) : 0;
 }
 
 function parseDashManifest(value) {
@@ -658,8 +657,8 @@ function parseDashManifest(value) {
 const FACEBOOK_VIDEO_FIELD_QUALITY = {
   browser_native_hd_url: "HD", playable_url_quality_hd: "HD", hd_src: "HD", hdSrc: "HD",
   hd_src_no_ratelimit: "HD", video_hd_url: "HD", hdUrl: "HD",
-  browser_native_sd_url: "SD", playable_url: "SD", sd_src: "SD", sdSrc: "SD",
-  sd_src_no_ratelimit: "SD", progressive_url: "SD", video_url: "SD", videoUrl: "SD", sdUrl: "SD"
+  browser_native_sd_url: "SD", sd_src: "SD", sdSrc: "SD", sd_src_no_ratelimit: "SD", sdUrl: "SD",
+  playable_url: "原始畫質", progressive_url: "原始畫質", video_url: "原始畫質", videoUrl: "原始畫質"
 };
 function collectFacebookDeepFields(source) {
   const candidates = [];
@@ -674,7 +673,7 @@ function collectFacebookDeepFields(source) {
       while ((match = pattern.exec(source))) {
         const url = decodeFacebookValue(match[1]);
         if (!/^https:\/\//i.test(url) || !/(?:fbcdn\.net|facebook\.com)/i.test(url)) continue;
-        candidates.push({ quality, height: inferFacebookHeight(url, quality), bitrate: quality === "HD" ? 2000000 : 700000, kind: "影音合一", mimeType: "video/mp4", codec: "", url, field });
+        candidates.push({ quality, height: inferFacebookHeight(url), bitrate: quality === "HD" ? 2000000 : quality === "SD" ? 700000 : 0, kind: "影音合一", mimeType: "video/mp4", codec: "", url, field });
       }
     }
   }
@@ -722,10 +721,12 @@ function collectFacebookUrls(html) {
       while ((match = pattern.exec(html))) {
         const url = decodeFacebookValue(match[1]);
         if (/^https:\/\//i.test(url)) {
+          const genericQuality = /"(?:playable_url|progressive_url|video_url|videoUrl)"/.test(match[0]);
+          const quality = genericQuality ? "原始畫質" : definition.quality;
           candidates.push({
-            quality: definition.quality,
-            height: inferFacebookHeight(url, definition.quality),
-            bitrate: definition.quality === "HD" ? 2000000 : 700000,
+            quality,
+            height: inferFacebookHeight(url),
+            bitrate: quality === "HD" ? 2000000 : quality === "SD" ? 700000 : 0,
             kind: "影音合一",
             mimeType: "video/mp4",
             codec: "",
@@ -747,7 +748,7 @@ function collectFacebookUrls(html) {
 
   const ogVideo = metaContent(html, "og:video") || metaContent(html, "og:video:url") || metaContent(html, "og:video:secure_url");
   if (/^https:\/\//i.test(ogVideo)) {
-    candidates.push({ quality: "SD", height: 360, bitrate: 700000, kind: "影音合一", mimeType: "video/mp4", codec: "", url: ogVideo });
+    candidates.push({ quality: "原始畫質", height: 0, bitrate: 0, kind: "影音合一", mimeType: "video/mp4", codec: "", url: ogVideo });
   }
 
   const unique = new Map();
@@ -1030,7 +1031,7 @@ async function facebookResolve(value, env, request) {
 
   const hasHighQuality = found.some(item => item.kind === "僅視訊" || Number(item.height || 0) >= 720 || item.quality === "HD");
   if (!hasHighQuality && cookie) {
-    steps.push("【FACEBOOK】訪客頁面只有 SD，使用 FB_COOKIE 再搜尋 HD 與 DASH 格式。");
+    steps.push("【FACEBOOK】訪客頁面尚未取得明確高畫質，使用 FB_COOKIE 再搜尋 HD 與 DASH 格式。");
     const authenticated = await fetchFacebookPage(new URL(finalUrl), { mobile: false, redirect: "follow", cookie });
     steps.push(`【FACEBOOK】登入工作階段高畫質頁面回傳 HTTP ${authenticated.status}。`);
     if (authenticated.ok && !isFacebookAuthPath(new URL(authenticated.url))) {
@@ -1056,7 +1057,7 @@ ${authenticatedHtml}`;
 
   const formats = found.map((item, index) => ({
     itag: `fb-${String(item.kind || "media").replace(/[^a-z0-9]/gi, "").toLowerCase()}-${item.height || String(item.quality).toLowerCase()}-${index + 1}`,
-    quality: item.quality || (item.height ? `${item.height}p` : "未知"),
+    quality: item.height ? `${item.height}p` : (item.quality || "未知畫質"),
     kind: item.kind || "影音合一",
     container: String(item.mimeType || "video/mp4").includes("webm") ? "webm" : "mp4",
     mimeType: item.mimeType || "video/mp4",
