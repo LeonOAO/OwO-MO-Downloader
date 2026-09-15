@@ -1,11 +1,12 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "" };
-const APP_VERSION = "v1.0.2";
+const APP_VERSION = "v1.0.3";
 const FFMPEG_MODULE_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
 const FFMPEG_UTIL_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
 const FFMPEG_CORE_BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
 const MAX_BROWSER_WORK_BYTES = 700 * 1024 * 1024;
+const DEFAULT_WORKER_URL = "https://owo-mo-downloader-api.kkwan812.workers.dev";
 
 function log(message) {
   const time = new Date().toLocaleTimeString("zh-TW", { hour12: false });
@@ -730,4 +731,4 @@ for (const prefix of ["ig", "th"]) {
   };
 }
 document.querySelectorAll(".mode").forEach(button => button.onclick = () => setMode(button.dataset.mode));
-$("worker").value = localStorage.getItem("workerUrl") || "";
+$("worker").value = localStorage.getItem("workerUrl") || DEFAULT_WORKER_URL;
