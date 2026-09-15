@@ -1,5 +1,5 @@
-const VERSION = "1.3.1";
-const BUILD = "2026.09.15-v131-session-media-refresh";
+const VERSION = "1.4.0";
+const BUILD = "2026.09.15-v140-youtube-session-resilience";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -12,7 +12,7 @@ function cors(origin = "*") {
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
-    "Access-Control-Allow-Headers": "Range,Content-Type,Cache-Control,X-FB-Session,X-IG-Session,X-TH-Session",
+    "Access-Control-Allow-Headers": "Range,Content-Type,Cache-Control,X-FB-Session,X-IG-Session,X-TH-Session,X-YT-Session",
     "Access-Control-Max-Age": "86400",
     "Access-Control-Expose-Headers": "Content-Length,Content-Range,Accept-Ranges,Content-Type,Content-Disposition",
     "Vary": "Origin"
@@ -142,9 +142,9 @@ const PLAYER_CLIENTS = [
 const ALL_MODE_CLIENT_ORDER = [
   "ANDROID",
   "ANDROID_VR",
-  "WEB_SAFARI",
-  "IOS",
   "WEB_EMBEDDED",
+  "IOS",
+  "WEB_SAFARI",
   "WEB",
   "MWEB",
   "TV",
@@ -174,7 +174,30 @@ function orderedAllModeProfiles() {
   return ALL_MODE_CLIENT_ORDER.map(label => byLabel.get(label)).filter(Boolean);
 }
 
-async function innertubePlayer(apiKey, visitorData, id, profile) {
+function requestYoutubeCookie(request, env) {
+  const supplied = String(request?.headers?.get("X-YT-Session") || "").trim();
+  const secret = String(env && env.YT_COOKIE || "").trim();
+  return supplied || secret;
+}
+function youtubeCookieValue(cookie, name) {
+  const match = String(cookie || "").match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`, "i"));
+  return match ? match[1] : "";
+}
+async function sha1Hex(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-1", bytes);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+async function youtubeAuthHeaders(cookie) {
+  if (!cookie) return {};
+  const sapisid = youtubeCookieValue(cookie, "SAPISID") || youtubeCookieValue(cookie, "__Secure-3PAPISID");
+  if (!sapisid) return { Cookie: cookie };
+  const timestamp = Math.floor(Date.now() / 1000);
+  const origin = "https://www.youtube.com";
+  const hash = await sha1Hex(`${timestamp} ${sapisid} ${origin}`);
+  return { Cookie: cookie, Authorization: `SAPISIDHASH ${timestamp}_${hash}`, "X-Origin": origin };
+}
+async function innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie = "") {
   const client = { hl: "zh-TW", gl: "TW", ...profile };
   delete client.label;
   delete client.embed;
@@ -185,6 +208,7 @@ async function innertubePlayer(apiKey, visitorData, id, profile) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(await youtubeAuthHeaders(youtubeCookie)),
       "Origin": "https://www.youtube.com",
       "X-YouTube-Client-Name": profile.clientName,
       "X-YouTube-Client-Version": profile.clientVersion,
@@ -198,7 +222,7 @@ async function innertubePlayer(apiKey, visitorData, id, profile) {
   return response.json();
 }
 
-async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
+async function collectSources(html, watchPlayer, id, steps, mode = "quick", youtubeCookie = "") {
   const output = [{ label: "WATCH_PAGE", player: watchPlayer }];
   let state = playState(watchPlayer);
   let rawCount = rawFormats(watchPlayer).length;
@@ -252,7 +276,7 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
         steps.push(`【請求節流】等待 ${CLIENT_REQUEST_INTERVAL_MS} 毫秒後再呼叫 ${profile.label}。`);
         await waitFor(CLIENT_REQUEST_INTERVAL_MS);
       }
-      const player = await innertubePlayer(apiKey, visitorData, id, profile);
+      const player = await innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie);
       state = playState(player);
       rawCount = rawFormats(player).length;
       addressCount = addressableFormats(player).length;
@@ -298,15 +322,8 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
       if (mode === "all" && state.status === "LOGIN_REQUIRED") {
         steps.push(`【登入限制】${profile.label} 要求登入；mode=all 繼續下一個匿名 Client。`);
       }
-      if (
-        mode === "all" &&
-        profile.label === "ANDROID_VR" &&
-        playState(watchPlayer).status === "LOGIN_REQUIRED" &&
-        output.filter(source => ["WATCH_PAGE", "ANDROID", "ANDROID_VR"].includes(source.label))
-          .every(source => playState(source.player).status === "LOGIN_REQUIRED" && rawFormats(source.player).length === 0)
-      ) {
-        steps.push("【登入限制熔斷】WATCH_PAGE、ANDROID、ANDROID_VR 均為 LOGIN_REQUIRED/0/0，停止其餘第一層 Client，避免持續增加匿名請求。");
-        break;
+      if (mode === "all" && profile.label === "ANDROID_VR" && state.status === "LOGIN_REQUIRED" && !addressCount) {
+        steps.push("【登入限制續跑】ANDROID_VR 未取得格式，繼續 WEB_EMBEDDED、IOS 與 TV 等備援 Client，不在此提前熔斷。");
       }
     } catch (error) {
       steps.push(`【${profile.label}】請求失敗：${error.message}。`);
@@ -506,7 +523,7 @@ function resolveFormatUrl(format, rules, counters) {
   return target.href;
 }
 
-async function fetchYoutubeWatchPage(id, steps) {
+async function fetchYoutubeWatchPage(id, steps, youtubeCookie = "") {
   const targets = [
     `https://www.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW`,
     `https://m.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW`,
@@ -521,7 +538,8 @@ async function fetchYoutubeWatchPage(id, steps) {
           ? "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36"
           : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
         "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.6",
-        "Cache-Control": "no-cache"
+        "Cache-Control": "no-cache",
+        ...(youtubeCookie ? { "Cookie": youtubeCookie } : {})
       },
       cache: "no-store"
     });
@@ -537,10 +555,10 @@ async function fetchYoutubeWatchPage(id, steps) {
   return { response: new Response(null, { status: lastStatus || 502 }), html: "" };
 }
 
-async function youtube(id, mode = "quick") {
+async function youtube(id, mode = "quick", youtubeCookie = "") {
   if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) return json({ error: "影片 ID 格式錯誤" }, 400);
   const steps = [];
-  const watchResult = await fetchYoutubeWatchPage(id, steps);
+  const watchResult = await fetchYoutubeWatchPage(id, steps, youtubeCookie);
   const response = watchResult.response;
   if (!response.ok || !watchResult.html) {
     return json({
@@ -557,7 +575,8 @@ async function youtube(id, mode = "quick") {
   if (!watchPlayer) return json({ error: "頁面中找不到 ytInitialPlayerResponse", steps }, 422);
   steps.push("【解析】已取得 ytInitialPlayerResponse。");
 
-  const sources = await collectSources(html, watchPlayer, id, steps, mode);
+  if (youtubeCookie) steps.push("【YOUTUBE SESSION】已套用目前請求的登入工作階段（內容已隱藏）。");
+  const sources = await collectSources(html, watchPlayer, id, steps, mode, youtubeCookie);
   const selected = sources.find(source => addressableFormats(source.player).length) || sources[0];
   const details = selected.player.videoDetails || watchPlayer.videoDetails || {};
   const rawMap = new Map();
@@ -584,19 +603,66 @@ async function youtube(id, mode = "quick") {
   })());
   const rules = needsRules ? await loadPlayerRules(html, steps) : { signature: null, n: null };
   const counters = { signature: 0, signatureFailed: 0, n: 0, nFailed: 0 };
-  const formats = raw
+  const candidateFormats = raw
     .map(format => normalize(format, resolveFormatUrl(format, rules, counters)))
     .filter(Boolean)
     .sort((a, b) => b.bitrate - a.bitrate);
+  const formats = await verifyYoutubeFormats(candidateFormats, steps);
   steps.push(`【網址】Signature 成功：「${counters.signature}」個；失敗：「${counters.signatureFailed}」個。`);
   steps.push(`【網址】N 參數成功：「${counters.n}」個；未處理：「${counters.nFailed}」個。`);
-  steps.push(`【網址】取得「${formats.length}」個可直接使用的候選網址。`);
+  steps.push(`【網址】取得「${candidateFormats.length}」個可直接使用的候選網址，開始實際媒體驗證。`);
   await cacheYoutubeFormats(id, formats, steps);
   return json({ id, phase: mode, source: sources.filter(source => addressableFormats(source.player).length).map(source => source.label).join("+") || selected.label, version: VERSION, code: formats.length ? "OK" : "SIGNATURE_REQUIRED", title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "",
     lengthSeconds: details.lengthSeconds || "", formats, steps,
-    note: formats.length ? "" : "播放器已回傳格式，但格式都只有加密 signatureCipher。此執行環境需要更新播放器規則解析器。" });
+    note: formats.length ? "" : (candidateFormats.length ? "播放器有回傳媒體網址，但所有候選均未通過實際媒體驗證。" : "播放器已回傳格式，但格式都只有加密 signatureCipher。此執行環境需要更新播放器規則解析器。") });
 }
 
+
+async function verifyYoutubeFormats(formats, steps) {
+  if (!formats.length) return [];
+  const verified = [];
+  let rejected403 = 0;
+  let otherRejected = 0;
+  const queue = [...formats];
+
+  async function worker() {
+    while (queue.length) {
+      const format = queue.shift();
+      let response;
+      try {
+        const headers = new Headers({
+          "Range": "bytes=0-1",
+          "Accept": "*/*",
+          "Accept-Encoding": "identity",
+          "Origin": "https://www.youtube.com",
+          "Referer": "https://www.youtube.com/",
+          "User-Agent": youtubeMediaUserAgent(format.source)
+        });
+        response = await fetch(format.url, { method: "GET", headers, redirect: "follow", cache: "no-store" });
+        const ok = response.status === 200 || response.status === 206;
+        if (ok) {
+          verified.push({ ...format, verified: true, verifiedAt: Date.now(), verificationStatus: response.status });
+        } else if (response.status === 403) {
+          rejected403++;
+        } else {
+          otherRejected++;
+        }
+      } catch {
+        otherRejected++;
+      } finally {
+        try { await response?.body?.cancel(); } catch {}
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(3, formats.length) }, () => worker()));
+  verified.sort((a, b) => Number(b.bitrate || 0) - Number(a.bitrate || 0));
+  steps.push(`【媒體預先驗證】候選「${formats.length}」個；HTTP 200/206 通過「${verified.length}」個；HTTP 403 淘汰「${rejected403}」個；其他失敗「${otherRejected}」個。`);
+  if (!verified.length && formats.length) {
+    steps.push("【媒體預先驗證】Player API 雖提供網址，但沒有任何候選通過 Google Video Server 實際存取驗證，因此不顯示無效下載選項。");
+  }
+  return verified;
+}
 
 function decodeHtml(value) {
   return String(value || "")
@@ -2031,7 +2097,7 @@ export default {
       if (url.pathname === "/youtube" && request.method === "GET") {
         const requestedMode = String(url.searchParams.get("mode") || "quick").toLowerCase();
         const mode = ["quick", "hq", "all"].includes(requestedMode) ? requestedMode : "quick";
-        return await youtube(url.searchParams.get("id"), mode);
+        return await youtube(url.searchParams.get("id"), mode, requestYoutubeCookie(request, env));
       }
       if (url.pathname === "/facebook" && request.method === "GET") return await facebookResolve(url.searchParams.get("url"), env, request);
       if (url.pathname === "/facebook-media" && ["GET", "HEAD"].includes(request.method)) return await facebookMedia(request, url.searchParams.get("url"), env);
@@ -2054,7 +2120,7 @@ export default {
           }
         );
       }
-      return json({ service: SERVICE, version: VERSION, build: BUILD, facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq|all", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT&url=SIGNED_URL", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
+      return json({ service: SERVICE, version: VERSION, build: BUILD, facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, youtubeSession: Boolean(requestYoutubeCookie(request, env)), endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq|all", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT&url=SIGNED_URL", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
     } catch (error) {
       return json({ error: error.message || "Worker 執行失敗", code: "WORKER_INTERNAL_ERROR", version: VERSION }, 500);
     }

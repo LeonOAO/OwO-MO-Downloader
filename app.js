@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
-const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "" };
-const APP_VERSION = "v1.3.1";
+const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "", ytCookie: "" };
+const APP_VERSION = "v1.4.0";
 const FFMPEG_MODULE_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
 const FFMPEG_UTIL_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
 const FFMPEG_CORE_BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
@@ -52,6 +52,7 @@ function detectPlatform(value) {
 
 function platformRequestHeaders(platform = state.platform) {
   const headers = { "Cache-Control": "no-cache" };
+  if (platform === "youtube" && state.ytCookie) headers["X-YT-Session"] = state.ytCookie;
   if (platform === "facebook" && state.fbCookie) headers["X-FB-Session"] = state.fbCookie;
   if (platform === "instagram" && state.igCookie) headers["X-IG-Session"] = state.igCookie;
   if (platform === "threads") {
@@ -61,6 +62,35 @@ function platformRequestHeaders(platform = state.platform) {
   return headers;
 }
 
+function setYtSessionUi(applied, message = "") {
+  const badge = $("ytSessionBadge");
+  badge.textContent = applied ? "此分頁已套用" : "未套用";
+  badge.className = `session-badge ${applied ? "on" : "off"}`;
+  document.querySelector(".yt-session-card").classList.toggle("applied", applied);
+  if (message) $("ytSessionHelp").textContent = message;
+}
+function applyYtCookie() {
+  const value = normalizeCookieInput($("ytCookie").value);
+  if (!value || !/(?:^|;\s*)(?:SAPISID|__Secure-3PAPISID)=/i.test(value)) {
+    setYtSessionUi(false, "格式不完整，至少需要 SAPISID 或 __Secure-3PAPISID。Cookie 不會寫入瀏覽器儲存空間。");
+    status("YT_COOKIE 格式不完整。", "error");
+    return;
+  }
+  state.ytCookie = value;
+  $("ytCookie").value = "";
+  setYtSessionUi(true, "已套用至目前分頁；重新整理或關閉分頁後自動清除，執行紀錄不顯示內容。");
+  status("YouTube 登入工作階段已套用至目前分頁。", "success");
+  log("YouTube 登入工作階段已套用至目前分頁（內容已隱藏）。");
+}
+function clearYtCookie() {
+  state.ytCookie = "";
+  $("ytCookie").value = "";
+  $("ytCookie").type = "password";
+  $("toggleYtCookie").textContent = "顯示";
+  setYtSessionUi(false, "Cookie 已從目前分頁記憶體清除。");
+  status("YouTube 登入工作階段已清除。", "idle");
+  log("YouTube 登入工作階段已清除。");
+}
 function setFbSessionUi(applied, message = "") {
   const badge = $("fbSessionBadge");
   badge.textContent = applied ? "此分頁已套用" : "未套用";
@@ -345,7 +375,7 @@ function wait(milliseconds) { return new Promise(resolve => setTimeout(resolve, 
 async function requestYoutubeAll(id, attempts = 3) {
   let lastResponse = null, lastData = {};
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    const response = await fetch(endpoint("/youtube", { id, mode: "all", nonce: `${Date.now()}-${attempt}` }), { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
+    const response = await fetch(endpoint("/youtube", { id, mode: "all", nonce: `${Date.now()}-${attempt}` }), { cache: "no-store", headers: platformRequestHeaders("youtube") });
     const data = await response.json().catch(() => ({}));
     if (Array.isArray(data.steps)) data.steps.forEach(log);
     lastResponse = response; lastData = data;
@@ -718,6 +748,13 @@ $("clearLog").onclick = () => $("log").textContent = "尚未執行。";
 $("videoFormat").onchange = updateButton;
 $("audioFormat").onchange = updateButton;
 $("directFormat").onchange = updateButton;
+$("ytCookieForm").onsubmit = event => { event.preventDefault(); applyYtCookie(); };
+$("clearYtCookie").onclick = clearYtCookie;
+$("toggleYtCookie").onclick = () => {
+  const input = $("ytCookie");
+  input.type = input.type === "password" ? "text" : "password";
+  $("toggleYtCookie").textContent = input.type === "password" ? "顯示" : "隱藏";
+};
 $("fbCookieForm").onsubmit = event => { event.preventDefault(); applyFbCookie(); };
 $("clearFbCookie").onclick = clearFbCookie;
 $("toggleFbCookie").onclick = () => {

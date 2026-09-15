@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#eef3ff">
   <meta name="color-scheme" content="light">
   <title>OwO 平台影音｜小幫手</title>
-  <link rel="stylesheet" href="app.css?v=20260915-v131">
+  <link rel="stylesheet" href="app.css?v=20260915-v140">
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -20,7 +20,7 @@
         </span>
         <span>OwO MO Downloader</span>
       </a>
-      <span class="version">v1.3.1</span>
+      <span class="version">v1.4.0</span>
     </nav>
 
     <section class="hero">
@@ -54,6 +54,25 @@
           <label for="worker">Cloudflare Worker 網址</label>
           <input id="worker" type="url" value="https://owo-mo-downloader-api.kkwan812.workers.dev" placeholder="https://owo-mo-downloader-api.kkwan812.workers.dev">
           <small>「小幫手」會透過您的 Cloudflare Worker 來獲取網頁資料。</small>
+
+          <div class="session-card yt-session-card">
+            <div class="session-heading">
+              <div><b>YouTube 登入</b><small>當匿名解析出現「登入帳戶以確認你不是機器人」時使用。公開影片通常無需填寫。</small></div>
+              <span id="ytSessionBadge" class="session-badge off">未套用</span>
+            </div>
+            <label for="ytCookie">YT_COOKIE</label>
+            <form id="ytCookieForm" class="session-form" autocomplete="off">
+              <div class="secret-input-row">
+                <input id="ytCookie" name="yt-session-cookie" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="貼上目前登入 YouTube 的完整 Cookie Header String">
+                <button id="toggleYtCookie" type="button" class="soft-button icon-button"><span>顯示</span></button>
+              </div>
+              <div class="session-actions">
+                <button id="applyYtCookie" type="submit" class="soft-button apply-button"><span>✓</span>套用</button>
+                <button id="clearYtCookie" type="button" class="soft-button clear-button"><span>×</span>清除</button>
+              </div>
+            </form>
+            <small id="ytSessionHelp">Cookie 僅保留在目前分頁記憶體，重新整理或關閉分頁後清除；執行紀錄不顯示內容。</small>
+          </div>
 
           <div class="session-card">
             <div class="session-heading">
@@ -175,6 +194,6 @@
 
     <footer><strong>OwO MO Downloader</strong><span>請只保存你有權下載的內容</span></footer>
   </main>
-  <script src="app.js?v=20260915-v131"></script>
+  <script src="app.js?v=20260915-v140"></script>
 </body>
 </html>
