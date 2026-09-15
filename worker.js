@@ -1,5 +1,5 @@
-const VERSION = "1.2.0";
-const BUILD = "2026.09.15-v120-multi-engine-final";
+const VERSION = "1.2.1";
+const BUILD = "2026.09.15-v121-stable-complete";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -285,6 +285,16 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick") {
 
       if (mode === "all" && state.status === "LOGIN_REQUIRED") {
         steps.push(`【登入限制】${profile.label} 要求登入；mode=all 繼續下一個匿名 Client。`);
+      }
+      if (
+        mode === "all" &&
+        profile.label === "ANDROID_VR" &&
+        playState(watchPlayer).status === "LOGIN_REQUIRED" &&
+        output.filter(source => ["WATCH_PAGE", "ANDROID", "ANDROID_VR"].includes(source.label))
+          .every(source => playState(source.player).status === "LOGIN_REQUIRED" && rawFormats(source.player).length === 0)
+      ) {
+        steps.push("【登入限制熔斷】WATCH_PAGE、ANDROID、ANDROID_VR 均為 LOGIN_REQUIRED/0/0，停止其餘第一層 Client，避免持續增加匿名請求。");
+        break;
       }
     } catch (error) {
       steps.push(`【${profile.label}】請求失敗：${error.message}。`);
