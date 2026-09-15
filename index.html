@@ -41,9 +41,9 @@
 
       <div class="url-box">
         <span class="input-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10.6 13.4a1 1 0 0 0 1.4 1.4l5-5a3 3 0 1 0-4.2-4.2l-2 2a1 1 0 1 0 1.4 1.4l2-2a1 1 0 1 1 1.4 1.4l-5 5Zm2.8-2.8a1 1 0 0 0-1.4-1.4l-5 5a3 3 0 1 0 4.2 4.2l2-2a1 1 0 1 0-1.4-1.4l-2 2a1 1 0 1 1-1.4-1.4l5-5Z"/></svg></span>
-        <input id="youtubeUrl" type="url" autocomplete="off" inputmode="url" placeholder="貼上 YouTube 或 Facebook 網址…">
+        <input id="youtubeUrl" type="url" autocomplete="off" inputmode="url" placeholder="請貼上目標網址...（僅支援 YouTube、Facebook、Instagram、Threads）。若為帳號限定影片，請於下方填寫 Cookie。">
         <button id="analyze" class="action-button analyze-button" type="button">
-          <span>解析影片</span>
+          <span>開始解析</span>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
         </button>
       </div>
@@ -52,7 +52,7 @@
         <summary><span class="summary-icon">⚙</span><span>進階設定</span><span class="summary-chevron">⌄</span></summary>
         <div class="advanced-content">
           <label for="worker">Cloudflare Worker 網址</label>
-          <input id="worker" type="url" placeholder="https://your-worker.workers.dev">
+          <input id="worker" type="url" placeholder="https://owo-mo-downloader-api.kkwan812.workers.dev">
           <small>「小幫手」會透過您的 Cloudflare Worker 來獲取網頁資料。</small>
 
           <div class="session-card">
