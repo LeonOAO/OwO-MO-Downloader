@@ -1,5 +1,5 @@
-const VERSION = "1.4.2";
-const BUILD = "2026.09.15-v142-one-second-full-matrix";
+const VERSION = "1.4.3";
+const BUILD = "2026.09.15-v143-clean-client-matrix-ui";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -141,18 +141,16 @@ const PLAYER_CLIENTS = [
   { label: "WEB_CREATOR", clientName: "WEB_CREATOR", clientVersion: "1.20260909.00.00" },
   { label: "WEB_KIDS", clientName: "WEB_KIDS", clientVersion: "2.20260909.00.00" },
   { label: "TV", clientName: "TVHTML5", clientVersion: "7.20260311.12.00", platform: "TV", userAgent: "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version" },
-  { label: "TV_KIDS", clientName: "TVHTML5_KIDS", clientVersion: "7.20260311.12.00", platform: "TV" },
   { label: "TV_EMBEDDED", clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER", clientVersion: "2.0", platform: "TV", clientScreen: "EMBED", embed: true },
   { label: "TV_SIMPLY", clientName: "TVHTML5_SIMPLY", clientVersion: "1.0", platform: "TV" },
-  { label: "TV_ALT", clientName: "TVHTML5", clientVersion: "8.0", platform: "TV", userAgent: "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version" }
 ];
 
 const ALL_MODE_CLIENT_ORDER = [
   "ANDROID", "ANDROID_VR", "WEB_EMBEDDED", "IOS", "WEB_KIDS",
-  "WEB_SAFARI", "WEB", "MWEB", "TV", "TV_KIDS",
+  "WEB_SAFARI", "WEB", "MWEB", "TV",
   "ANDROID_CREATOR", "ANDROID_MUSIC", "IOS_CREATOR", "IOS_MUSIC",
   "VISIONOS", "WEB_REMIX", "WEB_CREATOR", "TV_EMBEDDED",
-  "TV_SIMPLY", "ANDROID_TESTSUITE", "TV_ALT"
+  "TV_SIMPLY", "ANDROID_TESTSUITE"
 ];
 
 const CLIENT_REQUEST_INTERVAL_MS = 1000;

@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "", ytCookie: "" };
-const APP_VERSION = "v1.4.2";
+const APP_VERSION = "v1.4.3";
 const FFMPEG_MODULE_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
 const FFMPEG_UTIL_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
 const FFMPEG_CORE_BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
@@ -87,7 +87,7 @@ function clearYtCookie() {
   $("ytCookie").value = "";
   $("ytCookie").type = "password";
   $("toggleYtCookie").textContent = "顯示";
-  setYtSessionUi(false, "Cookie 已從目前分頁記憶體清除。");
+  setYtSessionUi(false, "🔒 隱私保護：Cookie 僅暫存於當前分頁，重新整理或關閉後將自動清除，不留任何紀錄。");
   status("YouTube 登入工作階段已清除。", "idle");
   log("YouTube 登入工作階段已清除。");
 }
