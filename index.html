@@ -53,11 +53,11 @@
         <div class="advanced-content">
           <label for="worker">Cloudflare Worker 網址</label>
           <input id="worker" type="url" placeholder="https://your-worker.workers.dev">
-          <small>Worker 網址只保存在這台裝置的 localStorage。</small>
+          <small>「小幫手」會透過您的 Cloudflare Worker 來獲取網頁資料。</small>
 
           <div class="session-card">
             <div class="session-heading">
-              <div><b>Facebook 登入工作階段</b><small>供 Facebook Stories 或登入限定影片使用</small></div>
+              <div><b>Facebook 登入</b><small>💡 本功能僅供「登入或帳號限定影片」讀取使用，若為「公開貼文」則無需填寫。</small></div>
               <span id="fbSessionBadge" class="session-badge off">未套用</span>
             </div>
             <label for="fbCookie">FB_COOKIE</label>
@@ -71,26 +71,26 @@
               <button id="clearFbCookie" type="button" class="soft-button clear-button"><span>×</span>清除</button>
             </div>
             </form>
-            <small id="fbSessionHelp">Cookie 僅暫存在目前分頁記憶體，重新整理或關閉分頁後會清除，不會寫入網址、localStorage 或執行紀錄。</small>
+            <small id="fbSessionHelp">🔒 隱私保護：Cookie 僅暫存於當前分頁，重新整理或關閉後將自動清除，不留任何紀錄。</small>
           </div>
           <div class="session-card ig-session-card">
-            <div class="session-heading"><div><b>Instagram 登入工作階段</b><small>供 Stories、Highlights 或登入限定內容使用</small></div><span id="igSessionBadge" class="session-badge off">未套用</span></div>
+            <div class="session-heading"><div><b>Instagram 登入</b><small>💡 本功能僅供「登入或帳號限定影片」讀取使用，若為「公開貼文」則無需填寫。</small></div><span id="igSessionBadge" class="session-badge off">未套用</span></div>
             <label for="igCookie">IG_COOKIE</label>
             <form id="igCookieForm" class="session-form" autocomplete="off">
             <div class="secret-input-row"><input id="igCookie" name="ig-session-cookie" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="貼上 sessionid=...; csrftoken=...;"><button id="toggleIgCookie" type="button" class="soft-button icon-button"><span>顯示</span></button></div>
             <div class="session-actions"><button id="applyIgCookie" type="submit" class="soft-button apply-button"><span>✓</span>套用至此分頁</button><button id="clearIgCookie" type="button" class="soft-button clear-button"><span>×</span>清除</button></div>
             </form>
-            <small id="igSessionHelp">Cookie 僅暫存在目前分頁記憶體，不會寫入瀏覽器儲存空間。</small>
+            <small id="igSessionHelp">🔒 隱私保護：Cookie 僅暫存於當前分頁，重新整理或關閉後將自動清除，不留任何紀錄。</small>
           </div>
 
           <div class="session-card th-session-card">
-            <div class="session-heading"><div><b>Threads 登入工作階段</b><small>公開貼文優先匿名解析，也可使用 Threads 或 Instagram 工作階段備援</small></div><span id="thSessionBadge" class="session-badge off">未套用</span></div>
+            <div class="session-heading"><div><b>Threads 登入</b><small>💡 本功能僅供「登入或帳號限定影片」讀取使用，若為「公開貼文」則無需填寫。</small></div><span id="thSessionBadge" class="session-badge off">未套用</span></div>
             <label for="thCookie">TH_COOKIE</label>
             <form id="thCookieForm" class="session-form" autocomplete="off">
             <div class="secret-input-row"><input id="thCookie" name="th-session-cookie" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="貼上 Threads Cookie Header String"><button id="toggleThCookie" type="button" class="soft-button icon-button"><span>顯示</span></button></div>
             <div class="session-actions"><button id="applyThCookie" type="submit" class="soft-button apply-button"><span>✓</span>套用至此分頁</button><button id="clearThCookie" type="button" class="soft-button clear-button"><span>×</span>清除</button></div>
             </form>
-            <small id="thSessionHelp">未填 TH_COOKIE 時，Worker 可使用本分頁的 IG_COOKIE 作為備援。</small>
+            <small id="thSessionHelp">🔒 隱私保護：Cookie 僅暫存於當前分頁，重新整理或關閉後將自動清除，不留任何紀錄。</small>
           </div>
         </div>
       </details>
