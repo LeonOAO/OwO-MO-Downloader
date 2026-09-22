@@ -1,5 +1,5 @@
-const VERSION = "1.6.4";
-const BUILD = "2026.09.22-v164-youtube-robust-media-validation";
+const VERSION = "1.6.5";
+const BUILD = "2026.09.22-v165-youtube-bounded-range-chunks";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -155,7 +155,6 @@ const ALL_MODE_CLIENT_ORDER = [
 
 const CLIENT_REQUEST_INTERVAL_MS = 1000;
 function stableVisitorData(current) {
-  // Keep Visitor Data inside the active request/session only.
   return String(current || "");
 }
 
@@ -217,46 +216,21 @@ async function innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie =
 }
 
 const YOUTUBE_MEDIA_PROBE_END = 262143;
-
 async function probeYoutubeFormats(player, sourceLabel, steps) {
   const candidates = addressableFormats(player);
-  if (!candidates.length) return { videoOnly: false, audioOnly: false, muxed: false, passed: 0, total: 0 };
-  let passed = 0;
-  let videoOnly = false;
-  let audioOnly = false;
-  let muxed = false;
+  if (!candidates.length) return { videoOnly: false, audioOnly: false };
+  let passed=0, videoOnly=false, audioOnly=false;
   for (const format of candidates) {
-    const url = directUrl(format);
-    if (!url) continue;
-    let response;
+    const url=directUrl(format); if (!url) continue; let response;
     try {
-      response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Range": `bytes=0-${YOUTUBE_MEDIA_PROBE_END}`,
-          "Accept": "*/*",
-          "Accept-Encoding": "identity",
-          "Origin": "https://www.youtube.com",
-          "Referer": "https://www.youtube.com/",
-          "User-Agent": youtubeMediaUserAgent(sourceLabel)
-        },
-        redirect: "follow",
-        cache: "no-store"
-      });
-      if (response.status !== 200 && response.status !== 206) continue;
-      passed++;
-      const mime = String(format.mimeType || "");
-      const hasVideo = mime.startsWith("video/");
-      const hasAudio = mime.startsWith("audio/") || Boolean(format.audioQuality);
-      if (hasVideo && hasAudio) muxed = true;
-      else if (hasVideo) videoOnly = true;
-      else if (hasAudio) audioOnly = true;
-    } catch {} finally {
-      try { await response?.body?.cancel(); } catch {}
-    }
+      response=await fetch(url,{method:"GET",headers:{"Range":`bytes=0-${YOUTUBE_MEDIA_PROBE_END}`,"Accept":"*/*","Accept-Encoding":"identity","Origin":"https://www.youtube.com","Referer":"https://www.youtube.com/","User-Agent":youtubeMediaUserAgent(sourceLabel)},redirect:"follow",cache:"no-store"});
+      if (response.status!==200 && response.status!==206) continue;
+      passed++; const mime=String(format.mimeType||""); const hasVideo=mime.startsWith("video/"); const hasAudio=mime.startsWith("audio/")||Boolean(format.audioQuality);
+      if (hasVideo&&!hasAudio) videoOnly=true; else if (!hasVideo&&hasAudio) audioOnly=true;
+    } catch {} finally { try { await response?.body?.cancel(); } catch {} }
   }
-  steps.push(`【實載驗證】${sourceLabel} 以 256 KiB Range 驗證「${candidates.length}」個網址，通過「${passed}」個；分離視訊：${videoOnly ? "有" : "無"}；分離音訊：${audioOnly ? "有" : "無"}。`);
-  return { videoOnly, audioOnly, muxed, passed, total: candidates.length };
+  steps.push(`【實載驗證】${sourceLabel} 以 256 KiB Range 驗證「${candidates.length}」個網址，通過「${passed}」個；分離視訊：${videoOnly?"有":"無"}；分離音訊：${audioOnly?"有":"無"}。`);
+  return {videoOnly,audioOnly};
 }
 
 async function collectSources(html, watchPlayer, id, steps, mode = "quick", youtubeCookie = "") {
@@ -343,10 +317,7 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
 
       if (videoOnly && audioOnly) {
         const probe = await probeYoutubeFormats(player, profile.label, steps);
-        if (probe.videoOnly && probe.audioOnly) {
-          steps.push(`【高畫質】${profile.label} 的分離視訊與音訊已通過實載驗證，停止其餘 Client 輪詢。`);
-          break;
-        }
+        if (probe.videoOnly && probe.audioOnly) { steps.push(`【高畫質】${profile.label} 的分離視訊與音訊已通過實載驗證，停止其餘 Client 輪詢。`); break; }
         steps.push(`【高畫質續搜】${profile.label} 雖回傳分離格式，但未通過 256 KiB 實載驗證，繼續下一個 Client。`);
       }
 
@@ -2040,8 +2011,8 @@ function youtubeMediaUserAgent(sourceLabel) {
 }
 function mediaRequestHeaders(request, sourceLabel) {
   const headers = new Headers();
-  const range = request.headers.get("Range") || "bytes=0-";
-  headers.set("Range", range);
+  const range = request.headers.get("Range");
+  if (range) headers.set("Range", range);
   headers.set("Accept", "*/*");
   headers.set("Accept-Encoding", "identity");
   headers.set("Origin", "https://www.youtube.com");
