@@ -1,12 +1,12 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "", ytCookie: "", ytMediaSessionId: "" };
-const APP_VERSION = "v1.6.5";
+const APP_VERSION = "v1.6.6";
 const FFMPEG_MODULE_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
 const FFMPEG_UTIL_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
 const FFMPEG_CORE_BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
 const MAX_BROWSER_WORK_BYTES = 700 * 1024 * 1024;
-const YOUTUBE_DOWNLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
+const YOUTUBE_DOWNLOAD_CHUNK_BYTES = 256 * 1024;
 const DEFAULT_WORKER_URL = "https://owo-mo-downloader-api.kkwan812.workers.dev";
 
 function log(message) {
@@ -466,7 +466,10 @@ function contentRangeInfo(value) {
 }
 async function fetchYoutubeMediaInChunks(format, label, start, end) {
   const chunks = [];
-  let received = 0, total = Number(format.contentLength || 0), offset = 0, requestCount = 0;
+  let received = 0;
+  let total = Number(format.contentLength || 0);
+  let offset = 0;
+  let requestCount = 0;
   while (true) {
     const rangeEnd = offset + YOUTUBE_DOWNLOAD_CHUNK_BYTES - 1;
     const response = await fetch(mediaEndpoint(format), {
@@ -478,23 +481,31 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
       const data = await response.json().catch(() => ({}));
       if (Array.isArray(data.steps)) data.steps.forEach(step => log(step));
       const error = new Error(data.error || `${label}下載失敗：HTTP ${response.status}。`);
-      error.code = data.code || "MEDIA_DOWNLOAD_FAILED"; error.httpStatus = response.status; throw error;
+      error.code = data.code || "MEDIA_DOWNLOAD_FAILED";
+      error.httpStatus = response.status;
+      throw error;
     }
     const range = contentRangeInfo(response.headers.get("Content-Range"));
     const data = new Uint8Array(await response.arrayBuffer());
     if (!data.length) throw Error(`${label}分段下載收到空白內容。`);
-    chunks.push(data); received += data.byteLength;
+    if (range && range.start !== offset) throw Error(`${label}分段位置不連續：預期 ${offset}，實際 ${range.start}。`);
+    chunks.push(data);
+    received += data.byteLength;
     if (received > MAX_BROWSER_WORK_BYTES) throw Error(`${label}超過瀏覽器安全處理上限。`);
-    if (range?.total) total = range.total; else if (response.status === 200) total = received;
+    if (range?.total) total = range.total;
+    else if (response.status === 200) total = received;
     if (total > MAX_BROWSER_WORK_BYTES) throw Error(`${label}大小 ${humanBytes(total)} 超過瀏覽器安全處理上限。`);
-    setProgress(total ? start + (end-start)*Math.min(1,received/total) : start, total ? `正在分段下載${label}：${humanBytes(received)} / ${humanBytes(total)}` : `正在分段下載${label}：${humanBytes(received)}`);
+    setProgress(total ? start + (end-start)*Math.min(1,received/total) : start,
+      total ? `正在分段下載${label}：${humanBytes(received)} / ${humanBytes(total)}` : `正在分段下載${label}：${humanBytes(received)}`);
     if (response.status === 200 || (total && received >= total) || data.byteLength < YOUTUBE_DOWNLOAD_CHUNK_BYTES) break;
     offset = range ? range.end + 1 : offset + data.byteLength;
   }
-  const output = new Uint8Array(received); let writeOffset = 0;
+  const output = new Uint8Array(received);
+  let writeOffset = 0;
   for (const chunk of chunks) { output.set(chunk, writeOffset); writeOffset += chunk.byteLength; }
-  log(`【YouTube 分段下載】${label}完成，共 ${requestCount} 段、${humanBytes(received)}。`);
-  setProgress(end, `${label}下載完成。`); return output;
+  log(`【YouTube 分段下載】${label}完成，共 ${requestCount} 段、${humanBytes(received)}；每段 256 KiB。`);
+  setProgress(end, `${label}下載完成。`);
+  return output;
 }
 
 async function fetchMedia(format, label = "媒體", start = 5, end = 65) {
