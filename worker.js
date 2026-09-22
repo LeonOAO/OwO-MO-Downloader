@@ -1,5 +1,5 @@
-const VERSION = "1.6.2";
-const BUILD = "2026.09.15-v162-total-15-watch-attempts";
+const VERSION = "1.6.3";
+const BUILD = "2026.09.22-v163-youtube-session-range-refresh";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -154,16 +154,9 @@ const ALL_MODE_CLIENT_ORDER = [
 ];
 
 const CLIENT_REQUEST_INTERVAL_MS = 1000;
-const VISITOR_DATA_TTL_MS = 45 * 60 * 1000;
-let rememberedVisitorData = { value: "", storedAt: 0 };
-
 function stableVisitorData(current) {
-  const now = Date.now();
-  if (rememberedVisitorData.value && now - rememberedVisitorData.storedAt < VISITOR_DATA_TTL_MS) {
-    return rememberedVisitorData.value;
-  }
-  if (current) rememberedVisitorData = { value: current, storedAt: now };
-  return current || "";
+  // Keep Visitor Data inside the active request/session only.
+  return String(current || "");
 }
 
 function waitFor(milliseconds) {
@@ -637,9 +630,11 @@ async function youtube(id, mode = "quick", youtubeCookie = "") {
   steps.push(`【網址】Signature 成功：「${counters.signature}」個；失敗：「${counters.signatureFailed}」個。`);
   steps.push(`【網址】N 參數成功：「${counters.n}」個；未處理：「${counters.nFailed}」個。`);
   steps.push(`【網址】取得「${candidateFormats.length}」個可直接使用的候選網址，開始實際媒體驗證。`);
-  await cacheYoutubeFormats(id, formats, steps);
-  return json({ id, phase: mode, source: sources.filter(source => addressableFormats(source.player).length).map(source => source.label).join("+") || selected.label, version: VERSION, code: formats.length ? "OK" : "SIGNATURE_REQUIRED", title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "",
-    lengthSeconds: details.lengthSeconds || "", formats, steps,
+  const mediaSessionId = crypto.randomUUID();
+  const sessionFormats = formats.map(format => ({ ...format, sessionId: mediaSessionId }));
+  await cacheYoutubeFormats(id, sessionFormats, steps, mediaSessionId);
+  return json({ id, phase: mode, mediaSessionId, source: sources.filter(source => addressableFormats(source.player).length).map(source => source.label).join("+") || selected.label, version: VERSION, code: formats.length ? "OK" : "SIGNATURE_REQUIRED", title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "",
+    lengthSeconds: details.lengthSeconds || "", formats: sessionFormats, steps,
     note: formats.length ? "" : (candidateFormats.length ? "播放器有回傳媒體網址，但所有候選均未通過實際媒體驗證。" : "播放器已回傳格式，但格式都只有加密 signatureCipher。此執行環境需要更新播放器規則解析器。") });
 }
 
@@ -1843,19 +1838,20 @@ async function metaSocialMedia(request, target, platform, env) {
 
 const YOUTUBE_MEDIA_CACHE_TTL_SECONDS = 120;
 
-function youtubeMediaCacheRequest(id, itag, sourceLabel) {
+function youtubeMediaCacheRequest(id, itag, sourceLabel, sessionId = "") {
   const safeSource = String(sourceLabel || "ANDROID").replace(/[^A-Za-z0-9_-]/g, "_");
-  const key = `https://owo-media-cache.invalid/youtube/${encodeURIComponent(id)}/${encodeURIComponent(String(itag))}/${safeSource}`;
+  const safeSession = String(sessionId || "legacy").replace(/[^A-Za-z0-9_-]/g, "_");
+  const key = `https://owo-media-cache.invalid/youtube/${encodeURIComponent(id)}/${safeSession}/${encodeURIComponent(String(itag))}/${safeSource}`;
   return new Request(key, { method: "GET" });
 }
 
-async function cacheYoutubeFormats(id, formats, steps) {
+async function cacheYoutubeFormats(id, formats, steps, sessionId = "") {
   if (typeof caches === "undefined" || !caches.default || !id) return;
   let stored = 0;
   for (const format of formats) {
     if (!format?.url || !format?.itag || !format?.source) continue;
     try {
-      const request = youtubeMediaCacheRequest(id, format.itag, format.source);
+      const request = youtubeMediaCacheRequest(id, format.itag, format.source, sessionId);
       const response = new Response(JSON.stringify({
         url: format.url,
         source: format.source,
@@ -1879,10 +1875,10 @@ async function cacheYoutubeFormats(id, formats, steps) {
   if (stored) steps.push(`【媒體工作階段】已暫存「${stored}」個格式網址，有效期約 ${YOUTUBE_MEDIA_CACHE_TTL_SECONDS} 秒。`);
 }
 
-async function readYoutubeFormatCache(id, itag, sourceLabel) {
+async function readYoutubeFormatCache(id, itag, sourceLabel, sessionId = "") {
   if (typeof caches === "undefined" || !caches.default || !id || !itag) return null;
   try {
-    const response = await caches.default.match(youtubeMediaCacheRequest(id, itag, sourceLabel));
+    const response = await caches.default.match(youtubeMediaCacheRequest(id, itag, sourceLabel, sessionId));
     if (!response) return null;
     const value = await response.json();
     if (!value?.url || Date.now() - Number(value.storedAt || 0) > YOUTUBE_MEDIA_CACHE_TTL_SECONDS * 1000) return null;
@@ -1892,9 +1888,9 @@ async function readYoutubeFormatCache(id, itag, sourceLabel) {
   }
 }
 
-async function deleteYoutubeFormatCache(id, itag, sourceLabel) {
+async function deleteYoutubeFormatCache(id, itag, sourceLabel, sessionId = "") {
   if (typeof caches === "undefined" || !caches.default || !id || !itag) return;
-  try { await caches.default.delete(youtubeMediaCacheRequest(id, itag, sourceLabel)); } catch {}
+  try { await caches.default.delete(youtubeMediaCacheRequest(id, itag, sourceLabel, sessionId)); } catch {}
 }
 
 function matchingFormatScore(format, wanted) {
@@ -1931,10 +1927,10 @@ function clientProfileByLabel(label) {
   return PLAYER_CLIENTS.find(profile => profile.label === label) || PLAYER_CLIENTS.find(profile => profile.label === "ANDROID");
 }
 
-async function freshMediaUrl(id, itag, sourceLabel, steps, wanted = {}) {
+async function freshMediaUrl(id, itag, sourceLabel, steps, wanted = {}, youtubeCookie = "") {
   if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) throw new Error("影片 ID 格式錯誤。");
   const watchSteps = [];
-  const watchResult = await fetchYoutubeWatchPage(id, watchSteps, "");
+  const watchResult = await fetchYoutubeWatchPage(id, watchSteps, youtubeCookie);
   steps.push(...watchSteps.map(step => `【即時媒體刷新】${step}`));
   if (!watchResult.response.ok || !watchResult.html || !watchResult.player) {
     const status = Number(watchResult.response.status || 0);
@@ -1954,7 +1950,7 @@ async function freshMediaUrl(id, itag, sourceLabel, steps, wanted = {}) {
   if (sourceLabel === "WATCH_PAGE") {
     player = watchResult.player;
   } else {
-    player = await innertubePlayer(apiKey, visitorData, id, profile);
+    player = await innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie);
   }
   if (!player) throw new Error("重新解析時沒有取得播放器回應。");
 
@@ -1965,7 +1961,7 @@ async function freshMediaUrl(id, itag, sourceLabel, steps, wanted = {}) {
   }
   if (!format && sourceLabel !== "ANDROID") {
     const android = clientProfileByLabel("ANDROID");
-    const androidPlayer = await innertubePlayer(apiKey, visitorData, id, android);
+    const androidPlayer = await innertubePlayer(apiKey, visitorData, id, android, youtubeCookie);
     format = addressableFormats(androidPlayer).find(item => String(item.itag) === String(itag)) || equivalentAddressableFormat(androidPlayer, wanted);
     if (format) sourceLabel = "ANDROID";
   }
@@ -1997,8 +1993,8 @@ function youtubeMediaUserAgent(sourceLabel) {
 }
 function mediaRequestHeaders(request, sourceLabel) {
   const headers = new Headers();
-  const range = request.headers.get("Range");
-  if (range) headers.set("Range", range);
+  const range = request.headers.get("Range") || "bytes=0-";
+  headers.set("Range", range);
   headers.set("Accept", "*/*");
   headers.set("Accept-Encoding", "identity");
   headers.set("Origin", "https://www.youtube.com");
@@ -2007,15 +2003,16 @@ function mediaRequestHeaders(request, sourceLabel) {
   return headers;
 }
 
-async function freshMediaUrlWithRetry(id, itag, sourceLabel, steps, wanted = {}) {
+async function freshMediaUrlWithRetry(id, itag, sourceLabel, steps, wanted = {}, youtubeCookie = "") {
   steps.push(`【即時媒體重試】${sourceLabel} / itag ${itag} 使用單一十五次 WATCH 嘗試刷新工作；不再外層重複啟動完整 WATCH 掃描。`);
-  return freshMediaUrl(id, itag, sourceLabel, steps, wanted);
+  return freshMediaUrl(id, itag, sourceLabel, steps, wanted, youtubeCookie);
 }
 
-async function media(request, target, id, itag, sourceLabel, wanted = {}) {
+async function media(request, target, id, itag, sourceLabel, wanted = {}, sessionId = "", youtubeCookie = "") {
   const steps = [];
-  let resolvedTarget = String(target || "");
+  let resolvedTarget = sessionId ? "" : String(target || "");
   let resolutionMode = resolvedTarget ? "analysis-url" : "";
+  if (sessionId) steps.push("【媒體工作階段】使用伺服器端 Session Token 取回媒體網址，不信任前端回傳的簽名網址。");
   const suppliedGeneratedAt = Number(new URL(request.url).searchParams.get("generatedAt") || 0);
   const suppliedAgeMs = suppliedGeneratedAt ? Date.now() - suppliedGeneratedAt : 0;
   if (resolvedTarget && suppliedAgeMs > 60000 && id && itag) {
@@ -2025,7 +2022,7 @@ async function media(request, target, id, itag, sourceLabel, wanted = {}) {
   }
 
   if (!resolvedTarget && id && itag) {
-    const cached = await readYoutubeFormatCache(id, itag, sourceLabel || "ANDROID");
+    const cached = await readYoutubeFormatCache(id, itag, sourceLabel || "ANDROID", sessionId);
     if (cached?.url) {
       const cachedAgeMs = Date.now() - Number(cached.generatedAt || cached.storedAt || 0);
       if (cachedAgeMs <= 60000) {
@@ -2040,7 +2037,7 @@ async function media(request, target, id, itag, sourceLabel, wanted = {}) {
   }
 
   if (!resolvedTarget && id && itag) {
-    const fresh = await freshMediaUrlWithRetry(id, itag, sourceLabel || "ANDROID", steps, wanted);
+    const fresh = await freshMediaUrlWithRetry(id, itag, sourceLabel || "ANDROID", steps, wanted, youtubeCookie);
     resolvedTarget = fresh.url;
     sourceLabel = fresh.sourceLabel;
     resolutionMode = "fresh";
@@ -2060,7 +2057,7 @@ async function media(request, target, id, itag, sourceLabel, wanted = {}) {
   let upstream = await fetch(url, { method: request.method, headers: mediaRequestHeaders(request, sourceLabel), redirect: "follow", cache: "no-store" });
   steps.push(`【媒體請求】${sourceLabel || "UNKNOWN"} 回傳 HTTP ${upstream.status}。`);
   if (upstream.status === 403 && id && itag && resolutionMode === "analysis-url") {
-    const cached = await readYoutubeFormatCache(id, itag, sourceLabel || "ANDROID");
+    const cached = await readYoutubeFormatCache(id, itag, sourceLabel || "ANDROID", sessionId);
     if (cached?.url && cached.url !== url.href) {
       steps.push(`【媒體工作階段】解析網址遭拒，改用 ${sourceLabel} / itag ${itag} 的短效快取網址。`);
       url = new URL(cached.url); resolutionMode = "session-cache";
@@ -2070,9 +2067,9 @@ async function media(request, target, id, itag, sourceLabel, wanted = {}) {
   }
   if (upstream.status === 403 && id && itag && resolutionMode !== "fresh") {
     steps.push(`【媒體工作階段隔離】${sourceLabel || "ANDROID"} / itag ${itag} 的 ${resolutionMode || "既有"} 網址回傳 HTTP 403；只清除此單一格式快取，其他 ANDROID 360p 或高畫質格式保持不變。`);
-    await deleteYoutubeFormatCache(id, itag, sourceLabel || "ANDROID");
+    await deleteYoutubeFormatCache(id, itag, sourceLabel || "ANDROID", sessionId);
     try {
-      const fresh = await freshMediaUrlWithRetry(id, itag, sourceLabel || "ANDROID", steps, wanted);
+      const fresh = await freshMediaUrlWithRetry(id, itag, sourceLabel || "ANDROID", steps, wanted, youtubeCookie);
       url = new URL(fresh.url); sourceLabel = fresh.sourceLabel; resolutionMode = "fresh";
       upstream = await fetch(url, { method: request.method, headers: mediaRequestHeaders(request, sourceLabel), redirect: "follow", cache: "no-store" });
       steps.push(`【媒體請求】即時重新解析網址回傳 HTTP ${upstream.status}。`);
@@ -2139,7 +2136,9 @@ export default {
             fps: Number(url.searchParams.get("fps") || 0),
             codec: url.searchParams.get("codec") || "",
             kind: url.searchParams.get("kind") || ""
-          }
+          },
+          url.searchParams.get("sessionId") || "",
+          requestYoutubeCookie(request, env)
         );
       }
       return json({ service: SERVICE, version: VERSION, build: BUILD, facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, youtubeSession: Boolean(requestYoutubeCookie(request, env)), endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq|all", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT&url=SIGNED_URL", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });

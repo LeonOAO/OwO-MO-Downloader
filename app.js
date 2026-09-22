@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
-const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "", ytCookie: "" };
-const APP_VERSION = "v1.6.2";
+const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "", ytCookie: "", ytMediaSessionId: "" };
+const APP_VERSION = "v1.6.3";
 const FFMPEG_MODULE_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
 const FFMPEG_UTIL_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
 const FFMPEG_CORE_BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
@@ -393,6 +393,7 @@ async function analyzeYoutube(id) {
   log("【單一工作階段】基本格式與高畫質 Client 共用同一次 watch 頁面、API Key、Visitor Data 與 Player Response。");
   const { response, data } = await requestYoutubeAll(id, 3);
   if (!response || !response.ok) throw Error(data.error || data.note || `YouTube 單一工作階段回傳 HTTP ${response?.status || "未知"}。`);
+  state.ytMediaSessionId = String(data.mediaSessionId || "");
   state.formats = mergeFormats([], Array.isArray(data.formats) ? data.formats : []);
   if (!state.formats.length) throw Error(data.note || data.error || "目前沒有取得可下載的 YouTube 格式。");
   state.videoId = id; state.baseReady = true; applyVideoData(data, id);
@@ -414,7 +415,7 @@ async function analyze() {
   const platform = detectPlatform(value);
   if (!platform) { status("請貼上支援的 YouTube、Facebook、Instagram 或 Threads 網址。", "error"); return; }
   try {
-    state.busy = true; state.platform = platform; state.formats = []; state.baseReady = false; updateButton();
+    state.busy = true; state.platform = platform; state.formats = []; state.baseReady = false; state.ytMediaSessionId = ""; updateButton();
     $("videoInfo").classList.add("hidden");
     $("downloadPanel").classList.add("hidden");
     status("正在解析影片頁面…", "working");
@@ -444,7 +445,7 @@ function mediaEndpoint(format, download = false) {
       itag: format.itag,
       source: format.source || "ANDROID",
       generatedAt: format.generatedAt || "",
-      url: format.url || "",
+      sessionId: format.sessionId || state.ytMediaSessionId || "",
       quality: format.quality || "",
       height: format.height || qualityNumber(format) || "",
       fps: format.fps || "",
