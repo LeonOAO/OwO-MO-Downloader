@@ -1,5 +1,5 @@
-const VERSION = "1.6.3";
-const BUILD = "2026.09.22-v163-youtube-session-range-refresh";
+const VERSION = "1.6.4";
+const BUILD = "2026.09.22-v164-youtube-robust-media-validation";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -216,6 +216,49 @@ async function innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie =
   return response.json();
 }
 
+const YOUTUBE_MEDIA_PROBE_END = 262143;
+
+async function probeYoutubeFormats(player, sourceLabel, steps) {
+  const candidates = addressableFormats(player);
+  if (!candidates.length) return { videoOnly: false, audioOnly: false, muxed: false, passed: 0, total: 0 };
+  let passed = 0;
+  let videoOnly = false;
+  let audioOnly = false;
+  let muxed = false;
+  for (const format of candidates) {
+    const url = directUrl(format);
+    if (!url) continue;
+    let response;
+    try {
+      response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Range": `bytes=0-${YOUTUBE_MEDIA_PROBE_END}`,
+          "Accept": "*/*",
+          "Accept-Encoding": "identity",
+          "Origin": "https://www.youtube.com",
+          "Referer": "https://www.youtube.com/",
+          "User-Agent": youtubeMediaUserAgent(sourceLabel)
+        },
+        redirect: "follow",
+        cache: "no-store"
+      });
+      if (response.status !== 200 && response.status !== 206) continue;
+      passed++;
+      const mime = String(format.mimeType || "");
+      const hasVideo = mime.startsWith("video/");
+      const hasAudio = mime.startsWith("audio/") || Boolean(format.audioQuality);
+      if (hasVideo && hasAudio) muxed = true;
+      else if (hasVideo) videoOnly = true;
+      else if (hasAudio) audioOnly = true;
+    } catch {} finally {
+      try { await response?.body?.cancel(); } catch {}
+    }
+  }
+  steps.push(`【實載驗證】${sourceLabel} 以 256 KiB Range 驗證「${candidates.length}」個網址，通過「${passed}」個；分離視訊：${videoOnly ? "有" : "無"}；分離音訊：${audioOnly ? "有" : "無"}。`);
+  return { videoOnly, audioOnly, muxed, passed, total: candidates.length };
+}
+
 async function collectSources(html, watchPlayer, id, steps, mode = "quick", youtubeCookie = "") {
   const output = [{ label: "WATCH_PAGE", player: watchPlayer }];
   let state = playState(watchPlayer);
@@ -299,8 +342,12 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
       const muxed = all.some(format => String(format.mimeType || "").startsWith("video/") && Boolean(format.audioQuality));
 
       if (videoOnly && audioOnly) {
-        steps.push(`【高畫質】${profile.label} 後已取得分離視訊與音訊，停止其餘 Client 輪詢。`);
-        break;
+        const probe = await probeYoutubeFormats(player, profile.label, steps);
+        if (probe.videoOnly && probe.audioOnly) {
+          steps.push(`【高畫質】${profile.label} 的分離視訊與音訊已通過實載驗證，停止其餘 Client 輪詢。`);
+          break;
+        }
+        steps.push(`【高畫質續搜】${profile.label} 雖回傳分離格式，但未通過 256 KiB 實載驗證，繼續下一個 Client。`);
       }
 
       if (mode !== "all" && muxed && authCount >= 4) {
@@ -652,7 +699,7 @@ async function verifyYoutubeFormats(formats, steps) {
       let response;
       try {
         const headers = new Headers({
-          "Range": "bytes=0-1",
+          "Range": `bytes=0-${YOUTUBE_MEDIA_PROBE_END}`,
           "Accept": "*/*",
           "Accept-Encoding": "identity",
           "Origin": "https://www.youtube.com",
@@ -678,9 +725,9 @@ async function verifyYoutubeFormats(formats, steps) {
 
   await Promise.all(Array.from({ length: Math.min(3, formats.length) }, () => worker()));
   verified.sort((a, b) => Number(b.bitrate || 0) - Number(a.bitrate || 0));
-  steps.push(`【媒體預先驗證】候選「${formats.length}」個；HTTP 200/206 通過「${verified.length}」個；HTTP 403 淘汰「${rejected403}」個；其他失敗「${otherRejected}」個。`);
+  steps.push(`【媒體實載驗證 256 KiB】候選「${formats.length}」個；HTTP 200/206 通過「${verified.length}」個；HTTP 403 淘汰「${rejected403}」個；其他失敗「${otherRejected}」個。`);
   if (!verified.length && formats.length) {
-    steps.push("【媒體預先驗證】Player API 雖提供網址，但沒有任何候選通過 Google Video Server 實際存取驗證，因此不顯示無效下載選項。");
+    steps.push("【媒體實載驗證】Player API 雖提供網址，但沒有任何候選通過 Google Video Server 實際存取驗證，因此不顯示無效下載選項。");
   }
   return verified;
 }
@@ -2004,7 +2051,7 @@ function mediaRequestHeaders(request, sourceLabel) {
 }
 
 async function freshMediaUrlWithRetry(id, itag, sourceLabel, steps, wanted = {}, youtubeCookie = "") {
-  steps.push(`【即時媒體重試】${sourceLabel} / itag ${itag} 使用單一十五次 WATCH 嘗試刷新工作；不再外層重複啟動完整 WATCH 掃描。`);
+  steps.push(`【即時媒體重試】${sourceLabel} / itag ${itag} 啟動最多十五個入口的 WATCH 刷新流程；取得完整 Player Response 後即停止。`);
   return freshMediaUrl(id, itag, sourceLabel, steps, wanted, youtubeCookie);
 }
 

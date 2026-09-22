@@ -1,15 +1,13 @@
-# OwO 平台影音｜小幫手 v1.6.3
+# OwO 平台影音｜小幫手 v1.6.4
 
 ## 本版修正範圍
 
-本版僅修正 YouTube 流程，Facebook、Instagram、Threads 與既有介面維持原樣。
+本版只修正 YouTube 流程，其他平台與介面維持原樣。
 
-### YouTube 修正
+### YouTube v1.6.4
 
-- 解析完成後建立獨立的短效媒體 Session Token。
-- 前端下載時不再回傳完整 Google Video 簽名網址，改由 Worker 依 Session Token 取回。
-- YouTube 正式媒體請求預設使用 `Range: bytes=0-`，使下載條件與預先驗證一致。
-- 403 後的即時刷新會沿用目前請求的 YouTube 登入工作階段。
-- Visitor Data 改為單次請求範圍，不再由 Worker isolate 跨工作共用。
-- YouTube 媒體快取加入 Session ID，避免不同解析工作互相覆蓋。
-- 保留原有 360p 基本格式與高畫質失敗隔離機制。
+- 將原本 2-byte 網址探測提升為 256 KiB 實載驗證。
+- Client 回傳高畫質格式後，先驗證分離視訊與音訊是否真的可讀取。
+- 若 ANDROID_VR 僅能通過極小探測、無法讀取實際內容，會繼續搜尋 WEB_EMBEDDED、IOS、WEB、MWEB、TV 等後續 Client。
+- 最終格式清單只保留通過 256 KiB 實載驗證的網址，避免下載時才發現 HTTP 403。
+- 延續 v1.6.3 的 Session Token、Cookie 刷新、Visitor Data 隔離及 Range 下載修正。
