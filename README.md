@@ -1,3 +1,3 @@
-# OwO 平台影音｜小幫手 v1.6.7
+# OwO 平台影音｜小幫手 v1.6.8
 
-本版只修正 YouTube 非零位移分段下載。瀏覽器使用 256 KiB 有限 Range；Worker 將 HTTP Range 轉成 Google Video URL `range=start-end` 參數，並在快取及刷新網址重新套用目前區段。其他平台與介面維持原樣。
+本版僅修正 YouTube：256 KiB 分段依總長度完成；URL range 403 自動回退原生 HTTP Range；保留 Session Token、實載驗證與 Cookie 刷新。

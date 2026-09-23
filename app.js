@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "", ytCookie: "", ytMediaSessionId: "" };
-const APP_VERSION = "v1.6.7";
+const APP_VERSION = "v1.6.8";
 const FFMPEG_MODULE_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
 const FFMPEG_UTIL_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
 const FFMPEG_CORE_BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
@@ -461,46 +461,36 @@ function mediaEndpoint(format, download = false) {
 }
 function contentRangeInfo(value) {
   const match = String(value || "").match(/^bytes\s+(\d+)-(\d+)\/(\d+|\*)$/i);
-  if (!match) return null;
-  return { start: Number(match[1]), end: Number(match[2]), total: match[3] === "*" ? 0 : Number(match[3]) };
+  return match ? { start:Number(match[1]), end:Number(match[2]), total:match[3]==="*"?0:Number(match[3]) } : null;
 }
-async function fetchYoutubeMediaInChunks(format, label, start, end) {
-  const chunks = [];
-  let received = 0, total = Number(format.contentLength || 0), offset = 0, requestCount = 0;
+async function fetchYoutubeMediaInChunks(format,label,start,end) {
+  const chunks=[]; let received=0, total=Number(format.contentLength||0), offset=0, requestCount=0;
   while (true) {
-    const rangeEnd = offset + YOUTUBE_DOWNLOAD_CHUNK_BYTES - 1;
-    const response = await fetch(mediaEndpoint(format), {
-      cache: "no-store",
-      headers: { ...platformRequestHeaders(), Range: `bytes=${offset}-${rangeEnd}` }
-    });
+    const rangeEnd=offset+YOUTUBE_DOWNLOAD_CHUNK_BYTES-1;
+    const requestedRange=`bytes=${offset}-${rangeEnd}`;
+    const response=await fetch(mediaEndpoint(format),{cache:"no-store",headers:{...platformRequestHeaders(),Range:requestedRange}});
     requestCount++;
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      if (Array.isArray(data.steps)) data.steps.forEach(step => log(step));
-      const requestedRange = `bytes=${offset}-${rangeEnd}`;
-      const error = new Error(data.error || `${label}下載失敗：HTTP ${response.status}；Range ${requestedRange}。`);
-      error.code = data.code || "MEDIA_DOWNLOAD_FAILED";
-      log(`【YouTube 分段失敗】${label}第 ${requestCount} 段；要求 ${requestedRange}；HTTP ${response.status}。`); error.httpStatus = response.status; throw error;
-    }
-    const range = contentRangeInfo(response.headers.get("Content-Range"));
-    const data = new Uint8Array(await response.arrayBuffer());
-    if (!data.length) throw Error(`${label}分段下載收到空白內容。`);
-    chunks.push(data); received += data.byteLength;
-    if (received > MAX_BROWSER_WORK_BYTES) throw Error(`${label}超過瀏覽器安全處理上限。`);
-    if (range?.total) total = range.total; else if (response.status === 200) total = received;
-    if (total > MAX_BROWSER_WORK_BYTES) throw Error(`${label}大小 ${humanBytes(total)} 超過瀏覽器安全處理上限。`);
-    setProgress(total ? start + (end-start)*Math.min(1,received/total) : start, total ? `正在分段下載${label}：${humanBytes(received)} / ${humanBytes(total)}` : `正在分段下載${label}：${humanBytes(received)}`);
-    if (response.status === 200 || (total && received >= total) || data.byteLength < YOUTUBE_DOWNLOAD_CHUNK_BYTES) break;
-    offset = range ? range.end + 1 : offset + data.byteLength;
+    if(!response.ok){const data=await response.json().catch(()=>({}));if(Array.isArray(data.steps))data.steps.forEach(log);log(`【YouTube 分段失敗】${label}第 ${requestCount} 段；要求 ${requestedRange}；HTTP ${response.status}。`);throw Error(data.error||`${label}下載失敗：HTTP ${response.status}；Range ${requestedRange}。`);}
+    const range=contentRangeInfo(response.headers.get("Content-Range"));
+    const contentLength=Number(response.headers.get("Content-Length")||0);
+    const data=new Uint8Array(await response.arrayBuffer());
+    if(!data.length)throw Error(`${label}分段下載收到空白內容。`);
+    if(range&&range.start!==offset)throw Error(`${label}分段位置不連續：預期 ${offset}，實際 ${range.start}。`);
+    chunks.push(data);received+=data.byteLength;
+    if(range?.total)total=range.total;
+    if(!total){const urlLength=Number(format.contentLength||0);if(urlLength)total=urlLength;}
+    if(received>MAX_BROWSER_WORK_BYTES||total>MAX_BROWSER_WORK_BYTES)throw Error(`${label}超過瀏覽器安全處理上限。`);
+    setProgress(total?start+(end-start)*Math.min(1,received/total):start,total?`正在分段下載${label}：${humanBytes(received)} / ${humanBytes(total)}`:`正在分段下載${label}：${humanBytes(received)}`);
+    const shortChunk=data.byteLength<YOUTUBE_DOWNLOAD_CHUNK_BYTES;
+    if((total&&received>=total)||(!total&&shortChunk))break;
+    offset=range?range.end+1:offset+(contentLength||data.byteLength);
   }
-  const output = new Uint8Array(received); let writeOffset = 0;
-  for (const chunk of chunks) { output.set(chunk, writeOffset); writeOffset += chunk.byteLength; }
-  log(`【YouTube 分段下載】${label}完成，共 ${requestCount} 段、${humanBytes(received)}；每段 256 KiB。`);
-  setProgress(end, `${label}下載完成。`); return output;
+  const output=new Uint8Array(received);let pos=0;for(const chunk of chunks){output.set(chunk,pos);pos+=chunk.byteLength;}
+  log(`【YouTube 分段下載】${label}完成，共 ${requestCount} 段、${humanBytes(received)}；每段 256 KiB。`);setProgress(end,`${label}下載完成。`);return output;
 }
 
 async function fetchMedia(format, label = "媒體", start = 5, end = 65) {
-  if (state.platform === "youtube") return fetchYoutubeMediaInChunks(format, label, start, end);
+  if (state.platform === "youtube") return fetchYoutubeMediaInChunks(format,label,start,end);
   const response = await fetch(mediaEndpoint(format), { cache: "no-store", headers: platformRequestHeaders() });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
