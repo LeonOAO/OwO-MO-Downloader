@@ -1,5 +1,5 @@
-const VERSION = "1.6.8";
-const BUILD = "2026.09.23-v168-youtube-hybrid-range";
+const VERSION = "1.0";
+const BUILD = "2026.09.24-v10-youtube-message-summary";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -587,7 +587,11 @@ async function youtube(id, mode = "quick", youtubeCookie = "") {
   const html = watchResult.html;
   steps.push("【解析】已取得可用的 YouTube 頁面 HTML。");
   const watchPlayer = watchResult.player || extractJsonObject(html, "ytInitialPlayerResponse");
-  if (!watchPlayer) return json({ error: "已完成十五次 WATCH 嘗試（五輪 × 三入口），仍找不到 ytInitialPlayerResponse，仍找不到 ytInitialPlayerResponse。", code: "YOUTUBE_PLAYER_RESPONSE_MISSING", retryable: true, version: VERSION, steps }, 422);
+  if (!watchPlayer) {
+    const message = "WATCH 重試已達上限：共 5 輪、每輪 3 個入口，仍未取得完整的 ytInitialPlayerResponse。";
+    steps.push(`【WATCH 重試失敗】${message}`);
+    return json({ error: message, code: "YOUTUBE_PLAYER_RESPONSE_MISSING", retryable: true, version: VERSION, steps }, 422);
+  }
   steps.push("【解析】已取得 ytInitialPlayerResponse。");
 
   if (youtubeCookie) steps.push("【YOUTUBE SESSION】已套用目前請求的登入工作階段（內容已隱藏）。");
@@ -603,12 +607,34 @@ async function youtube(id, mode = "quick", youtubeCookie = "") {
   }
   const raw = [...rawMap.values()];
   if (!raw.length) {
-    const summary = sources.map(sourceSummary).join("、");
-    const hasLoginRequired = sources.some(source => playState(source.player).status === "LOGIN_REQUIRED");
+    const statusCounts = { LOGIN_REQUIRED: 0, ERROR: 0, UNPLAYABLE: 0, OTHER: 0 };
+    const testedLabels = new Set();
+    for (const source of sources) {
+      testedLabels.add(source.label);
+      const status = playState(source.player).status;
+      if (Object.prototype.hasOwnProperty.call(statusCounts, status)) statusCounts[status]++;
+      else statusCounts.OTHER++;
+    }
+    for (const step of steps) {
+      const failed = String(step).match(/^【([^】]+)】請求失敗：/);
+      if (!failed || testedLabels.has(failed[1])) continue;
+      testedLabels.add(failed[1]);
+      statusCounts.ERROR++;
+    }
+    const testedCount = testedLabels.size;
+    const hasLoginRequired = statusCounts.LOGIN_REQUIRED > 0;
     const code = hasLoginRequired ? "AUTH_REQUIRED" : "NO_MEDIA_ADDRESS";
     const note = hasLoginRequired
-      ? `已測試來源要求登入，且沒有取得可解析媒體位址（${summary}）。`
-      : `播放器可能只提供 SABR 格式描述，沒有 url、signatureCipher 或 cipher（${summary}）。`;
+      ? "所有 YouTube 解析來源均未取得可用的媒體位址，部分來源要求登入。"
+      : "所有 YouTube 解析來源均未取得可用的媒體位址。";
+    steps.push(`【解析失敗】已測試 ${testedCount} 個來源，均未取得可用的媒體位址。`);
+    const statusSummary = [
+      `要求登入：${statusCounts.LOGIN_REQUIRED}`,
+      `請求錯誤：${statusCounts.ERROR}`,
+      `無法播放：${statusCounts.UNPLAYABLE}`,
+      ...(statusCounts.OTHER ? [`其他：${statusCounts.OTHER}`] : [])
+    ].join("；");
+    steps.push(`【狀態摘要】${statusSummary}。`);
     return json({ id, phase: mode, title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "", formats: [], steps, code, retryable: false, version: VERSION, note });
   }
 
