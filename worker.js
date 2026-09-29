@@ -1,5 +1,5 @@
 const VERSION = "1.0";
-const BUILD = "2026.09.29-v10-http416-eof-fix";
+const BUILD = "2026.09.29-v10-range416-resume-refresh";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -2138,6 +2138,41 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
       steps.push(`【媒體請求】短效快取網址回傳 HTTP ${upstream.status}。`);
     }
   }
+  const premature416 = upstream.status === 416
+    && Boolean(requestedRange)
+    && mediaTotal > 0
+    && requestedRange.start < mediaTotal;
+
+  if (premature416 && id && itag) {
+    steps.push(`【媒體區段續傳】${sourceLabel || "ANDROID"} / itag ${itag} 在 ${requestedRange.header} 提前回傳 HTTP 416；宣告總長度為 ${mediaTotal} bytes，改用相同解析上下文刷新網址並從原位移續傳。`);
+    try {
+      const fresh = await freshMediaUrlFromContext(id, itag, sourceLabel || "ANDROID", steps, wanted, refreshContext, youtubeCookie);
+      url = new URL(fresh.url);
+      sourceLabel = fresh.sourceLabel;
+      resolutionMode = "direct-player-resume-refresh";
+      if (Number(fresh.contentLength || 0) > 0) mediaTotal = Number(fresh.contentLength);
+      upstream = await fetchUpstream(url);
+      steps.push(`【媒體區段續傳】刷新後 ${requestedRange.header} 回傳 HTTP ${upstream.status}。`);
+    } catch (error) {
+      steps.push(`【媒體區段續傳失敗】${error.message}`);
+      return json({
+        error: `媒體於預期結尾前回傳 HTTP 416，續傳刷新失敗：${error.message}`,
+        code: "MEDIA_RANGE_RESUME_FAILED",
+        version: VERSION,
+        steps
+      }, 422);
+    }
+  }
+
+  if (upstream.status === 416 && requestedRange && mediaTotal > 0 && requestedRange.start < mediaTotal) {
+    return json({
+      error: `媒體於預期總長度 ${mediaTotal} bytes 前停止回傳；失敗區段 ${requestedRange.header}。`,
+      code: "MEDIA_PREMATURE_EOF",
+      version: VERSION,
+      steps
+    }, 409);
+  }
+
   if (upstream.status === 403 && id && itag && resolutionMode !== "fresh") {
     steps.push(`【媒體工作階段隔離】${sourceLabel || "ANDROID"} / itag ${itag} 的 ${resolutionMode || "既有"} 網址回傳 HTTP 403；只清除此單一格式快取。`);
     await deleteYoutubeFormatCache(id, itag, sourceLabel || "ANDROID", sessionId);

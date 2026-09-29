@@ -45,8 +45,9 @@ OwO-MO-Downloader-main/
 必須完整部署 `FFmpeg/`，且大小寫不可更改。
 
 
-### HTTP 416 媒體結尾修正
-- 若下一個連續 Range 回傳 HTTP 416，將上一區段末端視為 GVS 確認的真實媒體結尾。
-- 即使解析階段提供的 `contentLength` 偏大，也會以已連續下載的實際位元組數修正總長度。
-- 已知總長度時會限制最後一段 Range 終點，不再要求超過預期末端的範圍。
-- 只有在起點等於累計接收大小、前段完全連續且已取得內容時，HTTP 416 才會被接受為正常 EOF。
+### HTTP 416 續傳刷新修正
+- 已知總長度尚未到達時收到 HTTP 416，不再視為媒體結尾。
+- Worker 會沿用解析階段 API Key、Visitor Data、Client 與 itag 刷新網址，從原 Range 位移續傳。
+- 刷新後仍在總長度前回傳 HTTP 416 時，回傳 `MEDIA_PREMATURE_EOF`，不把截斷檔案送入 FFmpeg。
+- 只有總長度未知、所有前段連續且下一段為 HTTP 416 時，才接受上一段末端為 EOF。
+- FFmpeg Worker 的字串或空值錯誤會正規化成可讀訊息，不再只顯示 `undefined`。

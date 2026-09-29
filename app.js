@@ -471,116 +471,45 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
   const chunks = [];
   const declaredTotal = Number(format.contentLength || 0);
   let total = declaredTotal > YOUTUBE_DOWNLOAD_CHUNK_BYTES ? declaredTotal : 0;
-  let received = 0;
-  let offset = 0;
-  let requestCount = 0;
-  let eofConfirmedBy416 = false;
-
+  let received = 0, offset = 0, requestCount = 0;
   while (true) {
-    if (total > 0 && offset >= total) break;
-
-    const unrestrictedEnd = offset + YOUTUBE_DOWNLOAD_CHUNK_BYTES - 1;
-    const rangeEnd = total > 0
-      ? Math.min(unrestrictedEnd, total - 1)
-      : unrestrictedEnd;
+    const rangeEnd = offset + YOUTUBE_DOWNLOAD_CHUNK_BYTES - 1;
     const requestedRange = `bytes=${offset}-${rangeEnd}`;
-    const response = await fetch(mediaEndpoint(format), {
-      cache: "no-store",
-      headers: { ...platformRequestHeaders(), Range: requestedRange }
-    });
+    const response = await fetch(mediaEndpoint(format), { cache: "no-store", headers: { ...platformRequestHeaders(), Range: requestedRange } });
     requestCount++;
-
-    if (response.status === 416 && received > 0 && offset === received) {
-      const previousTotal = total;
+    if (response.status === 416 && received > 0 && !total) {
+      log(`【媒體結尾】${label}下一個連續區段 ${requestedRange} 回傳 HTTP 416，且沒有宣告總長度，以上一段末端作為實際結尾。`);
       total = received;
-      eofConfirmedBy416 = true;
-      log(`【媒體結尾】${label}第 ${requestCount} 段 ${requestedRange} 回傳 HTTP 416，確認上一個連續區段已到達媒體結尾。`);
-      if (previousTotal > 0 && previousTotal !== received) {
-        log(`【媒體長度修正】${label}原始預期 ${humanBytes(previousTotal)}，GVS 實際結尾為 ${humanBytes(received)}，改以實際長度為準。`);
-      }
       break;
     }
-
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       if (Array.isArray(body.steps)) body.steps.forEach(log);
       log(`【YouTube 分段失敗】${label}第 ${requestCount} 段；要求 ${requestedRange}；HTTP ${response.status}。`);
-      throw Error(body.error || `${label}下載失敗：HTTP ${response.status}；Range ${requestedRange}。`);
+      const message = body.error || body.note || `${label}下載失敗：HTTP ${response.status}；Range ${requestedRange}。`;
+      throw new Error(String(message || `${label}下載失敗：HTTP ${response.status}。`));
     }
-
     const range = contentRangeInfo(response.headers.get("Content-Range"));
     const workerTotal = Number(response.headers.get("X-OwO-Media-Total") || 0);
     const data = new Uint8Array(await response.arrayBuffer());
-
-    if (!data.length) {
-      if (received > 0 && offset === received) {
-        total = received;
-        log(`【媒體結尾】${label}下一個連續區段為空白內容，以上一區段末端作為實際結尾。`);
-        break;
-      }
-      throw Error(`${label}分段下載收到空白內容。`);
-    }
-
-    if (range && range.start !== offset) {
-      throw Error(`${label}分段位置不連續：預期 ${offset}，實際 ${range.start}。`);
-    }
-
-    const reportedTotal = range?.total > 0 ? range.total : workerTotal;
-    if (reportedTotal > 0) {
-      if (!total) total = reportedTotal;
-      else if (reportedTotal < total) {
-        log(`【媒體長度修正】${label}總長度由 ${humanBytes(total)} 下修為 ${humanBytes(reportedTotal)}。`);
-        total = reportedTotal;
-      }
-    }
-
-    chunks.push(data);
-    received += data.byteLength;
-
-    if (received > MAX_BROWSER_WORK_BYTES || total > MAX_BROWSER_WORK_BYTES) {
-      throw Error(`${label}超過瀏覽器安全處理上限。`);
-    }
-
-    setProgress(
-      total ? start + (end - start) * Math.min(1, received / total) : start,
-      total
-        ? `正在分段下載${label}：${humanBytes(received)} / ${humanBytes(total)}`
-        : `正在分段下載${label}：${humanBytes(received)}；總長度確認中`
-    );
-
+    if (!data.length) { if (received > 0 && !total) break; throw Error(`${label}分段下載收到空白內容。`); }
+    if (range && range.start !== offset) throw Error(`${label}分段位置不連續：預期 ${offset}，實際 ${range.start}。`);
+    if (range?.total > 0) total = range.total; else if (workerTotal > 0) total = workerTotal;
+    chunks.push(data); received += data.byteLength;
+    if (received > MAX_BROWSER_WORK_BYTES || total > MAX_BROWSER_WORK_BYTES) throw Error(`${label}超過瀏覽器安全處理上限。`);
+    setProgress(total ? start + (end-start) * Math.min(1, received/total) : start, total ? `正在分段下載${label}：${humanBytes(received)} / ${humanBytes(total)}` : `正在分段下載${label}：${humanBytes(received)}；總長度確認中`);
     const shortChunk = data.byteLength < YOUTUBE_DOWNLOAD_CHUNK_BYTES;
-    if (total > 0 && received >= total) break;
-    if (!total && shortChunk) {
-      total = received;
-      break;
-    }
-
-    const nextOffset = range ? range.end + 1 : offset + data.byteLength;
-    if (nextOffset !== received) {
-      throw Error(`${label}分段累計不連續：下一起點 ${nextOffset}，累計大小 ${received}。`);
-    }
-    offset = nextOffset;
+    if ((total > 0 && received >= total) || (!total && shortChunk)) break;
+    offset = range ? range.end + 1 : offset + data.byteLength;
   }
-
   if (!received) throw Error(`${label}沒有取得任何媒體內容。`);
-  if (total > 0 && received !== total) {
-    throw Error(`${label}媒體不完整：預期 ${humanBytes(total)}，實際 ${humanBytes(received)}。`);
-  }
-  if (!total && received === YOUTUBE_DOWNLOAD_CHUNK_BYTES) {
-    throw Error(`${label}僅取得第一個 256 KiB 測試區段，未判定為完整媒體。`);
-  }
-
-  const output = new Uint8Array(received);
-  let position = 0;
-  for (const chunk of chunks) {
-    output.set(chunk, position);
-    position += chunk.byteLength;
-  }
-
-  log(`【媒體完整性】${label}預期：${humanBytes(total || received)}；實際：${humanBytes(received)}${eofConfirmedBy416 ? "；結尾由 HTTP 416 確認" : ""}。`);
-  log(`【YouTube 分段下載】${label}完成，共 ${chunks.length} 個有效區段、${humanBytes(received)}；每段上限 256 KiB。`);
-  setProgress(end, `${label}下載完成。`);
-  return output;
+  if (total > 0 && received !== total) throw Error(`${label}媒體不完整：預期 ${humanBytes(total)}，實際 ${humanBytes(received)}。`);
+  if (!total && received === YOUTUBE_DOWNLOAD_CHUNK_BYTES) throw Error(`${label}僅取得第一個 256 KiB 測試區段，未判定為完整媒體。`);
+  const output = new Uint8Array(received); let position = 0;
+  for (const chunk of chunks) { output.set(chunk, position); position += chunk.byteLength; }
+  log(`【媒體完整性】${label}預期：${total ? humanBytes(total) : "由末段確認"}；實際：${humanBytes(received)}。`);
+  log(`【YouTube 分段下載】${label}完成，共 ${requestCount} 段、${humanBytes(received)}；每段 256 KiB。`);
+  setProgress(end, `${label}下載完成。`); return output;
 }
 
 async function fetchMedia(format, label = "媒體", start = 5, end = 65) {
@@ -631,11 +560,22 @@ async function ensureFFmpeg() {
     const ffmpeg = new FFmpeg();
     ffmpeg.on("log", ({ message }) => message && log(`【FFMPEG】${message}`));
     ffmpeg.on("progress", ({ progress }) => Number.isFinite(progress) && setProgress(65 + Math.max(0,Math.min(1,progress))*30, "正在執行瀏覽器影音處理…"));
-    await ffmpeg.load({
-      classWorkerURL: FFMPEG_CLASS_WORKER_URL,
-      coreURL: `${FFMPEG_CORE_BASE}/ffmpeg-core.js`,
-      wasmURL: `${FFMPEG_CORE_BASE}/ffmpeg-core.wasm`
-    });
+    try {
+      await ffmpeg.load({
+        classWorkerURL: FFMPEG_CLASS_WORKER_URL,
+        coreURL: `${FFMPEG_CORE_BASE}/ffmpeg-core.js`,
+        wasmURL: `${FFMPEG_CORE_BASE}/ffmpeg-core.wasm`
+      });
+    } catch (reason) {
+      try { ffmpeg.terminate(); } catch {}
+      const detail = reason instanceof Error
+        ? reason.message
+        : typeof reason === "string"
+          ? reason
+          : JSON.stringify(reason ?? null);
+      log(`【FFMPEG 載入失敗】Worker：${FFMPEG_CLASS_WORKER_URL}；Core：${FFMPEG_CORE_BASE}/ffmpeg-core.js；原因：${detail || "未提供錯誤內容"}。`);
+      throw new Error(`FFmpeg 載入失敗：${detail || "Worker 未提供錯誤內容"}`);
+    }
     state.ffmpeg=ffmpeg; state.ffmpegLoaded=true; log("【FFMPEG】單執行緒核心載入完成。"); return ffmpeg;
   })();
   try { return await state.ffmpegLoading; } finally { state.ffmpegLoading=null; }

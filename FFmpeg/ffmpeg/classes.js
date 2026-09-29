@@ -50,9 +50,13 @@ export class FFmpeg {
                     case FFMessageType.PROGRESS:
                         this.#progressEventCallbacks.forEach((f) => f(data));
                         break;
-                    case FFMessageType.ERROR:
-                        this.#rejects[id](data);
+                    case FFMessageType.ERROR: {
+                        const reason = data instanceof Error
+                            ? data
+                            : new Error(typeof data === "string" ? data : JSON.stringify(data ?? null));
+                        this.#rejects[id](reason);
                         break;
+                    }
                 }
                 delete this.#resolves[id];
                 delete this.#rejects[id];
