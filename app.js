@@ -6,15 +6,9 @@ const FFMPEG_MODULE_URL = new URL("./FFmpeg/ffmpeg/index.js", import.meta.url).h
 const FFMPEG_CLASS_WORKER_URL = new URL("./FFmpeg/ffmpeg/worker.js", import.meta.url).href;
 const FFMPEG_CORE_BASE = new URL("./FFmpeg/core", import.meta.url).href;
 const MAX_BROWSER_WORK_BYTES = 700 * 1024 * 1024;
-const YOUTUBE_DOWNLOAD_CHUNK_BYTES = 256 * 1024;
+const YOUTUBE_DOWNLOAD_CHUNK_BYTES = 2 * 1024 * 1024;
 const YOUTUBE_AUTO_RETRY_DELAY_MS = 5000;
-const YOUTUBE_AUTO_RETRY_CODES = new Set([
-  "YOUTUBE_PLAYER_RESPONSE_MISSING",
-  "YOUTUBE_RATE_LIMITED",
-  "YOUTUBE_PAGE_UNAVAILABLE",
-  "AUTH_REQUIRED",
-  "NO_MEDIA_ADDRESS"
-]);
+const YOUTUBE_AUTO_RETRY_CODES = new Set(["YOUTUBE_PLAYER_RESPONSE_MISSING","YOUTUBE_RATE_LIMITED","YOUTUBE_PAGE_UNAVAILABLE","AUTH_REQUIRED","NO_MEDIA_ADDRESS"]);
 const DEFAULT_WORKER_URL = "https://owo-mo-downloader-api.kkwan812.workers.dev";
 
 function log(message) {
@@ -401,21 +395,11 @@ async function analyzeYoutube(id) {
   log(`開始解析影片 ID：${id}`);
   log("【單一工作階段】基本格式與高畫質 Client 共用同一次 watch 頁面、API Key、Visitor Data 與 Player Response。");
   const { response, data } = await requestYoutubeAll(id, 3);
-  if (!response || !response.ok) {
-    const error = new Error(data.error || data.note || `YouTube 單一工作階段回傳 HTTP ${response?.status || "未知"}。`);
-    error.code = String(data.code || "YOUTUBE_ANALYSIS_FAILED");
-    error.httpStatus = Number(response?.status || 0);
-    throw error;
-  }
+  if (!response || !response.ok) { const error=new Error(data.error||data.note||`YouTube 單一工作階段回傳 HTTP ${response?.status||"未知"}。`); error.code=String(data.code||"YOUTUBE_ANALYSIS_FAILED"); throw error; }
   state.ytMediaSessionId = String(data.mediaSessionId || "");
   log(`【版本】前端：${APP_VERSION}；Worker：${data.version || "未知"}；Media Session：${state.ytMediaSessionId ? state.ytMediaSessionId.slice(0, 8) : "未建立"}。`);
   state.formats = mergeFormats([], Array.isArray(data.formats) ? data.formats : []);
-  if (!state.formats.length) {
-    const error = new Error(data.note || data.error || "目前沒有取得可下載的 YouTube 格式。");
-    error.code = String(data.code || "NO_MEDIA_ADDRESS");
-    error.httpStatus = Number(response.status || 0);
-    throw error;
-  }
+  if (!state.formats.length) { const error=new Error(data.note||data.error||"目前沒有取得可下載的 YouTube 格式。"); error.code=String(data.code||"NO_MEDIA_ADDRESS"); throw error; }
   state.videoId = id; state.baseReady = true; applyVideoData(data, id);
   const { videoOnly, audioOnly, muxed } = lists();
   const hasHqPair = videoOnly.length > 0 && audioOnly.length > 0;
@@ -428,55 +412,10 @@ async function analyzeYoutube(id) {
     log("【基本格式保留】本次沒有取得完整高畫質配對，基本格式仍可直接下載。");
   }
 }
-function youtubeAutoRetryEnabled() {
-  return Boolean($("youtubeAutoRetry")?.checked);
-}
-function youtubeRetryLimit() {
-  const input = $("youtubeRetryLimit");
-  const parsed = Number.parseInt(input?.value || "3", 10);
-  const value = Number.isFinite(parsed) ? Math.max(1, Math.min(99, parsed)) : 3;
-  if (input) input.value = String(value);
-  return value;
-}
-function cleanRetryReason(value) {
-  return String(value || "解析失敗").trim().replace(/[。．.!！?？；;：:]+$/u, "");
-}
-function isYoutubeAutoRetryError(error) {
-  const code = String(error?.code || "");
-  const message = String(error?.message || error || "");
-  return YOUTUBE_AUTO_RETRY_CODES.has(code)
-    || message.includes("WATCH 重試已達上限")
-    || message.includes("所有 YouTube 解析來源均未取得可用的媒體位址");
-}
-async function analyzeYoutubeWithAutoRetry(id) {
-  const retryLimit = youtubeRetryLimit();
-  let retryCount = 0;
-  while (true) {
-    try {
-      await analyzeYoutube(id);
-      if (retryCount > 0) {
-        log(`【YouTube 自動重試】第 ${retryCount} 次重新解析成功，已停止自動重試。`);
-      }
-      return;
-    } catch (error) {
-      const enabled = youtubeAutoRetryEnabled();
-      const retryable = isYoutubeAutoRetryError(error);
-      if (!enabled || !retryable || retryCount >= retryLimit) {
-        if (enabled && retryable && retryCount >= retryLimit) {
-          log(`【YouTube 自動重試失敗】已達重試上限，共完成 ${retryCount} 次重新解析，仍未取得可用的媒體位址。`);
-        }
-        throw error;
-      }
-      retryCount++;
-      const reason = cleanRetryReason(error.message || error);
-      log(`【YouTube 自動重試】等待 5 秒後，嘗試「第 ${retryCount}/${retryLimit} 次」重新解析；原因：${reason}。`);
-      status(`YouTube 解析失敗，等待 5 秒後，嘗試「第 ${retryCount}/${retryLimit} 次」重新解析…`, "working");
-      await wait(YOUTUBE_AUTO_RETRY_DELAY_MS);
-      log(`【YouTube 自動重試】開始嘗試「第 ${retryCount}/${retryLimit} 次」完整重新解析。`);
-      status(`正在嘗試「第 ${retryCount}/${retryLimit} 次」YouTube 自動重新解析…`, "working");
-    }
-  }
-}
+function youtubeRetryLimit(){const input=$("youtubeRetryLimit");const parsed=Number.parseInt(input?.value||"3",10);const value=Number.isFinite(parsed)?Math.max(1,Math.min(99,parsed)):3;if(input)input.value=String(value);return value;}
+function cleanRetryReason(value){return String(value||"解析失敗").trim().replace(/[。．.!！?？；;：:]+$/u,"");}
+function isYoutubeAutoRetryError(error){const code=String(error?.code||"");const message=String(error?.message||error||"");return YOUTUBE_AUTO_RETRY_CODES.has(code)||message.includes("WATCH 重試已達上限")||message.includes("所有 YouTube 解析來源均未取得可用的媒體位址");}
+async function analyzeYoutubeWithAutoRetry(id){const retryLimit=youtubeRetryLimit();let retryCount=0;while(true){try{await analyzeYoutube(id);if(retryCount>0)log(`【YouTube 自動重試】第 ${retryCount} 次重新解析成功，已停止自動重試。`);return;}catch(error){if(!$("youtubeAutoRetry")?.checked||!isYoutubeAutoRetryError(error)||retryCount>=retryLimit){if($("youtubeAutoRetry")?.checked&&isYoutubeAutoRetryError(error)&&retryCount>=retryLimit)log(`【YouTube 自動重試失敗】已達重試上限，共完成 ${retryCount} 次重新解析。`);throw error;}retryCount++;const reason=cleanRetryReason(error.message||error);log(`【YouTube 自動重試】等待 5 秒後，嘗試「第 ${retryCount}/${retryLimit} 次」重新解析；原因：${reason}。`);status(`YouTube 解析失敗，等待 5 秒後，嘗試「第 ${retryCount}/${retryLimit} 次」重新解析…`,"working");await wait(YOUTUBE_AUTO_RETRY_DELAY_MS);log(`【YouTube 自動重試】開始嘗試「第 ${retryCount}/${retryLimit} 次」完整重新解析。`);status(`正在嘗試「第 ${retryCount}/${retryLimit} 次」YouTube 自動重新解析…`,"working");}}}
 
 async function analyze() {
   if (state.busy) return;
@@ -558,14 +497,7 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
     const selectedItag = response.headers.get("X-OwO-Selected-Itag") || format.itag;
     const data = new Uint8Array(await response.arrayBuffer());
     if (!data.length) { if (received > 0 && !total) break; throw Error(`${label}分段下載收到空白內容。`); }
-    if (trackRestart) {
-      chunks = [];
-      received = 0;
-      offset = 0;
-      format.activeItag = selectedItag;
-      if (workerTotal > 0) total = workerTotal;
-      log(`【媒體軌重啟】${label}已切換為等效 itag ${selectedItag}，目前軌道從第 0 byte 重新下載，避免拼接不同位元流。`);
-    }
+    if (trackRestart) { chunks=[]; received=0; offset=0; format.activeItag=selectedItag; if(workerTotal>0) total=workerTotal; log(`【媒體軌重啟】${label}已切換為等效 itag ${selectedItag}，目前軌道從第 0 byte 重新下載。`); }
     if (range && range.start !== offset) throw Error(`${label}分段位置不連續：預期 ${offset}，實際 ${range.start}。`);
     if (range?.total > 0) total = range.total; else if (workerTotal > 0) total = workerTotal;
     chunks.push(data); received += data.byteLength;
@@ -577,11 +509,11 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
   }
   if (!received) throw Error(`${label}沒有取得任何媒體內容。`);
   if (total > 0 && received !== total) throw Error(`${label}媒體不完整：預期 ${humanBytes(total)}，實際 ${humanBytes(received)}。`);
-  if (!total && received === YOUTUBE_DOWNLOAD_CHUNK_BYTES) throw Error(`${label}僅取得第一個 256 KiB 測試區段，未判定為完整媒體。`);
+  if (!total && received === YOUTUBE_DOWNLOAD_CHUNK_BYTES) throw Error(`${label}僅取得第一個 2 MiB 正式下載區段，未判定為完整媒體。`);
   const output = new Uint8Array(received); let position = 0;
   for (const chunk of chunks) { output.set(chunk, position); position += chunk.byteLength; }
   log(`【媒體完整性】${label}預期：${total ? humanBytes(total) : "由末段確認"}；實際：${humanBytes(received)}。`);
-  log(`【YouTube 分段下載】${label}完成，共 ${requestCount} 段、${humanBytes(received)}；每段 256 KiB。`);
+  log(`【YouTube 分段下載】${label}完成，共 ${requestCount} 段、${humanBytes(received)}；每段上限 2 MiB。`);
   setProgress(end, `${label}下載完成。`); return output;
 }
 
@@ -634,11 +566,7 @@ async function ensureFFmpeg() {
     ffmpeg.on("log", ({ message }) => message && log(`【FFMPEG】${message}`));
     ffmpeg.on("progress", ({ progress }) => Number.isFinite(progress) && setProgress(65 + Math.max(0,Math.min(1,progress))*30, "正在執行瀏覽器影音處理…"));
     try {
-      await ffmpeg.load({
-        classWorkerURL: FFMPEG_CLASS_WORKER_URL,
-        coreURL: `${FFMPEG_CORE_BASE}/ffmpeg-core.js`,
-        wasmURL: `${FFMPEG_CORE_BASE}/ffmpeg-core.wasm`
-      });
+      await ffmpeg.load({ classWorkerURL: FFMPEG_CLASS_WORKER_URL, coreURL: `${FFMPEG_CORE_BASE}/ffmpeg-core.js`, wasmURL: `${FFMPEG_CORE_BASE}/ffmpeg-core.wasm` });
     } catch (reason) {
       try { ffmpeg.terminate(); } catch {}
       const detail = reason instanceof Error ? reason.message : typeof reason === "string" ? reason : JSON.stringify(reason ?? null);
@@ -925,13 +853,5 @@ for (const prefix of ["ig", "th"]) {
   };
 }
 document.querySelectorAll(".mode").forEach(button => button.onclick = () => setMode(button.dataset.mode));
-$("youtubeAutoRetry").checked = localStorage.getItem("youtubeAutoRetry") === "1";
-$("youtubeRetryLimit").value = localStorage.getItem("youtubeRetryLimit") || "3";
-youtubeRetryLimit();
-$("youtubeAutoRetry").onchange = () => localStorage.setItem("youtubeAutoRetry", $("youtubeAutoRetry").checked ? "1" : "0");
-$("youtubeRetryLimit").onchange = () => {
-  const value = youtubeRetryLimit();
-  localStorage.setItem("youtubeRetryLimit", String(value));
-};
-$("youtubeRetryLimit").onblur = $("youtubeRetryLimit").onchange;
+$("youtubeAutoRetry").checked=localStorage.getItem("youtubeAutoRetry")==="1";$("youtubeRetryLimit").value=localStorage.getItem("youtubeRetryLimit")||"3";youtubeRetryLimit();$("youtubeAutoRetry").onchange=()=>localStorage.setItem("youtubeAutoRetry",$("youtubeAutoRetry").checked?"1":"0");$("youtubeRetryLimit").onchange=()=>{const value=youtubeRetryLimit();localStorage.setItem("youtubeRetryLimit",String(value));};$("youtubeRetryLimit").onblur=$("youtubeRetryLimit").onchange;
 $("worker").value = localStorage.getItem("workerUrl") || DEFAULT_WORKER_URL;
