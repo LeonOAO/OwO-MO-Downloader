@@ -1,5 +1,5 @@
 const VERSION = "1.0";
-const BUILD = "2026.09.29-v10-2mib-segment-retry-watch-fallback";
+const BUILD = "2026.09.29-v10-fixed-five-segments";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -216,7 +216,6 @@ async function innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie =
 }
 
 const YOUTUBE_MEDIA_PROBE_END=262143;
-const YOUTUBE_MEDIA_SEGMENT_RETRY_DELAYS_MS = [500, 1000];
 async function probeYoutubeFormats(player,label,steps){const c=addressableFormats(player);let v=false,a=false,n=0;for(const f of c){const u=directUrl(f);if(!u)continue;let r;try{r=await fetch(u,{headers:{Range:`bytes=0-${YOUTUBE_MEDIA_PROBE_END}`,Accept:"*/*","Accept-Encoding":"identity",Origin:"https://www.youtube.com",Referer:"https://www.youtube.com/","User-Agent":youtubeMediaUserAgent(label)},cache:"no-store"});if(![200,206].includes(r.status))continue;n++;const m=String(f.mimeType||"");if(m.startsWith("video/")&&!f.audioQuality)v=true;if(m.startsWith("audio/")||(!m.startsWith("video/")&&f.audioQuality))a=true;}catch{}finally{try{await r?.body?.cancel()}catch{}}}steps.push(`【實載驗證】${label} 以 256 KiB Range 驗證「${c.length}」個網址，通過「${n}」個；分離視訊：${v?"有":"無"}；分離音訊：${a?"有":"無"}。`);return{videoOnly:v,audioOnly:a}}
 async function collectSources(html, watchPlayer, id, steps, mode = "quick", youtubeCookie = "") {
   const output = [{ label: "WATCH_PAGE", player: watchPlayer }];
@@ -2129,37 +2128,15 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
   }
 
   const requestedRange=requestedByteRange(request);
-  async function fetchUpstream(activeUrl, rangeOverride = requestedRange) {
-    let response;
-    const retryableStatuses = new Set([403, 416]);
-    for (let attempt = 0; attempt <= YOUTUBE_MEDIA_SEGMENT_RETRY_DELAYS_MS.length; attempt++) {
-      response = await fetch(activeUrl, {
-        method: request.method,
-        headers: (() => { const h = mediaRequestHeaders(request, sourceLabel); if (rangeOverride) h.set("Range", rangeOverride.header); else h.delete("Range"); return h; })(),
-        redirect: "follow",
-        cache: "no-store"
-      });
-      if (!rangeOverride || !retryableStatuses.has(response.status)) return response;
-      if (attempt < YOUTUBE_MEDIA_SEGMENT_RETRY_DELAYS_MS.length) {
-        const delay = YOUTUBE_MEDIA_SEGMENT_RETRY_DELAYS_MS[attempt];
-        steps.push(`【媒體區段重試】${rangeOverride.header} 第 ${attempt + 1}/3 次回傳 HTTP ${response.status}，等待 ${delay} 毫秒後重試同一網址與區段。`);
-        try { await response.body?.cancel(); } catch {}
-        await waitFor(delay);
-      }
-    }
-    if (rangeOverride && retryableStatuses.has(response.status)) {
-      const ranged = new URL(activeUrl.href);
-      ranged.searchParams.set("range", rangeOverride.query);
-      steps.push(`【媒體分段備援】原生 HTTP ${rangeOverride.header} 連續 3 次失敗，改用 URL range=${rangeOverride.query}。`);
-      response = await fetch(ranged, {
-        method: request.method,
-        headers: headersForRange(request, sourceLabel, false),
-        redirect: "follow",
-        cache: "no-store"
-      });
-    }
-    return response;
+  async function fetchUpstream(activeUrl) {
+    return fetch(activeUrl, {
+      method: request.method,
+      headers: headersForRange(request, sourceLabel, true),
+      redirect: "follow",
+      cache: "no-store"
+    });
   }
+
   steps.push(`【媒體請求】使用 ${sourceLabel||"UNKNOWN"} Client 身分存取 ${resolutionMode||"legacy"} 網址${requestedRange?`，區段 ${requestedRange.header}`:""}。`);
   let upstream=await fetchUpstream(url);
   steps.push(`【媒體請求】${sourceLabel || "UNKNOWN"} 回傳 HTTP ${upstream.status}。`);
@@ -2172,57 +2149,45 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
       steps.push(`【媒體請求】短效快取網址回傳 HTTP ${upstream.status}。`);
     }
   }
-  const premature416 = upstream.status === 416
-    && requestedRange
-    && mediaTotal > 0
-    && requestedRange.start < mediaTotal;
-  if ((upstream.status === 403 || premature416) && id && itag && resolutionMode !== "fresh") {
-    steps.push(`【媒體工作階段隔離】${sourceLabel || "ANDROID"} / itag ${itag} 的 ${resolutionMode || "既有"} 網址在 ${requestedRange?.header || "目前請求"} 回傳 HTTP ${upstream.status}；同區段重試已完成，現在才清除此單一格式快取。`);
+  const mediaRejected = [403, 416].includes(upstream.status);
+  if (mediaRejected && id && itag) {
+    steps.push(`【媒體單次刷新】${sourceLabel || "ANDROID"} / itag ${itag} 的 ${requestedRange?.header || "目前區段"} 回傳 HTTP ${upstream.status}；只執行一次直接 Player 刷新，不重新 WATCH。`);
     await deleteYoutubeFormatCache(id, itag, sourceLabel || "ANDROID", sessionId);
-    let fresh;
     try {
-      fresh = await freshMediaUrlFromContext(id, itag, sourceLabel || "ANDROID", steps, wanted, refreshContext, youtubeCookie);
-      steps.push("【媒體刷新】直接 Player API 已取得原 itag 或等效格式。");
-    } catch (directError) {
-      steps.push(`【直接 Player 刷新失敗】${directError.message}`);
-      steps.push("【完整高畫質刷新】直接 Player API 無可用格式，執行一次 WATCH + 高畫質 Client 完整重新解析。");
-      try {
-        fresh = await freshMediaUrl(id, itag, sourceLabel || "ANDROID", steps, wanted, youtubeCookie);
-      } catch (watchError) {
-        steps.push(`【完整高畫質刷新失敗】${watchError.message}`);
+      const fresh = await freshMediaUrlFromContext(id, itag, sourceLabel || "ANDROID", steps, wanted, refreshContext, youtubeCookie);
+      if (fresh.equivalent && String(fresh.selectedItag || itag) !== String(itag)) {
         return json({
-          error: `媒體區段重試與兩層刷新均失敗：${watchError.message}`,
-          code: "MEDIA_REFRESH_FAILED",
+          error: `直接 Player 刷新取得不同 itag ${fresh.selectedItag}，固定五段下載不混接不同位元流，請重新解析後再下載。`,
+          code: "MEDIA_TRACK_CHANGED",
           version: VERSION,
           steps
-        }, 422);
+        }, 409);
       }
-    }
-    url = new URL(fresh.url);
-    sourceLabel = fresh.sourceLabel;
-    selectedItag = String(fresh.selectedItag || itag);
-    mediaTotal = Number(fresh.contentLength || mediaTotal || 0);
-    if (fresh.equivalent && selectedItag !== String(itag)) {
-      trackRestart = true;
-      resolutionMode = "equivalent-track-restart";
-      const restartEnd = 2 * 1024 * 1024 - 1;
-      const restartRange = { start: 0, end: restartEnd, header: `bytes=0-${restartEnd}`, query: `0-${restartEnd}` };
-      upstream = await fetchUpstream(url, restartRange);
-      steps.push(`【媒體軌重啟】等效 itag ${selectedItag} 與原 itag ${itag} 不同，避免拼接不同位元流；目前視訊或音訊軌從第 0 byte 重新下載。`);
-    } else {
-      resolutionMode = "refreshed-segment-resume";
+      url = new URL(fresh.url);
+      sourceLabel = fresh.sourceLabel;
+      selectedItag = String(fresh.selectedItag || itag);
+      resolutionMode = "single-player-refresh";
+      mediaTotal = Number(fresh.contentLength || mediaTotal || 0);
       upstream = await fetchUpstream(url);
-      steps.push(`【媒體區段續傳】保留先前已下載資料，從 ${requestedRange?.header || "目前區段"} 使用刷新網址續傳，回傳 HTTP ${upstream.status}。`);
+      steps.push(`【媒體單次刷新】${requestedRange?.header || "目前區段"} 使用刷新網址重試一次，回傳 HTTP ${upstream.status}。`);
+    } catch (error) {
+      steps.push(`【媒體單次刷新失敗】${error.message}`);
+      return json({
+        error: `媒體區段遭拒，單次 Player 刷新失敗：${error.message}`,
+        code: "MEDIA_REFRESH_FAILED",
+        version: VERSION,
+        steps
+      }, 422);
     }
   }
 
-  if ([403, 416].includes(upstream.status) && id && itag) {
+  if ([403, 416].includes(upstream.status)) {
     return json({
-      error: `Google Video Server 拒絕媒體區段：HTTP ${upstream.status}。已嘗試同區段 3 次、URL Range、直接 Player 刷新與一次完整 WATCH 高畫質刷新。`,
+      error: `Google Video Server 拒絕媒體區段：HTTP ${upstream.status}。固定五段下載已執行原網址一次與 Player 刷新網址一次。`,
       code: "MEDIA_URL_FORBIDDEN",
       version: VERSION,
       steps
-    }, 403);
+    }, upstream.status === 403 ? 403 : 409);
   }
 
   const output = new Headers(upstream.headers);
