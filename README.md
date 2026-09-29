@@ -1,33 +1,45 @@
 # OwO 平台影音｜小幫手 v1.0
 
-此完整版本包含前端、Cloudflare Worker 與同源 FFmpeg WebAssembly 資源。
+此版本包含完整前端、Cloudflare Worker、YouTube Media Session 修正，以及同源 FFmpeg WebAssembly 資源。
 
-## 本版重點
+## YouTube Media Session 修正
 
-- YouTube 分段下載從 `contentLength`、Google Video `clen`、`Content-Range` 與 Worker 回傳標頭判斷完整總長度。
-- 不再因第一個 256 KiB 區段回傳 HTTP 200 而誤判下載完成。
-- 未知總長度時會繼續要求下一段，直到短末段、空末段或 HTTP 416。
-- 合併前記錄並檢查視訊與音訊的預期大小及實際大小。
-- FFmpeg 主 Worker、Core JS 與 WASM 全部包含在 `FFmpeg/`，由 GitHub Pages 同源載入。
-- 不再從外部 CDN 建立 FFmpeg Worker。
+- 解析完成後為每個格式建立「精確 Session 索引」與「影片/itag/Client 格式備援索引」。
+- 前端媒體請求會攜帶 Session ID，紀錄只顯示前 8 碼供診斷。
+- 若 Cache API 因節點差異未命中，會使用解析回應內同一格式的已驗證媒體網址，不會立即啟動 WATCH 刷新。
+- 快取、格式備援及解析網址都不存在時回傳 `MEDIA_SESSION_MISS` 與 HTTP 409，要求重新解析。
+- 只有 Google Video Server 明確拒絕既有網址後，才執行即時 WATCH 刷新。
+- 即時刷新失敗使用 HTTP 422；YouTube 限流使用 HTTP 429；未捕捉的程式例外才使用 HTTP 500。
+- 媒體工作階段期限為 1800 秒。
 
-## 部署
+## 完整媒體與 FFmpeg
 
-請將整個 `OwO-MO-Downloader-main` 目錄完整部署，不可遺漏 `FFmpeg/`。
+- 從 `contentLength`、`clen`、`Content-Range` 及 `X-OwO-Media-Total` 判定媒體總長度。
+- 不會把第一個 256 KiB 測試區段誤判為完整檔案。
+- 合併前檢查影音預期大小與實際大小。
+- `FFmpeg/` 包含主 Worker、Core JS 與 WASM，全部從網站同源載入。
+- `classWorkerURL` 已明確指定為 `FFmpeg/ffmpeg/worker.js`。
+
+## 部署結構
 
 ```text
-FFmpeg/
-├── ffmpeg/
-│   ├── index.js
-│   ├── classes.js
-│   ├── worker.js
-│   ├── const.js
-│   ├── errors.js
-│   ├── types.js
-│   └── utils.js
-└── core/
-    ├── ffmpeg-core.js
-    └── ffmpeg-core.wasm
+OwO-MO-Downloader-main/
+├── index.html
+├── app.css
+├── app.js
+├── worker.js
+└── FFmpeg/
+    ├── ffmpeg/
+    │   ├── index.js
+    │   ├── classes.js
+    │   ├── worker.js
+    │   ├── const.js
+    │   ├── errors.js
+    │   ├── types.js
+    │   └── utils.js
+    └── core/
+        ├── ffmpeg-core.js
+        └── ffmpeg-core.wasm
 ```
 
-GitHub Pages 必須以正常 MIME 類型提供 `.js` 與 `.wasm`。首次使用合併或音訊轉換時，瀏覽器會下載約 31 MiB 的 WASM 核心並快取。
+必須完整部署 `FFmpeg/`，且大小寫不可更改。

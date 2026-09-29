@@ -1,5 +1,5 @@
 const VERSION = "1.0";
-const BUILD = "2026.09.24-v10-youtube-message-summary";
+const BUILD = "2026.09.29-v10-youtube-session-fallback";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -1871,14 +1871,17 @@ function youtubeMediaCacheRequest(id,itag,sourceLabel,sessionId=""){
   return new Request(key, { method: "GET" });
 }
 
+function youtubeMediaLatestRequest(id, itag, sourceLabel) {
+  return youtubeMediaCacheRequest(id, itag, sourceLabel, "latest");
+}
+
 async function cacheYoutubeFormats(id,formats,steps,sessionId=""){
   if (typeof caches === "undefined" || !caches.default || !id) return;
   let stored = 0;
   for (const format of formats) {
     if (!format?.url || !format?.itag || !format?.source) continue;
     try {
-      const request = youtubeMediaCacheRequest(id,format.itag,format.source,sessionId);
-      const response = new Response(JSON.stringify({
+      const payload = JSON.stringify({
         url: format.url,
         source: format.source,
         quality: format.quality || "",
@@ -1887,32 +1890,37 @@ async function cacheYoutubeFormats(id,formats,steps,sessionId=""){
         codec: format.codec || "",
         kind: format.kind || "",
         contentLength: Number(format.contentLength || 0),
+        sessionId,
         generatedAt: Number(format.generatedAt || Date.now()),
         storedAt: Date.now()
-      }), {
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": `public, max-age=${YOUTUBE_MEDIA_CACHE_TTL_SECONDS}`
-        }
       });
-      await caches.default.put(request, response);
+      const headers = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": `public, max-age=${YOUTUBE_MEDIA_CACHE_TTL_SECONDS}` };
+      await caches.default.put(youtubeMediaCacheRequest(id, format.itag, format.source, sessionId), new Response(payload, { headers }));
+      await caches.default.put(youtubeMediaLatestRequest(id, format.itag, format.source), new Response(payload, { headers }));
       stored++;
     } catch {}
   }
-  if (stored) steps.push(`【媒體工作階段】已暫存「${stored}」個格式網址，有效期約 ${YOUTUBE_MEDIA_CACHE_TTL_SECONDS} 秒。`);
+  if (stored) steps.push(`【媒體工作階段】Session ${String(sessionId).slice(0, 8)} 已建立精確索引與格式備援索引，共暫存「${stored}」個格式網址，有效期約 ${YOUTUBE_MEDIA_CACHE_TTL_SECONDS} 秒。`);
 }
 
-async function readYoutubeFormatCache(id,itag,sourceLabel,sessionId=""){
+async function readYoutubeFormatCache(id, itag, sourceLabel, sessionId = "") {
   if (typeof caches === "undefined" || !caches.default || !id || !itag) return null;
-  try {
-    const response = await caches.default.match(youtubeMediaCacheRequest(id,itag,sourceLabel,sessionId));
-    if (!response) return null;
-    const value = await response.json();
-    if (!value?.url || Date.now() - Number(value.storedAt || 0) > YOUTUBE_MEDIA_CACHE_TTL_SECONDS * 1000) return null;
-    return value;
-  } catch {
-    return null;
+  const candidates = [
+    { request: youtubeMediaCacheRequest(id, itag, sourceLabel, sessionId), matchMode: "exact-session" },
+    { request: youtubeMediaLatestRequest(id, itag, sourceLabel), matchMode: "latest-format" }
+  ];
+  for (const candidate of candidates) {
+    try {
+      const response = await caches.default.match(candidate.request);
+      if (!response) continue;
+      const value = await response.json();
+      if (!value?.url) continue;
+      const ageMs = Date.now() - Number(value.storedAt || 0);
+      if (ageMs > YOUTUBE_MEDIA_CACHE_TTL_SECONDS * 1000) continue;
+      return { ...value, matchMode: candidate.matchMode, ageMs };
+    } catch {}
   }
+  return null;
 }
 
 async function deleteYoutubeFormatCache(id,itag,sourceLabel,sessionId=""){
@@ -2002,8 +2010,7 @@ async function freshMediaUrl(id,itag,sourceLabel,steps,wanted={},youtubeCookie="
   const url = resolveFormatUrl(format, rules, counters);
   if (!url) throw new Error(`itag ${itag} 的即時媒體網址解析失敗。`);
   steps.push(`【即時媒體】已使用 ${sourceLabel} 重新取得 itag ${itag} 的媒體網址。`);
-  const normalized = normalize({ ...format, _source: sourceLabel }, url);
-  return { url, sourceLabel, contentLength: Number(normalized?.contentLength || 0) };
+  return { url, sourceLabel };
 }
 
 function youtubeMediaUserAgent(sourceLabel) {
@@ -2040,40 +2047,43 @@ async function freshMediaUrlWithRetry(id,itag,sourceLabel,steps,wanted={},youtub
 
 async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",youtubeCookie=""){
   const steps = [];
-  let resolvedTarget=sessionId?"":String(target||"");
-  let resolutionMode=resolvedTarget?"analysis-url":"";
+  let resolvedTarget = "";
+  let resolutionMode = "";
   let mediaTotal = 0;
-  const suppliedGeneratedAt = Number(new URL(request.url).searchParams.get("generatedAt") || 0);
-  const suppliedAgeMs = suppliedGeneratedAt ? Date.now() - suppliedGeneratedAt : 0;
-  if (resolvedTarget && suppliedAgeMs > 60000 && id && itag) {
-    steps.push(`【媒體網址刷新】解析網址已產生約 ${Math.round(suppliedAgeMs / 1000)} 秒，下載前直接重新取得。`);
-    resolvedTarget = "";
-    resolutionMode = "";
-  }
+  const analysisFallback = String(target || "");
+  const sessionShort = String(sessionId || "none").slice(0, 8);
+  steps.push(`【媒體工作階段】請求 Session：${sessionShort}；影片：${id || "未知"}；itag：${itag || "未知"}；來源：${sourceLabel || "ANDROID"}。`);
+
 
   if (!resolvedTarget && id && itag) {
     const cached = await readYoutubeFormatCache(id,itag,sourceLabel||"ANDROID",sessionId);
     if (cached?.url) {
-      const cachedAgeMs = Date.now() - Number(cached.generatedAt || cached.storedAt || 0);
       resolvedTarget = cached.url;
       sourceLabel = cached.source || sourceLabel;
-      resolutionMode = "session-cache";
+      resolutionMode = cached.matchMode === "exact-session" ? "session-cache" : "format-fallback-cache";
       mediaTotal = Number(cached.contentLength || 0);
-      steps.push(`【媒體工作階段】命中 ${sourceLabel} / itag ${itag} 快取；網址約 ${Math.round(cachedAgeMs / 1000)} 秒，先實際嘗試，只有 GVS 明確拒絕後才刷新。`);
+      const label = cached.matchMode === "exact-session" ? "精確 Session" : "格式備援";
+      steps.push(`【媒體工作階段】命中${label}索引：${sourceLabel} / itag ${itag}；快取約 ${Math.round(cached.ageMs / 1000)} 秒。`);
+    } else {
+      steps.push(`【媒體工作階段】Session ${sessionShort} 的精確索引與格式備援索引均未命中。`);
     }
   }
 
+  if (!resolvedTarget && analysisFallback) {
+    resolvedTarget = analysisFallback;
+    resolutionMode = "analysis-fallback";
+    steps.push("【媒體工作階段】快取未命中，改用解析回應隨格式傳回的受驗證網址，不先啟動 WATCH 刷新。");
+  }
+
   if (!resolvedTarget && id && itag) {
-    const fresh = await freshMediaUrlWithRetry(id,itag,sourceLabel||"ANDROID",steps,wanted,youtubeCookie);
-    resolvedTarget = fresh.url;
-    sourceLabel = fresh.sourceLabel;
-    resolutionMode = "fresh";
-    mediaTotal = Number(fresh.contentLength || 0);
+    steps.push("【媒體工作階段】快取與解析網址皆不存在，停止媒體請求並要求前端重新解析。");
+    return json({ error: "媒體工作階段未命中，請重新解析影片後立即下載。", code: "MEDIA_SESSION_MISS", version: VERSION, steps }, 409);
   }
 
   let url;
   try {
     url = new URL(resolvedTarget);
+    mediaTotal = mediaTotal || Number(url.searchParams.get("clen") || 0);
   } catch {
     return json({ error: "媒體網址無效。", code: "INVALID_MEDIA_URL", version: VERSION, steps }, 400);
   }
@@ -2081,7 +2091,6 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
     return json({ error: "此媒體網域未列入允許清單。", code: "MEDIA_DOMAIN_DENIED", version: VERSION, steps }, 403);
   }
 
-  try { mediaTotal = mediaTotal || Number(url.searchParams.get("clen") || 0); } catch {}
   const requestedRange=requestedByteRange(request);
   async function fetchUpstream(activeUrl){
     const ranged=new URL(activeUrl.href);if(requestedRange)ranged.searchParams.set("range",requestedRange.query);
@@ -2107,7 +2116,6 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
     try {
       const fresh = await freshMediaUrlWithRetry(id,itag,sourceLabel||"ANDROID",steps,wanted,youtubeCookie);
       url = new URL(fresh.url); sourceLabel = fresh.sourceLabel; resolutionMode = "fresh";
-      mediaTotal = Number(fresh.contentLength || mediaTotal || 0);
       upstream=await fetchUpstream(url);
       steps.push(`【媒體請求】即時重新解析網址回傳 HTTP ${upstream.status}。`);
     } catch (error) {
@@ -2179,7 +2187,7 @@ export default {
       }
       return json({ service: SERVICE, version: VERSION, build: BUILD, facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, youtubeSession: Boolean(requestYoutubeCookie(request, env)), endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq|all", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT&url=SIGNED_URL", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
     } catch (error) {
-      return json({ error: error.message || "Worker 執行失敗", code: "WORKER_INTERNAL_ERROR", version: VERSION }, 500);
+      return json({ error: error.message || "Worker 執行失敗", code: error.code || "WORKER_INTERNAL_ERROR", version: VERSION, steps: Array.isArray(error.steps) ? error.steps : [] }, Number(error.httpStatus || 500));
     }
   }
 };
