@@ -69,9 +69,9 @@ OwO-MO-Downloader-main/
 - 任一段遭 403 或 416 時，整條媒體軌最多直接 Player 刷新一次；不重新 WATCH。
 
 
-### 單次完整 Range 正式下載
-- 正式視訊與音訊各只使用一次完整 Range 請求，例如 `bytes=0-(total-1)`。
-- Worker 直接串流上游回應，瀏覽器依 `Content-Length` 顯示進度並驗證完整大小。
-- 遭 HTTP 403 或 416 時，每條媒體軌只呼叫原始 Client 的 Player API 一次，並以刷新網址重試完整 Range 一次。
-- 下載階段不分段、不重新 WATCH、不輪詢其他 Player Client。
-- 解析階段 256 KiB 實載驗證、自動解析重試及同源 FFmpeg 全部保留。
+### 5 MiB 分段重新解析續傳
+- 正式視訊與音訊恢復為瀏覽器逐段下載，每段固定上限 5 MiB。
+- 區段遭 HTTP 403 或 416 時，Worker 不執行 Player 刷新，也不重新 WATCH。
+- 前端保留已完成區段，完整重新解析 YouTube 一次，再比對影片 ID、itag、媒體類型、解析度、FPS、容器、Codec 與 contentLength。
+- 全部一致才以新媒體網址重試失敗區段並繼續；任一欄位不同即停止，不混接媒體軌。
+- 每條媒體軌最多自動完整重新解析一次。

@@ -6,7 +6,7 @@ const FFMPEG_MODULE_URL = new URL("./FFmpeg/ffmpeg/index.js", import.meta.url).h
 const FFMPEG_CLASS_WORKER_URL = new URL("./FFmpeg/ffmpeg/worker.js", import.meta.url).href;
 const FFMPEG_CORE_BASE = new URL("./FFmpeg/core", import.meta.url).href;
 const MAX_BROWSER_WORK_BYTES = 700 * 1024 * 1024;
-const YOUTUBE_FULL_RANGE_DOWNLOAD = true;
+const YOUTUBE_DOWNLOAD_CHUNK_BYTES = 5 * 1024 * 1024;
 const YOUTUBE_AUTO_RETRY_DELAY_MS = 5000;
 const YOUTUBE_AUTO_RETRY_CODES = new Set(["YOUTUBE_PLAYER_RESPONSE_MISSING","YOUTUBE_RATE_LIMITED","YOUTUBE_PAGE_UNAVAILABLE","AUTH_REQUIRED","NO_MEDIA_ADDRESS"]);
 const DEFAULT_WORKER_URL = "https://owo-mo-downloader-api.kkwan812.workers.dev";
@@ -474,44 +474,99 @@ function contentRangeInfo(value) {
   const match = String(value || "").match(/^bytes\s+(\d+)-(\d+)\/(\d+|\*)$/i);
   return match ? { start:Number(match[1]), end:Number(match[2]), total:match[3]==="*"?0:Number(match[3]) } : null;
 }
+function youtubeResumeFingerprint(format) {
+  return {
+    itag: String(format?.itag || ""),
+    kind: normalizedKind(format),
+    height: Number(format?.height || qualityNumber(format) || 0),
+    fps: Number(format?.fps || 0),
+    container: String(format?.container || "").toLowerCase(),
+    codec: String(format?.codec || "").toLowerCase(),
+    contentLength: Number(format?.contentLength || 0)
+  };
+}
+function sameYoutubeResumeTrack(candidate, fingerprint) {
+  const next = youtubeResumeFingerprint(candidate);
+  return next.itag === fingerprint.itag
+    && next.kind === fingerprint.kind
+    && next.height === fingerprint.height
+    && next.fps === fingerprint.fps
+    && next.container === fingerprint.container
+    && next.codec === fingerprint.codec
+    && next.contentLength === fingerprint.contentLength;
+}
+async function reanalyzeYoutubeTrackForResume(originalFormat, label, completedBytes) {
+  const fingerprint = youtubeResumeFingerprint(originalFormat);
+  log(`【5 MiB 續傳重新解析】${label}已保留 ${humanBytes(completedBytes)}；執行一次完整 YouTube 重新解析以取得新媒體網址。`);
+  status(`${label}下載網址失效，正在重新解析後續傳…`, "working");
+  const { response, data } = await requestYoutubeAll(state.videoId, 1);
+  if (!response?.ok) {
+    throw new Error(data.error || data.note || `續傳重新解析失敗：HTTP ${response?.status || "未知"}。`);
+  }
+  const formats = mergeFormats([], Array.isArray(data.formats) ? data.formats : []);
+  const matched = formats.find(format => sameYoutubeResumeTrack(format, fingerprint));
+  if (!matched?.url) {
+    throw new Error(`${label}重新解析後未取得完全相同的媒體軌，已保留區段未接續。`);
+  }
+  state.ytMediaSessionId = String(data.mediaSessionId || "");
+  state.formats = formats;
+  log(`【5 MiB 續傳重新解析】已取得相同媒體軌：itag ${matched.itag}；${matched.quality || "未知畫質"}；${matched.container || "未知容器"}；${matched.codec || "未知編碼"}；${humanBytes(Number(matched.contentLength || 0))}。`);
+  return matched;
+}
 async function fetchYoutubeMediaInChunks(format, label, start, end) {
   const total = Number(format.contentLength || 0);
   if (!Number.isFinite(total) || total <= 0) throw new Error(`${label}缺少可靠的完整媒體大小。`);
   if (total > MAX_BROWSER_WORK_BYTES) throw new Error(`${label}超過瀏覽器安全處理上限。`);
 
-  const requestedRange = `bytes=0-${total - 1}`;
-  log(`【YouTube 完整 Range】${label}總大小 ${humanBytes(total)}，使用單次完整範圍 ${requestedRange}。`);
-  const response = await fetch(mediaEndpoint(format), {
-    cache: "no-store",
-    headers: { ...platformRequestHeaders(), Range: requestedRange }
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    if (Array.isArray(body.steps)) body.steps.forEach(log);
-    throw new Error(String(body.error || `${label}完整 Range 下載失敗：HTTP ${response.status}。`));
-  }
-  if (!response.body) throw new Error(`${label}完整 Range 回應沒有可讀取的內容。`);
-
-  const range = contentRangeInfo(response.headers.get("Content-Range"));
-  if (range && (range.start !== 0 || range.end !== total - 1 || (range.total > 0 && range.total !== total))) {
-    throw new Error(`${label}完整 Range 不符：要求 ${requestedRange}，實際 ${response.headers.get("Content-Range") || "未提供"}。`);
-  }
-
-  const reader = response.body.getReader();
   const chunks = [];
+  let activeFormat = format;
   let received = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value?.byteLength) continue;
-      chunks.push(value);
-      received += value.byteLength;
-      if (received > total) throw new Error(`收到的資料超過預期總長度 ${total} bytes。`);
-      setProgress(start + (end - start) * Math.min(1, received / total), `正在完整下載${label}：${humanBytes(received)} / ${humanBytes(total)}`);
+  let offset = 0;
+  let segmentIndex = 0;
+  let reanalysisUsed = false;
+  const segmentTotal = Math.ceil(total / YOUTUBE_DOWNLOAD_CHUNK_BYTES);
+  log(`【YouTube 5 MiB 分段續傳】${label}總大小 ${humanBytes(total)}，每段上限 5 MiB，共 ${segmentTotal} 段。`);
+
+  while (offset < total) {
+    const rangeEnd = Math.min(total - 1, offset + YOUTUBE_DOWNLOAD_CHUNK_BYTES - 1);
+    const requestedRange = `bytes=${offset}-${rangeEnd}`;
+    segmentIndex++;
+    let response = await fetch(mediaEndpoint(activeFormat), {
+      cache: "no-store",
+      headers: { ...platformRequestHeaders(), Range: requestedRange }
+    });
+
+    if (!response.ok && !reanalysisUsed && [403, 409, 416, 422].includes(response.status)) {
+      const body = await response.json().catch(() => ({}));
+      if (Array.isArray(body.steps)) body.steps.forEach(log);
+      reanalysisUsed = true;
+      activeFormat = await reanalyzeYoutubeTrackForResume(format, label, received);
+      log(`【5 MiB 續傳】重新解析成功，僅重試第 ${segmentIndex}/${segmentTotal} 段 ${requestedRange}。`);
+      response = await fetch(mediaEndpoint(activeFormat), {
+        cache: "no-store",
+        headers: { ...platformRequestHeaders(), Range: requestedRange }
+      });
     }
-  } catch (error) {
-    throw new Error(`${label}完整 Range 串流中斷：${String(error?.message || error || "未知原因")}`);
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      if (Array.isArray(body.steps)) body.steps.forEach(log);
+      log(`【YouTube 5 MiB 續傳失敗】${label}第 ${segmentIndex}/${segmentTotal} 段；已保留 ${humanBytes(received)}；要求 ${requestedRange}；HTTP ${response.status}。`);
+      throw new Error(String(body.error || `${label}第 ${segmentIndex}/${segmentTotal} 段續傳失敗：HTTP ${response.status}。`));
+    }
+
+    const range = contentRangeInfo(response.headers.get("Content-Range"));
+    const data = new Uint8Array(await response.arrayBuffer());
+    const expectedLength = rangeEnd - offset + 1;
+    if (!data.length) throw new Error(`${label}第 ${segmentIndex}/${segmentTotal} 段收到空白內容。`);
+    if (range && range.start !== offset) throw new Error(`${label}第 ${segmentIndex}/${segmentTotal} 段位置錯誤：預期 ${offset}，實際 ${range.start}。`);
+    if (data.byteLength !== expectedLength) throw new Error(`${label}第 ${segmentIndex}/${segmentTotal} 段大小不完整：預期 ${humanBytes(expectedLength)}，實際 ${humanBytes(data.byteLength)}。`);
+
+    chunks.push(data);
+    received += data.byteLength;
+    offset = rangeEnd + 1;
+    setProgress(start + (end - start) * Math.min(1, received / total), `正在 5 MiB 分段續傳${label}：${humanBytes(received)} / ${humanBytes(total)}`);
+    log(`【YouTube 5 MiB 分段續傳】${label}第 ${segmentIndex}/${segmentTotal} 段完成：${requestedRange}。`);
   }
 
   if (received !== total) throw new Error(`${label}媒體不完整：預期 ${humanBytes(total)}，實際 ${humanBytes(received)}。`);
@@ -519,7 +574,7 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
   let position = 0;
   for (const chunk of chunks) { output.set(chunk, position); position += chunk.byteLength; }
   log(`【媒體完整性】${label}預期：${humanBytes(total)}；實際：${humanBytes(received)}。`);
-  log(`【YouTube 完整 Range】${label}完成；上游媒體請求 1 次。`);
+  log(`【YouTube 5 MiB 分段續傳】${label}完成，共 ${chunks.length} 段；完整重新解析 ${reanalysisUsed ? "1 次" : "0 次"}。`);
   setProgress(end, `${label}下載完成。`);
   return output;
 }
