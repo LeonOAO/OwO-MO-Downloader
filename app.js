@@ -469,11 +469,11 @@ async function analyzeYoutubeWithAutoRetry(id) {
       }
       retryCount++;
       const reason = cleanRetryReason(error.message || error);
-      log(`【YouTube 自動重試】第 ${retryCount}/${retryLimit} 次重新解析將於 5 秒後開始；原因：${reason}。`);
-      status(`YouTube 解析失敗，5 秒後進行第 ${retryCount}/${retryLimit} 次重新解析…`, "working");
+      log(`【YouTube 自動重試】等待 5 秒後，嘗試「第 ${retryCount}/${retryLimit} 次」重新解析；原因：${reason}。`);
+      status(`YouTube 解析失敗，等待 5 秒後，嘗試「第 ${retryCount}/${retryLimit} 次」重新解析…`, "working");
       await wait(YOUTUBE_AUTO_RETRY_DELAY_MS);
-      log(`【YouTube 自動重試】開始第 ${retryCount}/${retryLimit} 次完整重新解析。`);
-      status(`正在進行第 ${retryCount}/${retryLimit} 次 YouTube 自動重新解析…`, "working");
+      log(`【YouTube 自動重試】開始嘗試「第 ${retryCount}/${retryLimit} 次」完整重新解析。`);
+      status(`正在嘗試「第 ${retryCount}/${retryLimit} 次」YouTube 自動重新解析…`, "working");
     }
   }
 }
