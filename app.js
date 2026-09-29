@@ -449,6 +449,8 @@ function mediaEndpoint(format, download = false) {
       generatedAt: format.generatedAt || "",
       sessionId: format.sessionId || state.ytMediaSessionId || "",
       url: format.url || "",
+      refreshApiKey: format.refreshApiKey || "",
+      refreshVisitorData: format.refreshVisitorData || "",
       quality: format.quality || "",
       height: format.height || qualityNumber(format) || "",
       fps: format.fps || "",

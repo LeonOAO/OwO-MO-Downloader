@@ -8,8 +8,8 @@
 - 前端媒體請求會攜帶 Session ID，紀錄只顯示前 8 碼供診斷。
 - 若 Cache API 因節點差異未命中，會使用解析回應內同一格式的已驗證媒體網址，不會立即啟動 WATCH 刷新。
 - 快取、格式備援及解析網址都不存在時回傳 `MEDIA_SESSION_MISS` 與 HTTP 409，要求重新解析。
-- 只有 Google Video Server 明確拒絕既有網址後，才執行即時 WATCH 刷新。
-- 即時刷新失敗使用 HTTP 422；YouTube 限流使用 HTTP 429；未捕捉的程式例外才使用 HTTP 500。
+- 只有 Google Video Server 明確拒絕既有網址後，才沿用解析階段 API Key、Visitor Data 與 Client 直接呼叫 Player API 刷新，不重新執行 WATCH。
+- 直接 Player 刷新失敗使用 HTTP 422；未捕捉的程式例外才使用 HTTP 500。
 - 媒體工作階段期限為 1800 秒。
 
 ## 完整媒體與 FFmpeg
