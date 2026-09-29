@@ -490,7 +490,7 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
 
   const segmentCount = Number(response.headers.get("X-OwO-Segment-Count") || 5);
   const segmentSize = Math.ceil(total / segmentCount);
-  log(`【YouTube 五段串流】${label}總大小 ${humanBytes(total)}；瀏覽器只呼叫 Worker 一次，Worker 內部固定分為 ${segmentCount} 段。`);
+  log(`【YouTube 五段緩衝】${label}總大小 ${humanBytes(total)}；瀏覽器只呼叫 Worker 一次，Worker 會先完整下載並驗證 ${segmentCount} 段後再回傳。`);
   if (!response.body) throw new Error(`${label}串流回應沒有可讀取的內容。`);
 
   const reader = response.body.getReader();
@@ -508,12 +508,12 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
         const boundary = Math.min(total, (completedSegments + 1) * segmentSize);
         if (received < boundary) break;
         completedSegments++;
-        log(`【YouTube 五段串流】${label}第 ${completedSegments}/${segmentCount} 段完成。`);
+        log(`【YouTube 五段緩衝】${label}第 ${completedSegments}/${segmentCount} 段完成。`);
       }
-      setProgress(start + (end - start) * Math.min(1, received / total), `正在五段串流${label}：${humanBytes(received)} / ${humanBytes(total)}`);
+      setProgress(start + (end - start) * Math.min(1, received / total), `正在接收已驗證的五段${label}：${humanBytes(received)} / ${humanBytes(total)}`);
     }
   } catch (error) {
-    throw new Error(`${label}五段串流中斷：${String(error?.message || error || "Worker 串流中斷")}`);
+    throw new Error(`${label}五段回傳中斷：${String(error?.message || error || "Worker 串流中斷")}`);
   }
 
   if (received !== total) throw new Error(`${label}媒體不完整：預期 ${humanBytes(total)}，實際 ${humanBytes(received)}。`);
@@ -521,7 +521,7 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
   let position = 0;
   for (const chunk of chunks) { output.set(chunk, position); position += chunk.byteLength; }
   log(`【媒體完整性】${label}預期：${humanBytes(total)}；實際：${humanBytes(received)}。`);
-  log(`【YouTube 五段串流】${label}完成；瀏覽器至 Worker 共 1 次請求。`);
+  log(`【YouTube 五段緩衝】${label}完成；瀏覽器至 Worker 共 1 次請求。`);
   setProgress(end, `${label}下載完成。`);
   return output;
 }
