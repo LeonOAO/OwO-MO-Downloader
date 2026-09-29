@@ -55,6 +55,24 @@
           <input id="worker" type="url" value="https://owo-mo-downloader-api.kkwan812.workers.dev" placeholder="https://owo-mo-downloader-api.kkwan812.workers.dev">
           <small>「小幫手」會透過您的 Cloudflare Worker 來獲取網頁資料。</small>
 
+          <div class="youtube-retry-card">
+            <label class="youtube-retry-toggle" for="youtubeAutoRetry">
+              <input id="youtubeAutoRetry" type="checkbox">
+              <span>YouTube 自動重試解析失敗</span>
+            </label>
+            <div class="youtube-retry-limit">
+              <label for="youtubeRetryLimit">重試上限</label>
+              <div class="select-wrap">
+                <select id="youtubeRetryLimit">
+                  <option value="1">1 次</option>
+                  <option value="3" selected>3 次</option>
+                  <option value="5">5 次</option>
+                </select>
+              </div>
+            </div>
+            <small>符合指定的暫時性解析錯誤時，每次固定等待 5 秒後重新解析。</small>
+          </div>
+
           <div class="session-card yt-session-card">
             <div class="session-heading">
               <div><b>YouTube 登入</b><small>💡 當匿名解析出現「登入帳戶以確認你不是機器人」時使用。</small></div>
@@ -193,6 +211,6 @@
 
     <footer><strong>OwO MO Downloader</strong><span>請只保存你有權下載的內容</span></footer>
   </main>
-  <script type="module" src="app.js?v=20260929-v10-range416-resume-refresh"></script>
+  <script type="module" src="app.js?v=20260929-v10-stale-cache-equivalent-resume"></script>
 </body>
 </html>

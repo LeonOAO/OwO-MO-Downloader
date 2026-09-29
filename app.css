@@ -571,3 +571,64 @@ input, select, button, textarea {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* YouTube automatic analysis retry */
+.youtube-retry-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  align-items: end;
+  gap: 14px 18px;
+  margin-top: 18px;
+  padding: 17px 18px;
+  background: linear-gradient(145deg, #f7f9ff, #f0f4ff);
+  border: 1px solid #d8e1f3;
+  border-radius: 16px;
+}
+.youtube-retry-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 11px;
+  min-height: 48px;
+  margin: 0 !important;
+  color: #34425f;
+  cursor: pointer;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+}
+.youtube-retry-toggle input {
+  width: 20px !important;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.youtube-retry-limit label {
+  display: block;
+  margin: 0 0 7px;
+  color: #5d6a84;
+  font-size: 12px;
+  font-weight: 800;
+}
+.youtube-retry-limit select {
+  height: 46px;
+  background: #fff;
+}
+.youtube-retry-card > small {
+  grid-column: 1 / -1;
+  margin: -2px 0 0;
+  color: #7b879f;
+  font-size: 12px;
+  line-height: 1.6;
+}
+@media (max-width: 680px) {
+  .youtube-retry-card {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 15px;
+  }
+  .youtube-retry-card > small { grid-column: auto; }
+  .youtube-retry-toggle { min-height: 44px; }
+  .youtube-retry-limit select { width: 100%; }
+}

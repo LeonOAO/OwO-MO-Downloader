@@ -1,9 +1,9 @@
 core/ffmpeg-core.js	112059 bytes
 core/ffmpeg-core.wasm	32232419 bytes
-ffmpeg/classes.js	9974 bytes
+ffmpeg/classes.js	9918 bytes
 ffmpeg/const.js	1016 bytes
 ffmpeg/errors.js	332 bytes
 ffmpeg/index.js	58 bytes
 ffmpeg/types.js	295 bytes
 ffmpeg/utils.js	138 bytes
-ffmpeg/worker.js	5305 bytes
+ffmpeg/worker.js	5085 bytes

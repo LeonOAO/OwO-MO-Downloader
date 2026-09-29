@@ -147,15 +147,10 @@ self.onmessage = async ({ data: { id, type, data: _data }, }) => {
         }
     }
     catch (e) {
-        const message = e instanceof Error
-            ? `${e.name}: ${e.message}`
-            : typeof e === "string"
-                ? e
-                : JSON.stringify(e ?? null);
         self.postMessage({
             id,
             type: FFMessageType.ERROR,
-            data: message || "FFmpeg Worker 未提供錯誤內容",
+            data: e.toString(),
         });
         return;
     }

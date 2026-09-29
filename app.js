@@ -7,6 +7,14 @@ const FFMPEG_CLASS_WORKER_URL = new URL("./FFmpeg/ffmpeg/worker.js", import.meta
 const FFMPEG_CORE_BASE = new URL("./FFmpeg/core", import.meta.url).href;
 const MAX_BROWSER_WORK_BYTES = 700 * 1024 * 1024;
 const YOUTUBE_DOWNLOAD_CHUNK_BYTES = 256 * 1024;
+const YOUTUBE_AUTO_RETRY_DELAY_MS = 5000;
+const YOUTUBE_AUTO_RETRY_CODES = new Set([
+  "YOUTUBE_PLAYER_RESPONSE_MISSING",
+  "YOUTUBE_RATE_LIMITED",
+  "YOUTUBE_PAGE_UNAVAILABLE",
+  "AUTH_REQUIRED",
+  "NO_MEDIA_ADDRESS"
+]);
 const DEFAULT_WORKER_URL = "https://owo-mo-downloader-api.kkwan812.workers.dev";
 
 function log(message) {
@@ -393,11 +401,21 @@ async function analyzeYoutube(id) {
   log(`開始解析影片 ID：${id}`);
   log("【單一工作階段】基本格式與高畫質 Client 共用同一次 watch 頁面、API Key、Visitor Data 與 Player Response。");
   const { response, data } = await requestYoutubeAll(id, 3);
-  if (!response || !response.ok) throw Error(data.error || data.note || `YouTube 單一工作階段回傳 HTTP ${response?.status || "未知"}。`);
+  if (!response || !response.ok) {
+    const error = new Error(data.error || data.note || `YouTube 單一工作階段回傳 HTTP ${response?.status || "未知"}。`);
+    error.code = String(data.code || "YOUTUBE_ANALYSIS_FAILED");
+    error.httpStatus = Number(response?.status || 0);
+    throw error;
+  }
   state.ytMediaSessionId = String(data.mediaSessionId || "");
   log(`【版本】前端：${APP_VERSION}；Worker：${data.version || "未知"}；Media Session：${state.ytMediaSessionId ? state.ytMediaSessionId.slice(0, 8) : "未建立"}。`);
   state.formats = mergeFormats([], Array.isArray(data.formats) ? data.formats : []);
-  if (!state.formats.length) throw Error(data.note || data.error || "目前沒有取得可下載的 YouTube 格式。");
+  if (!state.formats.length) {
+    const error = new Error(data.note || data.error || "目前沒有取得可下載的 YouTube 格式。");
+    error.code = String(data.code || "NO_MEDIA_ADDRESS");
+    error.httpStatus = Number(response.status || 0);
+    throw error;
+  }
   state.videoId = id; state.baseReady = true; applyVideoData(data, id);
   const { videoOnly, audioOnly, muxed } = lists();
   const hasHqPair = videoOnly.length > 0 && audioOnly.length > 0;
@@ -410,6 +428,49 @@ async function analyzeYoutube(id) {
     log("【基本格式保留】本次沒有取得完整高畫質配對，基本格式仍可直接下載。");
   }
 }
+function youtubeAutoRetryEnabled() {
+  return Boolean($("youtubeAutoRetry")?.checked);
+}
+function youtubeRetryLimit() {
+  const value = Number($("youtubeRetryLimit")?.value || 3);
+  return [1, 3, 5].includes(value) ? value : 3;
+}
+function isYoutubeAutoRetryError(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || error || "");
+  return YOUTUBE_AUTO_RETRY_CODES.has(code)
+    || message.includes("WATCH 重試已達上限")
+    || message.includes("所有 YouTube 解析來源均未取得可用的媒體位址");
+}
+async function analyzeYoutubeWithAutoRetry(id) {
+  const retryLimit = youtubeRetryLimit();
+  let retryCount = 0;
+  while (true) {
+    try {
+      await analyzeYoutube(id);
+      if (retryCount > 0) {
+        log(`【YouTube 自動重試】第 ${retryCount} 次重新解析成功，已停止自動重試。`);
+      }
+      return;
+    } catch (error) {
+      const enabled = youtubeAutoRetryEnabled();
+      const retryable = isYoutubeAutoRetryError(error);
+      if (!enabled || !retryable || retryCount >= retryLimit) {
+        if (enabled && retryable && retryCount >= retryLimit) {
+          log(`【YouTube 自動重試失敗】已達重試上限，共完成 ${retryCount} 次重新解析，仍未取得可用的媒體位址。`);
+        }
+        throw error;
+      }
+      retryCount++;
+      log(`【YouTube 自動重試】第 ${retryCount}/${retryLimit} 次重新解析將於 5 秒後開始；原因：${String(error.message || error)}。`);
+      status(`YouTube 解析失敗，5 秒後進行第 ${retryCount}/${retryLimit} 次重新解析…`, "working");
+      await wait(YOUTUBE_AUTO_RETRY_DELAY_MS);
+      log(`【YouTube 自動重試】開始第 ${retryCount}/${retryLimit} 次完整重新解析。`);
+      status(`正在進行第 ${retryCount}/${retryLimit} 次 YouTube 自動重新解析…`, "working");
+    }
+  }
+}
+
 async function analyze() {
   if (state.busy) return;
   $("log").textContent = "尚未執行。";
@@ -423,7 +484,7 @@ async function analyze() {
     status("正在解析影片頁面…", "working");
     if (platform === "youtube") {
       const id = videoId(value); if (!id) throw Error("無法辨識 YouTube 影片 ID。");
-      await analyzeYoutube(id);
+      await analyzeYoutubeWithAutoRetry(id);
     } else if (platform === "facebook") {
       log("已辨識平台：Facebook，開始解析影片頁面。");
       const response = await fetch(endpoint("/facebook", { url: value }), { cache: "no-store", headers: platformRequestHeaders("facebook") });
@@ -444,7 +505,7 @@ function mediaEndpoint(format, download = false) {
   if (state.platform === "youtube") {
     return endpoint("/media", {
       id: state.videoId,
-      itag: format.itag,
+      itag: format.activeItag || format.itag,
       source: format.source || "ANDROID",
       generatedAt: format.generatedAt || "",
       sessionId: format.sessionId || state.ytMediaSessionId || "",
@@ -468,7 +529,7 @@ function contentRangeInfo(value) {
   return match ? { start:Number(match[1]), end:Number(match[2]), total:match[3]==="*"?0:Number(match[3]) } : null;
 }
 async function fetchYoutubeMediaInChunks(format, label, start, end) {
-  const chunks = [];
+  let chunks = [];
   const declaredTotal = Number(format.contentLength || 0);
   let total = declaredTotal > YOUTUBE_DOWNLOAD_CHUNK_BYTES ? declaredTotal : 0;
   let received = 0, offset = 0, requestCount = 0;
@@ -477,22 +538,27 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
     const requestedRange = `bytes=${offset}-${rangeEnd}`;
     const response = await fetch(mediaEndpoint(format), { cache: "no-store", headers: { ...platformRequestHeaders(), Range: requestedRange } });
     requestCount++;
-    if (response.status === 416 && received > 0 && !total) {
-      log(`【媒體結尾】${label}下一個連續區段 ${requestedRange} 回傳 HTTP 416，且沒有宣告總長度，以上一段末端作為實際結尾。`);
-      total = received;
-      break;
-    }
+    if (response.status === 416 && received > 0 && !total) break;
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       if (Array.isArray(body.steps)) body.steps.forEach(log);
       log(`【YouTube 分段失敗】${label}第 ${requestCount} 段；要求 ${requestedRange}；HTTP ${response.status}。`);
-      const message = body.error || body.note || `${label}下載失敗：HTTP ${response.status}；Range ${requestedRange}。`;
-      throw new Error(String(message || `${label}下載失敗：HTTP ${response.status}。`));
+      throw Error(body.error || `${label}下載失敗：HTTP ${response.status}；Range ${requestedRange}。`);
     }
     const range = contentRangeInfo(response.headers.get("Content-Range"));
     const workerTotal = Number(response.headers.get("X-OwO-Media-Total") || 0);
+    const trackRestart = response.headers.get("X-OwO-Track-Restart") === "1";
+    const selectedItag = response.headers.get("X-OwO-Selected-Itag") || format.itag;
     const data = new Uint8Array(await response.arrayBuffer());
     if (!data.length) { if (received > 0 && !total) break; throw Error(`${label}分段下載收到空白內容。`); }
+    if (trackRestart) {
+      chunks = [];
+      received = 0;
+      offset = 0;
+      format.activeItag = selectedItag;
+      if (workerTotal > 0) total = workerTotal;
+      log(`【媒體軌重啟】${label}已切換為等效 itag ${selectedItag}，目前軌道從第 0 byte 重新下載，避免拼接不同位元流。`);
+    }
     if (range && range.start !== offset) throw Error(`${label}分段位置不連續：預期 ${offset}，實際 ${range.start}。`);
     if (range?.total > 0) total = range.total; else if (workerTotal > 0) total = workerTotal;
     chunks.push(data); received += data.byteLength;
@@ -568,12 +634,7 @@ async function ensureFFmpeg() {
       });
     } catch (reason) {
       try { ffmpeg.terminate(); } catch {}
-      const detail = reason instanceof Error
-        ? reason.message
-        : typeof reason === "string"
-          ? reason
-          : JSON.stringify(reason ?? null);
-      log(`【FFMPEG 載入失敗】Worker：${FFMPEG_CLASS_WORKER_URL}；Core：${FFMPEG_CORE_BASE}/ffmpeg-core.js；原因：${detail || "未提供錯誤內容"}。`);
+      const detail = reason instanceof Error ? reason.message : typeof reason === "string" ? reason : JSON.stringify(reason ?? null);
       throw new Error(`FFmpeg 載入失敗：${detail || "Worker 未提供錯誤內容"}`);
     }
     state.ffmpeg=ffmpeg; state.ffmpegLoaded=true; log("【FFMPEG】單執行緒核心載入完成。"); return ffmpeg;
@@ -857,4 +918,8 @@ for (const prefix of ["ig", "th"]) {
   };
 }
 document.querySelectorAll(".mode").forEach(button => button.onclick = () => setMode(button.dataset.mode));
+$("youtubeAutoRetry").checked = localStorage.getItem("youtubeAutoRetry") === "1";
+$("youtubeRetryLimit").value = localStorage.getItem("youtubeRetryLimit") || "3";
+$("youtubeAutoRetry").onchange = () => localStorage.setItem("youtubeAutoRetry", $("youtubeAutoRetry").checked ? "1" : "0");
+$("youtubeRetryLimit").onchange = () => localStorage.setItem("youtubeRetryLimit", $("youtubeRetryLimit").value);
 $("worker").value = localStorage.getItem("workerUrl") || DEFAULT_WORKER_URL;

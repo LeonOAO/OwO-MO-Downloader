@@ -45,9 +45,19 @@ OwO-MO-Downloader-main/
 必須完整部署 `FFmpeg/`，且大小寫不可更改。
 
 
-### HTTP 416 續傳刷新修正
-- 已知總長度尚未到達時收到 HTTP 416，不再視為媒體結尾。
-- Worker 會沿用解析階段 API Key、Visitor Data、Client 與 itag 刷新網址，從原 Range 位移續傳。
-- 刷新後仍在總長度前回傳 HTTP 416 時，回傳 `MEDIA_PREMATURE_EOF`，不把截斷檔案送入 FFmpeg。
-- 只有總長度未知、所有前段連續且下一段為 HTTP 416 時，才接受上一段末端為 EOF。
-- FFmpeg Worker 的字串或空值錯誤會正規化成可讀訊息，不再只顯示 `undefined`。
+### YouTube 自動重試解析失敗
+- 進階設定新增「YouTube 自動重試解析失敗」核取方塊。
+- 可設定重試上限為 1、3 或 5 次，預設 3 次。
+- 每次重新解析前固定等待 5 秒，不採用累進等待。
+- 觸發條件包含 `YOUTUBE_PLAYER_RESPONSE_MISSING`、`YOUTUBE_RATE_LIMITED`、`YOUTUBE_PAGE_UNAVAILABLE`、`AUTH_REQUIRED` 與 `NO_MEDIA_ADDRESS`。
+- 「WATCH 重試已達上限」及「所有 YouTube 解析來源均未取得可用媒體位址，部分來源要求登入」都會觸發。
+- 重新解析成功、達到重試上限或遇到非指定錯誤時停止。
+- 勾選狀態與重試上限會保存在目前瀏覽器的本機設定。
+
+
+### 舊格式快取與等效格式續傳修正
+- 精確 Session 未命中時，優先使用本次解析回應攜帶的已驗證網址。
+- 格式備援索引最多接受 60 秒，超過即跳過，不再使用數分鐘前的舊網址。
+- 已知總長度前收到 HTTP 416 時，保留前面已下載區段並從原位移續傳。
+- 原 Client 找不到原 itag 時，依媒體類型、解析度、FPS、容器、Codec 與 bitrate 搜尋等效格式。
+- 原 Client 無結果時，依序嘗試 ANDROID_VR、ANDROID、IOS、WEB 與 TV Player Client，不重新執行 WATCH。
