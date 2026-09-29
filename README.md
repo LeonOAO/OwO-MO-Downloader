@@ -82,3 +82,11 @@ OwO-MO-Downloader-main/
 - 僅視訊與僅音訊格式繼續使用 5 MiB 分段重新解析續傳。
 - 音訊擷取、MP3 與 WAV 轉換所讀取的影音合一來源，也使用單次直接下載。
 - 續傳尚未完成任何區段時，紀錄顯示「目前尚未完成任何區段」，不再顯示「大小未知」。
+
+
+### 影音合一同一次 Worker 執行下載
+- 新增 `/youtube-muxed-download` 專用端點。
+- 360p 影音合一下載時，端點在同一次 Worker 執行內呼叫 ANDROID Player API、取得 itag 18 媒體網址並立即串流。
+- 此路徑不讀取 Media Session Cache、不使用 analysis-fallback URL、不附加 Range，也不套用 5 MiB 分段續傳。
+- 音訊擷取、MP3 與 WAV 所需的影音合一來源同樣使用此端點。
+- 高畫質僅視訊及僅音訊仍保留既有 5 MiB 分段重新解析續傳。

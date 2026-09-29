@@ -1,5 +1,5 @@
 const VERSION = "1.0";
-const BUILD = "2026.09.29-v10-muxed-direct-hq-resume";
+const BUILD = "2026.09.29-v10-muxed-same-invocation";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -2078,6 +2078,78 @@ async function freshMediaUrlWithRetry(id,itag,sourceLabel,steps,wanted={},youtub
   return freshMediaUrl(id,itag,sourceLabel,steps,wanted,youtubeCookie);
 }
 
+async function youtubeMuxedDownload(request, id, itag, apiKey, visitorData, youtubeCookie = "") {
+  const steps = [];
+  if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) {
+    return json({ error: "影片 ID 格式錯誤。", code: "INVALID_VIDEO_ID", version: VERSION, steps }, 400);
+  }
+  const selectedItag = String(itag || "18");
+  if (!/^\d+$/.test(selectedItag)) {
+    return json({ error: "影音合一 itag 格式錯誤。", code: "INVALID_ITAG", version: VERSION, steps }, 400);
+  }
+  if (!apiKey) {
+    return json({ error: "缺少解析工作階段的 Player API Key，請重新解析影片。", code: "PLAYER_API_KEY_MISSING", version: VERSION, steps }, 409);
+  }
+
+  const profile = clientProfileByLabel("ANDROID");
+  steps.push(`【影音合一同工作階段】使用 ANDROID Player API 重新取得 itag ${selectedItag}，取得後立即在同一次 Worker 執行內發起媒體請求。`);
+  let player;
+  try {
+    player = await innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie);
+  } catch (error) {
+    steps.push(`【影音合一同工作階段失敗】ANDROID Player API：${error.message}。`);
+    return json({ error: `ANDROID Player API 失敗：${error.message}`, code: "MUXED_PLAYER_FAILED", version: VERSION, steps }, 422);
+  }
+
+  const playability = player?.playabilityStatus || {};
+  const format = addressableFormats(player).find(item => String(item.itag) === selectedItag);
+  if (!format) {
+    const reason = playability.reason || playability.messages?.[0] || "未取得指定影音合一格式";
+    steps.push(`【影音合一同工作階段失敗】ANDROID 未取得 itag ${selectedItag}；狀態 ${playability.status || "UNKNOWN"}；原因：${reason}。`);
+    return json({ error: `ANDROID 未取得 itag ${selectedItag}：${reason}`, code: "MUXED_FORMAT_MISSING", version: VERSION, steps }, 422);
+  }
+
+  const resolvedUrl = directUrl(format);
+  if (!resolvedUrl) {
+    steps.push(`【影音合一同工作階段失敗】itag ${selectedItag} 沒有可直接使用的媒體網址。`);
+    return json({ error: `itag ${selectedItag} 沒有可直接使用的媒體網址。`, code: "MUXED_URL_MISSING", version: VERSION, steps }, 422);
+  }
+
+  let mediaUrl;
+  try {
+    mediaUrl = new URL(resolvedUrl);
+  } catch {
+    return json({ error: "ANDROID 回傳的媒體網址無效。", code: "INVALID_MEDIA_URL", version: VERSION, steps }, 422);
+  }
+  if (mediaUrl.protocol !== "https:" || !MEDIA_SUFFIXES.some(suffix => mediaUrl.hostname.endsWith(suffix))) {
+    return json({ error: "ANDROID 回傳的媒體網域未列入允許清單。", code: "MEDIA_DOMAIN_DENIED", version: VERSION, steps }, 403);
+  }
+
+  const headers = mediaRequestHeaders(request, "ANDROID");
+  headers.delete("Range");
+  let upstream;
+  try {
+    upstream = await fetch(mediaUrl, { method: "GET", headers, redirect: "follow", cache: "no-store" });
+  } catch (error) {
+    steps.push(`【影音合一同工作階段失敗】媒體連線：${error.message}。`);
+    return json({ error: `影音合一媒體連線失敗：${error.message}`, code: "MUXED_MEDIA_FETCH_FAILED", version: VERSION, steps }, 502);
+  }
+  steps.push(`【影音合一同工作階段】ANDROID itag ${selectedItag} 媒體請求回傳 HTTP ${upstream.status}。`);
+  if (![200, 206].includes(upstream.status)) {
+    try { await upstream.body?.cancel(); } catch {}
+    return json({ error: `影音合一同工作階段下載遭拒：HTTP ${upstream.status}。`, code: "MUXED_SAME_INVOCATION_REJECTED", version: VERSION, steps }, upstream.status === 403 ? 403 : 422);
+  }
+
+  const output = new Headers(upstream.headers);
+  Object.entries(cors()).forEach(([key, value]) => output.set(key, value));
+  output.set("Cache-Control", "no-store");
+  output.set("X-OwO-Media-Mode", "muxed-same-invocation");
+  output.set("X-OwO-Media-Source", "ANDROID");
+  output.set("X-OwO-Selected-Itag", selectedItag);
+  output.set("X-OwO-Version", VERSION);
+  return new Response(upstream.body, { status: upstream.status, headers: output });
+}
+
 async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",youtubeCookie="",refreshContext={}){
   const steps = [];
   let resolvedTarget = "";
@@ -2196,6 +2268,16 @@ export default {
       if (url.pathname === "/instagram" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "instagram", request, env);
       if (url.pathname === "/threads" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "threads", request, env);
       if (url.pathname === "/social-media" && ["GET", "HEAD"].includes(request.method)) return await metaSocialMedia(request, url.searchParams.get("url"), url.searchParams.get("platform") === "threads" ? "threads" : "instagram", env);
+      if (url.pathname === "/youtube-muxed-download" && request.method === "GET") {
+        return await youtubeMuxedDownload(
+          request,
+          url.searchParams.get("id") || "",
+          url.searchParams.get("itag") || "18",
+          url.searchParams.get("apiKey") || "",
+          url.searchParams.get("visitorData") || "",
+          requestYoutubeCookie(request, env)
+        );
+      }
       if (url.pathname === "/media" && ["GET", "HEAD"].includes(request.method)) {
         return await media(
           request,
@@ -2218,7 +2300,7 @@ export default {
           }
         );
       }
-      return json({ service: SERVICE, version: VERSION, build: BUILD, facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, youtubeSession: Boolean(requestYoutubeCookie(request, env)), endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq|all", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT&url=SIGNED_URL", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
+      return json({ service: SERVICE, version: VERSION, build: BUILD, facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, youtubeSession: Boolean(requestYoutubeCookie(request, env)), endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq|all", "GET /youtube-muxed-download?id=VIDEO_ID&itag=18&apiKey=KEY&visitorData=VISITOR", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT&url=SIGNED_URL", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
     } catch (error) {
       return json({ error: error.message || "Worker 執行失敗", code: error.code || "WORKER_INTERNAL_ERROR", version: VERSION, steps: Array.isArray(error.steps) ? error.steps : [] }, Number(error.httpStatus || 500));
     }

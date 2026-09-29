@@ -585,10 +585,16 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
 
 async function fetchYoutubeDirectMedia(format, label, start, end) {
   const declaredLength = Number(format.contentLength || 0);
-  log(`【YouTube 影音合一直接下載】${label}使用單次直接下載，不套用 5 MiB 分段續傳。`);
-  const response = await fetch(mediaEndpoint(format), {
+  log(`【YouTube 影音合一同工作階段下載】${label}由專用端點在同一次 Worker 執行內重新取得 ANDROID Player URL 並立即串流。`);
+  const response = await fetch(endpoint("/youtube-muxed-download", {
+    id: state.videoId,
+    itag: format.activeItag || format.itag || 18,
+    apiKey: format.refreshApiKey || "",
+    visitorData: format.refreshVisitorData || "",
+    ext: format.container || "mp4"
+  }), {
     cache: "no-store",
-    headers: platformRequestHeaders()
+    headers: platformRequestHeaders("youtube")
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -640,7 +646,7 @@ async function fetchYoutubeDirectMedia(format, label, start, end) {
     output.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  log(`【YouTube 影音合一直接下載】${label}完成：${humanBytes(received)}。`);
+  log(`【YouTube 影音合一同工作階段下載】${label}完成：${humanBytes(received)}。`);
   setProgress(end, `${label}直接下載完成。`);
   return output;
 }
