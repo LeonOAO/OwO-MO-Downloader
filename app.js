@@ -464,7 +464,9 @@ function mediaEndpoint(format, download = false) {
       codec: format.codec || "",
       kind: format.kind || "",
       ext: format.container || "bin",
-      download: download ? "1" : "0"
+      download: download ? "1" : "0",
+      fiveSegments: "1",
+      total: format.contentLength || ""
     });
   }
   if (state.platform === "facebook") return endpoint("/facebook-media", { url: format.url });
@@ -476,46 +478,42 @@ function contentRangeInfo(value) {
 }
 async function fetchYoutubeMediaInChunks(format, label, start, end) {
   const total = Number(format.contentLength || 0);
-  if (!Number.isFinite(total) || total <= 0) {
-    throw new Error(`${label}缺少可靠的完整媒體大小，固定五段下載未啟動。`);
-  }
+  if (!Number.isFinite(total) || total <= 0) throw new Error(`${label}缺少可靠的完整媒體大小。`);
   if (total > MAX_BROWSER_WORK_BYTES) throw new Error(`${label}超過瀏覽器安全處理上限。`);
 
-  const segmentCount = YOUTUBE_DOWNLOAD_SEGMENT_COUNT;
+  const response = await fetch(mediaEndpoint(format), { cache: "no-store", headers: platformRequestHeaders() });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    if (Array.isArray(body.steps)) body.steps.forEach(log);
+    throw new Error(String(body.error || `${label}固定五段串流失敗：HTTP ${response.status}。`));
+  }
+
+  const segmentCount = Number(response.headers.get("X-OwO-Segment-Count") || 5);
   const segmentSize = Math.ceil(total / segmentCount);
+  log(`【YouTube 五段串流】${label}總大小 ${humanBytes(total)}；瀏覽器只呼叫 Worker 一次，Worker 內部固定分為 ${segmentCount} 段。`);
+  if (!response.body) throw new Error(`${label}串流回應沒有可讀取的內容。`);
+
+  const reader = response.body.getReader();
   const chunks = [];
   let received = 0;
-  log(`【YouTube 五段下載】${label}總大小 ${humanBytes(total)}，固定分為 ${segmentCount} 段，每段約 ${humanBytes(segmentSize)}。`);
-
-  for (let index = 0; index < segmentCount; index++) {
-    const rangeStart = index * segmentSize;
-    if (rangeStart >= total) break;
-    const rangeEnd = Math.min(total - 1, rangeStart + segmentSize - 1);
-    const requestedRange = `bytes=${rangeStart}-${rangeEnd}`;
-    const response = await fetch(mediaEndpoint(format), {
-      cache: "no-store",
-      headers: { ...platformRequestHeaders(), Range: requestedRange }
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      if (Array.isArray(body.steps)) body.steps.forEach(log);
-      log(`【YouTube 五段失敗】${label}第 ${index + 1}/${segmentCount} 段；要求 ${requestedRange}；HTTP ${response.status}。`);
-      throw new Error(String(body.error || `${label}第 ${index + 1}/${segmentCount} 段下載失敗：HTTP ${response.status}。`));
+  let completedSegments = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value?.byteLength) continue;
+      chunks.push(value);
+      received += value.byteLength;
+      while (completedSegments < segmentCount) {
+        const boundary = Math.min(total, (completedSegments + 1) * segmentSize);
+        if (received < boundary) break;
+        completedSegments++;
+        log(`【YouTube 五段串流】${label}第 ${completedSegments}/${segmentCount} 段完成。`);
+      }
+      setProgress(start + (end - start) * Math.min(1, received / total), `正在五段串流${label}：${humanBytes(received)} / ${humanBytes(total)}`);
     }
-    const range = contentRangeInfo(response.headers.get("Content-Range"));
-    const data = new Uint8Array(await response.arrayBuffer());
-    const expectedLength = rangeEnd - rangeStart + 1;
-    if (!data.length) throw new Error(`${label}第 ${index + 1}/${segmentCount} 段收到空白內容。`);
-    if (range && range.start !== rangeStart) {
-      throw new Error(`${label}第 ${index + 1}/${segmentCount} 段位置錯誤：預期 ${rangeStart}，實際 ${range.start}。`);
-    }
-    if (data.byteLength !== expectedLength) {
-      throw new Error(`${label}第 ${index + 1}/${segmentCount} 段大小不完整：預期 ${humanBytes(expectedLength)}，實際 ${humanBytes(data.byteLength)}。`);
-    }
-    chunks.push(data);
-    received += data.byteLength;
-    setProgress(start + (end - start) * Math.min(1, received / total), `正在五段下載${label}：${humanBytes(received)} / ${humanBytes(total)}`);
-    log(`【YouTube 五段下載】${label}第 ${index + 1}/${segmentCount} 段完成：${requestedRange}。`);
+  } catch (error) {
+    throw new Error(`${label}五段串流中斷：${String(error?.message || error || "Worker 串流中斷")}`);
   }
 
   if (received !== total) throw new Error(`${label}媒體不完整：預期 ${humanBytes(total)}，實際 ${humanBytes(received)}。`);
@@ -523,7 +521,7 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
   let position = 0;
   for (const chunk of chunks) { output.set(chunk, position); position += chunk.byteLength; }
   log(`【媒體完整性】${label}預期：${humanBytes(total)}；實際：${humanBytes(received)}。`);
-  log(`【YouTube 五段下載】${label}完成，共 ${chunks.length} 段。`);
+  log(`【YouTube 五段串流】${label}完成；瀏覽器至 Worker 共 1 次請求。`);
   setProgress(end, `${label}下載完成。`);
   return output;
 }

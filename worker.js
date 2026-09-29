@@ -1,5 +1,5 @@
 const VERSION = "1.0";
-const BUILD = "2026.09.29-v10-fixed-five-segments";
+const BUILD = "2026.09.29-v10-single-worker-five-segments";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -14,7 +14,7 @@ function cors(origin = "*") {
     "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
     "Access-Control-Allow-Headers": "Range,Content-Type,Cache-Control,X-FB-Session,X-IG-Session,X-TH-Session,X-YT-Session",
     "Access-Control-Max-Age": "86400",
-    "Access-Control-Expose-Headers": "Content-Length,Content-Range,Accept-Ranges,Content-Type,Content-Disposition,X-OwO-Media-Total,X-OwO-Media-Mode,X-OwO-Media-Source,X-OwO-Version,X-OwO-Track-Restart,X-OwO-Selected-Itag",
+    "Access-Control-Expose-Headers": "Content-Length,Content-Range,Accept-Ranges,Content-Type,Content-Disposition,X-OwO-Media-Total,X-OwO-Media-Mode,X-OwO-Media-Source,X-OwO-Version,X-OwO-Track-Restart,X-OwO-Selected-Itag,X-OwO-Segment-Count",
     "Vary": "Origin"
   };
 }
@@ -2078,6 +2078,76 @@ async function freshMediaUrlWithRetry(id,itag,sourceLabel,steps,wanted={},youtub
   return freshMediaUrl(id,itag,sourceLabel,steps,wanted,youtubeCookie);
 }
 
+async function mediaFiveSegments(request, activeUrl, id, itag, sourceLabel, wanted, refreshContext, youtubeCookie, total, steps) {
+  const segmentCount = 5;
+  const segmentSize = Math.ceil(total / segmentCount);
+  let currentUrl = new URL(activeUrl.href);
+  let currentSource = sourceLabel;
+  let refreshUsed = false;
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        for (let index = 0; index < segmentCount; index++) {
+          const rangeStart = index * segmentSize;
+          if (rangeStart >= total) break;
+          const rangeEnd = Math.min(total - 1, rangeStart + segmentSize - 1);
+          const rangeHeader = `bytes=${rangeStart}-${rangeEnd}`;
+          const expectedLength = rangeEnd - rangeStart + 1;
+
+          const fetchRange = async () => {
+            const headers = mediaRequestHeaders(request, currentSource);
+            headers.set("Range", rangeHeader);
+            return fetch(currentUrl, { method: "GET", headers, redirect: "follow", cache: "no-store" });
+          };
+
+          let upstream = await fetchRange();
+          if ([403, 416].includes(upstream.status) && !refreshUsed) {
+            refreshUsed = true;
+            try { await upstream.body?.cancel(); } catch {}
+            const fresh = await freshMediaUrlFromContext(id, itag, currentSource, steps, wanted, refreshContext, youtubeCookie);
+            if (fresh.equivalent && String(fresh.selectedItag || itag) !== String(itag)) {
+              throw new Error(`第 ${index + 1}/5 段刷新取得不同 itag ${fresh.selectedItag}，未混接不同位元流。`);
+            }
+            currentUrl = new URL(fresh.url);
+            currentSource = fresh.sourceLabel;
+            upstream = await fetchRange();
+          }
+          if (![200, 206].includes(upstream.status)) {
+            throw new Error(`第 ${index + 1}/5 段 ${rangeHeader} 回傳 HTTP ${upstream.status}。`);
+          }
+          const reader = upstream.body?.getReader();
+          if (!reader) throw new Error(`第 ${index + 1}/5 段沒有可讀取的上游串流。`);
+          let segmentReceived = 0;
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (!value?.byteLength) continue;
+            segmentReceived += value.byteLength;
+            controller.enqueue(value);
+          }
+          if (segmentReceived !== expectedLength) {
+            throw new Error(`第 ${index + 1}/5 段大小不完整：預期 ${expectedLength} bytes，實際 ${segmentReceived} bytes。`);
+          }
+        }
+        controller.close();
+      } catch (error) {
+        controller.error(new Error(`Worker 固定五段串流失敗：${error.message}`));
+      }
+    }
+  });
+
+  const headers = new Headers(cors());
+  headers.set("Content-Type", wanted.kind === "僅音訊" ? "audio/mp4" : "video/mp4");
+  headers.set("Content-Length", String(total));
+  headers.set("Cache-Control", "no-store");
+  headers.set("X-OwO-Segment-Count", String(segmentCount));
+  headers.set("X-OwO-Media-Mode", "single-worker-five-segments");
+  headers.set("X-OwO-Media-Source", sourceLabel || "UNKNOWN");
+  headers.set("X-OwO-Version", VERSION);
+  return new Response(stream, { status: 200, headers });
+}
+
 async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",youtubeCookie="",refreshContext={}){
   const steps = [];
   let resolvedTarget = "";
@@ -2125,6 +2195,16 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
   }
   if (url.protocol !== "https:" || !MEDIA_SUFFIXES.some(suffix => url.hostname.endsWith(suffix))) {
     return json({ error: "此媒體網域未列入允許清單。", code: "MEDIA_DOMAIN_DENIED", version: VERSION, steps }, 403);
+  }
+
+  const requestUrl = new URL(request.url);
+  const fiveSegments = requestUrl.searchParams.get("fiveSegments") === "1";
+  const requestedTotal = Number(requestUrl.searchParams.get("total") || mediaTotal || 0);
+  if (fiveSegments) {
+    if (!Number.isFinite(requestedTotal) || requestedTotal <= 0) {
+      return json({ error: "固定五段串流缺少可靠的完整媒體大小。", code: "MEDIA_TOTAL_MISSING", version: VERSION, steps }, 422);
+    }
+    return mediaFiveSegments(request, url, id, itag, sourceLabel || "ANDROID", wanted, refreshContext, youtubeCookie, requestedTotal, steps);
   }
 
   const requestedRange=requestedByteRange(request);

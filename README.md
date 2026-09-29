@@ -60,3 +60,10 @@ OwO-MO-Downloader-main/
 - 單段遭 HTTP 403 或 416 時，只執行 1 次直接 Player 刷新並重試該段 1 次。
 - 下載階段不再進行同區段多次重試、URL Range 備援或完整 WATCH 刷新。
 - 解析階段的 256 KiB 實載驗證維持不變。
+
+
+### 單一 Worker 呼叫內固定五段串流
+- 瀏覽器下載一條視訊或音訊時只呼叫 Worker 一次。
+- Worker 在同一次執行內依序完成 5 個上游 Range，並串流回傳瀏覽器。
+- 不再依賴五個瀏覽器請求之間的 Cache API Session 命中。
+- 任一段遭 403 或 416 時，整條媒體軌最多直接 Player 刷新一次；不重新 WATCH。
