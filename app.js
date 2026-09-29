@@ -432,8 +432,14 @@ function youtubeAutoRetryEnabled() {
   return Boolean($("youtubeAutoRetry")?.checked);
 }
 function youtubeRetryLimit() {
-  const value = Number($("youtubeRetryLimit")?.value || 3);
-  return [1, 3, 5].includes(value) ? value : 3;
+  const input = $("youtubeRetryLimit");
+  const parsed = Number.parseInt(input?.value || "3", 10);
+  const value = Number.isFinite(parsed) ? Math.max(1, Math.min(99, parsed)) : 3;
+  if (input) input.value = String(value);
+  return value;
+}
+function cleanRetryReason(value) {
+  return String(value || "解析失敗").trim().replace(/[。．.!！?？；;：:]+$/u, "");
 }
 function isYoutubeAutoRetryError(error) {
   const code = String(error?.code || "");
@@ -462,7 +468,8 @@ async function analyzeYoutubeWithAutoRetry(id) {
         throw error;
       }
       retryCount++;
-      log(`【YouTube 自動重試】第 ${retryCount}/${retryLimit} 次重新解析將於 5 秒後開始；原因：${String(error.message || error)}。`);
+      const reason = cleanRetryReason(error.message || error);
+      log(`【YouTube 自動重試】第 ${retryCount}/${retryLimit} 次重新解析將於 5 秒後開始；原因：${reason}。`);
       status(`YouTube 解析失敗，5 秒後進行第 ${retryCount}/${retryLimit} 次重新解析…`, "working");
       await wait(YOUTUBE_AUTO_RETRY_DELAY_MS);
       log(`【YouTube 自動重試】開始第 ${retryCount}/${retryLimit} 次完整重新解析。`);
@@ -920,6 +927,11 @@ for (const prefix of ["ig", "th"]) {
 document.querySelectorAll(".mode").forEach(button => button.onclick = () => setMode(button.dataset.mode));
 $("youtubeAutoRetry").checked = localStorage.getItem("youtubeAutoRetry") === "1";
 $("youtubeRetryLimit").value = localStorage.getItem("youtubeRetryLimit") || "3";
+youtubeRetryLimit();
 $("youtubeAutoRetry").onchange = () => localStorage.setItem("youtubeAutoRetry", $("youtubeAutoRetry").checked ? "1" : "0");
-$("youtubeRetryLimit").onchange = () => localStorage.setItem("youtubeRetryLimit", $("youtubeRetryLimit").value);
+$("youtubeRetryLimit").onchange = () => {
+  const value = youtubeRetryLimit();
+  localStorage.setItem("youtubeRetryLimit", String(value));
+};
+$("youtubeRetryLimit").onblur = $("youtubeRetryLimit").onchange;
 $("worker").value = localStorage.getItem("workerUrl") || DEFAULT_WORKER_URL;

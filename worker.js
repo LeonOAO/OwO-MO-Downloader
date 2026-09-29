@@ -1,5 +1,5 @@
 const VERSION = "1.0";
-const BUILD = "2026.09.29-v10-stale-cache-equivalent-resume";
+const BUILD = "2026.09.29-v10-adjustable-retry-count";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
