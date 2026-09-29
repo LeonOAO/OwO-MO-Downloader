@@ -2,9 +2,8 @@
 const $ = id => document.getElementById(id);
 const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "", ytCookie: "", ytMediaSessionId: "" };
 const APP_VERSION = "v1.0";
-const FFMPEG_MODULE_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
-const FFMPEG_UTIL_URL = "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
-const FFMPEG_CORE_BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+const FFMPEG_MODULE_URL = new URL("./FFmpeg/ffmpeg/index.js", import.meta.url).href;
+const FFMPEG_CORE_BASE = new URL("./FFmpeg/core", import.meta.url).href;
 const MAX_BROWSER_WORK_BYTES = 700 * 1024 * 1024;
 const YOUTUBE_DOWNLOAD_CHUNK_BYTES = 256 * 1024;
 const DEFAULT_WORKER_URL = "https://owo-mo-downloader-api.kkwan812.workers.dev";
@@ -463,30 +462,73 @@ function contentRangeInfo(value) {
   const match = String(value || "").match(/^bytes\s+(\d+)-(\d+)\/(\d+|\*)$/i);
   return match ? { start:Number(match[1]), end:Number(match[2]), total:match[3]==="*"?0:Number(match[3]) } : null;
 }
-async function fetchYoutubeMediaInChunks(format,label,start,end) {
-  const chunks=[]; let received=0, total=Number(format.contentLength||0), offset=0, requestCount=0;
-  while (true) {
-    const rangeEnd=offset+YOUTUBE_DOWNLOAD_CHUNK_BYTES-1;
-    const requestedRange=`bytes=${offset}-${rangeEnd}`;
-    const response=await fetch(mediaEndpoint(format),{cache:"no-store",headers:{...platformRequestHeaders(),Range:requestedRange}});
+async function fetchYoutubeMediaInChunks(format, label, start, end) {
+  const chunks = [];
+  const declaredTotal = Number(format.contentLength || 0);
+  let total = declaredTotal > YOUTUBE_DOWNLOAD_CHUNK_BYTES ? declaredTotal : 0;
+  let received = 0;
+  let offset = 0;
+  let requestCount = 0;
+  let verifiedFinalChunk = false;
+  while (!verifiedFinalChunk) {
+    const rangeEnd = offset + YOUTUBE_DOWNLOAD_CHUNK_BYTES - 1;
+    const requestedRange = `bytes=${offset}-${rangeEnd}`;
+    const response = await fetch(mediaEndpoint(format), {
+      cache: "no-store",
+      headers: { ...platformRequestHeaders(), Range: requestedRange }
+    });
     requestCount++;
-    if(!response.ok){const data=await response.json().catch(()=>({}));if(Array.isArray(data.steps))data.steps.forEach(log);log(`【YouTube 分段失敗】${label}第 ${requestCount} 段；要求 ${requestedRange}；HTTP ${response.status}。`);throw Error(data.error||`${label}下載失敗：HTTP ${response.status}；Range ${requestedRange}。`);}
-    const range=contentRangeInfo(response.headers.get("Content-Range"));
-    const contentLength=Number(response.headers.get("Content-Length")||0);
-    const data=new Uint8Array(await response.arrayBuffer());
-    if(!data.length)throw Error(`${label}分段下載收到空白內容。`);
-    if(range&&range.start!==offset)throw Error(`${label}分段位置不連續：預期 ${offset}，實際 ${range.start}。`);
-    chunks.push(data);received+=data.byteLength;
-    if(range?.total)total=range.total;
-    if(!total){const urlLength=Number(format.contentLength||0);if(urlLength)total=urlLength;}
-    if(received>MAX_BROWSER_WORK_BYTES||total>MAX_BROWSER_WORK_BYTES)throw Error(`${label}超過瀏覽器安全處理上限。`);
-    setProgress(total?start+(end-start)*Math.min(1,received/total):start,total?`正在分段下載${label}：${humanBytes(received)} / ${humanBytes(total)}`:`正在分段下載${label}：${humanBytes(received)}`);
-    const shortChunk=data.byteLength<YOUTUBE_DOWNLOAD_CHUNK_BYTES;
-    if((total&&received>=total)||(!total&&shortChunk))break;
-    offset=range?range.end+1:offset+(contentLength||data.byteLength);
+    if (response.status === 416 && received > 0 && !total) {
+      log(`【媒體完整性】${label}下一區段回傳 HTTP 416，以上一區段末端作為完整檔案結尾。`);
+      break;
+    }
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      if (Array.isArray(body.steps)) body.steps.forEach(log);
+      log(`【YouTube 分段失敗】${label}第 ${requestCount} 段；要求 ${requestedRange}；HTTP ${response.status}。`);
+      throw Error(body.error || `${label}下載失敗：HTTP ${response.status}；Range ${requestedRange}。`);
+    }
+    const range = contentRangeInfo(response.headers.get("Content-Range"));
+    const workerTotal = Number(response.headers.get("X-OwO-Media-Total") || 0);
+    const data = new Uint8Array(await response.arrayBuffer());
+    if (!data.length) {
+      if (received > 0 && !total) break;
+      throw Error(`${label}分段下載收到空白內容。`);
+    }
+    if (range && range.start !== offset) {
+      throw Error(`${label}分段位置不連續：預期 ${offset}，實際 ${range.start}。`);
+    }
+    if (range?.total > 0) total = range.total;
+    else if (workerTotal > 0) total = workerTotal;
+    chunks.push(data);
+    received += data.byteLength;
+    if (received > MAX_BROWSER_WORK_BYTES || total > MAX_BROWSER_WORK_BYTES) {
+      throw Error(`${label}超過瀏覽器安全處理上限。`);
+    }
+    setProgress(
+      total ? start + (end - start) * Math.min(1, received / total) : start,
+      total
+        ? `正在分段下載${label}：${humanBytes(received)} / ${humanBytes(total)}`
+        : `正在分段下載${label}：${humanBytes(received)}；總長度確認中`
+    );
+    const shortChunk = data.byteLength < YOUTUBE_DOWNLOAD_CHUNK_BYTES;
+    verifiedFinalChunk = (total > 0 && received >= total) || (!total && shortChunk);
+    offset = range ? range.end + 1 : offset + data.byteLength;
   }
-  const output=new Uint8Array(received);let pos=0;for(const chunk of chunks){output.set(chunk,pos);pos+=chunk.byteLength;}
-  log(`【YouTube 分段下載】${label}完成，共 ${requestCount} 段、${humanBytes(received)}；每段 256 KiB。`);setProgress(end,`${label}下載完成。`);return output;
+  if (!received) throw Error(`${label}沒有取得任何媒體內容。`);
+  if (total > 0 && received !== total) {
+    throw Error(`${label}媒體不完整：預期 ${humanBytes(total)}，實際 ${humanBytes(received)}。`);
+  }
+  if (!total && received === YOUTUBE_DOWNLOAD_CHUNK_BYTES) {
+    throw Error(`${label}僅取得第一個 256 KiB 測試區段，未判定為完整媒體。`);
+  }
+  const output = new Uint8Array(received);
+  let position = 0;
+  for (const chunk of chunks) { output.set(chunk, position); position += chunk.byteLength; }
+  log(`【媒體完整性】${label}預期：${total ? humanBytes(total) : "由末段確認"}；實際：${humanBytes(received)}。`);
+  log(`【YouTube 分段下載】${label}完成，共 ${requestCount} 段、${humanBytes(received)}；每段 256 KiB。`);
+  setProgress(end, `${label}下載完成。`);
+  return output;
 }
 
 async function fetchMedia(format, label = "媒體", start = 5, end = 65) {
@@ -522,22 +564,23 @@ function saveBlob(data, filename, type = "application/octet-stream") {
   document.body.append(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 async function loadFFmpegModules() {
-  const [ffmpegModule, utilModule] = await Promise.all([import(FFMPEG_MODULE_URL), import(FFMPEG_UTIL_URL)]);
-  if (!ffmpegModule.FFmpeg || !utilModule.toBlobURL) throw Error("FFmpeg ES Module 載入內容不完整。");
-  return { FFmpeg: ffmpegModule.FFmpeg, toBlobURL: utilModule.toBlobURL };
+  const ffmpegModule = await import(FFMPEG_MODULE_URL);
+  if (!ffmpegModule.FFmpeg) throw Error("專案內 FFmpeg ES Module 載入內容不完整。");
+  return { FFmpeg: ffmpegModule.FFmpeg };
 }
 async function ensureFFmpeg() {
   if (state.ffmpegLoaded && state.ffmpeg) return state.ffmpeg;
   if (state.ffmpegLoading) return state.ffmpegLoading;
   state.ffmpegLoading = (async () => {
-    status("首次使用，正在載入 FFmpeg WebAssembly…", "working"); log("【FFMPEG】以 ES Module 延遲載入，不使用會觸發 exports 錯誤的 CommonJS UMD util。");
-    const { FFmpeg, toBlobURL } = await loadFFmpegModules();
+    status("首次使用，正在載入專案內 FFmpeg WebAssembly…", "working");
+    log("【FFMPEG】從專案內同源 FFmpeg 目錄載入主 Worker、Core JS 與 WASM。");
+    const { FFmpeg } = await loadFFmpegModules();
     const ffmpeg = new FFmpeg();
     ffmpeg.on("log", ({ message }) => message && log(`【FFMPEG】${message}`));
     ffmpeg.on("progress", ({ progress }) => Number.isFinite(progress) && setProgress(65 + Math.max(0,Math.min(1,progress))*30, "正在執行瀏覽器影音處理…"));
     await ffmpeg.load({
-      coreURL: await toBlobURL(`${FFMPEG_CORE_BASE}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(`${FFMPEG_CORE_BASE}/ffmpeg-core.wasm`, "application/wasm")
+      coreURL: `${FFMPEG_CORE_BASE}/ffmpeg-core.js`,
+      wasmURL: `${FFMPEG_CORE_BASE}/ffmpeg-core.wasm`
     });
     state.ffmpeg=ffmpeg; state.ffmpegLoaded=true; log("【FFMPEG】單執行緒核心載入完成。"); return ffmpeg;
   })();

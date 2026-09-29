@@ -14,7 +14,7 @@ function cors(origin = "*") {
     "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
     "Access-Control-Allow-Headers": "Range,Content-Type,Cache-Control,X-FB-Session,X-IG-Session,X-TH-Session,X-YT-Session",
     "Access-Control-Max-Age": "86400",
-    "Access-Control-Expose-Headers": "Content-Length,Content-Range,Accept-Ranges,Content-Type,Content-Disposition",
+    "Access-Control-Expose-Headers": "Content-Length,Content-Range,Accept-Ranges,Content-Type,Content-Disposition,X-OwO-Media-Total,X-OwO-Media-Mode,X-OwO-Media-Source,X-OwO-Version",
     "Vary": "Origin"
   };
 }
@@ -65,6 +65,8 @@ function directUrl(format) {
 function normalize(format, resolvedUrl = "") {
   const url = resolvedUrl || directUrl(format);
   if (!url) return null;
+  let urlContentLength = "";
+  try { urlContentLength = new URL(url).searchParams.get("clen") || ""; } catch {}
   const mime = format.mimeType || "";
   const mimeMain = mime.split(";")[0];
   const codecs = (mime.match(/codecs="([^"]+)"/) || [])[1] || "";
@@ -79,7 +81,7 @@ function normalize(format, resolvedUrl = "") {
     mimeType: mimeMain,
     codec: codecs,
     bitrate: format.bitrate || 0,
-    contentLength: format.contentLength || "",
+    contentLength: format.contentLength || urlContentLength || "",
     width: Number(format.width || 0),
     height: Number(format.height || 0),
     fps: Number(format.fps || 0),
@@ -683,7 +685,11 @@ async function verifyYoutubeFormats(formats, steps) {
         response = await fetch(format.url, { method: "GET", headers, redirect: "follow", cache: "no-store" });
         const ok = response.status === 200 || response.status === 206;
         if (ok) {
-          verified.push({ ...format, verified: true, verifiedAt: Date.now(), verificationStatus: response.status });
+          const contentRange = String(response.headers.get("Content-Range") || "");
+          const rangeTotal = Number((contentRange.match(/\/(\d+)$/) || [])[1] || 0);
+          const urlTotal = (() => { try { return Number(new URL(format.url).searchParams.get("clen") || 0); } catch { return 0; } })();
+          const contentLength = Number(format.contentLength || 0) || rangeTotal || urlTotal || 0;
+          verified.push({ ...format, contentLength: contentLength || "", verified: true, verifiedAt: Date.now(), verificationStatus: response.status });
         } else if (response.status === 403) {
           rejected403++;
         } else {
@@ -1857,7 +1863,7 @@ async function metaSocialMedia(request, target, platform, env) {
   return new Response(upstream.body, { status: upstream.status, headers: output });
 }
 
-const YOUTUBE_MEDIA_CACHE_TTL_SECONDS = 120;
+const YOUTUBE_MEDIA_CACHE_TTL_SECONDS = 1800;
 
 function youtubeMediaCacheRequest(id,itag,sourceLabel,sessionId=""){
   const safeSource=String(sourceLabel||"ANDROID").replace(/[^A-Za-z0-9_-]/g,"_");const safeSession=String(sessionId||"legacy").replace(/[^A-Za-z0-9_-]/g,"_");
@@ -1880,6 +1886,7 @@ async function cacheYoutubeFormats(id,formats,steps,sessionId=""){
         fps: Number(format.fps || 0),
         codec: format.codec || "",
         kind: format.kind || "",
+        contentLength: Number(format.contentLength || 0),
         generatedAt: Number(format.generatedAt || Date.now()),
         storedAt: Date.now()
       }), {
@@ -1995,7 +2002,8 @@ async function freshMediaUrl(id,itag,sourceLabel,steps,wanted={},youtubeCookie="
   const url = resolveFormatUrl(format, rules, counters);
   if (!url) throw new Error(`itag ${itag} 的即時媒體網址解析失敗。`);
   steps.push(`【即時媒體】已使用 ${sourceLabel} 重新取得 itag ${itag} 的媒體網址。`);
-  return { url, sourceLabel };
+  const normalized = normalize({ ...format, _source: sourceLabel }, url);
+  return { url, sourceLabel, contentLength: Number(normalized?.contentLength || 0) };
 }
 
 function youtubeMediaUserAgent(sourceLabel) {
@@ -2034,6 +2042,7 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
   const steps = [];
   let resolvedTarget=sessionId?"":String(target||"");
   let resolutionMode=resolvedTarget?"analysis-url":"";
+  let mediaTotal = 0;
   const suppliedGeneratedAt = Number(new URL(request.url).searchParams.get("generatedAt") || 0);
   const suppliedAgeMs = suppliedGeneratedAt ? Date.now() - suppliedGeneratedAt : 0;
   if (resolvedTarget && suppliedAgeMs > 60000 && id && itag) {
@@ -2046,14 +2055,11 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
     const cached = await readYoutubeFormatCache(id,itag,sourceLabel||"ANDROID",sessionId);
     if (cached?.url) {
       const cachedAgeMs = Date.now() - Number(cached.generatedAt || cached.storedAt || 0);
-      if (cachedAgeMs <= 60000) {
-        resolvedTarget = cached.url;
-        sourceLabel = cached.source || sourceLabel;
-        resolutionMode = "session-cache";
-      } else {
-        steps.push(`【媒體網址刷新】短效快取網址已產生約 ${Math.round(cachedAgeMs / 1000)} 秒，改用即時重新解析。`);
-      }
-      steps.push(`【媒體工作階段】命中 ${sourceLabel} / itag ${itag} 短效快取。`);
+      resolvedTarget = cached.url;
+      sourceLabel = cached.source || sourceLabel;
+      resolutionMode = "session-cache";
+      mediaTotal = Number(cached.contentLength || 0);
+      steps.push(`【媒體工作階段】命中 ${sourceLabel} / itag ${itag} 快取；網址約 ${Math.round(cachedAgeMs / 1000)} 秒，先實際嘗試，只有 GVS 明確拒絕後才刷新。`);
     }
   }
 
@@ -2062,6 +2068,7 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
     resolvedTarget = fresh.url;
     sourceLabel = fresh.sourceLabel;
     resolutionMode = "fresh";
+    mediaTotal = Number(fresh.contentLength || 0);
   }
 
   let url;
@@ -2074,6 +2081,7 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
     return json({ error: "此媒體網域未列入允許清單。", code: "MEDIA_DOMAIN_DENIED", version: VERSION, steps }, 403);
   }
 
+  try { mediaTotal = mediaTotal || Number(url.searchParams.get("clen") || 0); } catch {}
   const requestedRange=requestedByteRange(request);
   async function fetchUpstream(activeUrl){
     const ranged=new URL(activeUrl.href);if(requestedRange)ranged.searchParams.set("range",requestedRange.query);
@@ -2099,6 +2107,7 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
     try {
       const fresh = await freshMediaUrlWithRetry(id,itag,sourceLabel||"ANDROID",steps,wanted,youtubeCookie);
       url = new URL(fresh.url); sourceLabel = fresh.sourceLabel; resolutionMode = "fresh";
+      mediaTotal = Number(fresh.contentLength || mediaTotal || 0);
       upstream=await fetchUpstream(url);
       steps.push(`【媒體請求】即時重新解析網址回傳 HTTP ${upstream.status}。`);
     } catch (error) {
@@ -2124,6 +2133,7 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
   output.set("X-OwO-Media-Mode", resolutionMode || "legacy");
   output.set("X-OwO-Media-Source", sourceLabel || "UNKNOWN");
   output.set("X-OwO-Version", VERSION);
+  if (mediaTotal > 0) output.set("X-OwO-Media-Total", String(mediaTotal));
   if (new URL(request.url).searchParams.get("download") === "1") {
     const ext = (new URL(request.url).searchParams.get("ext") || "bin").replace(/[^a-z0-9]/gi, "");
     output.set("Content-Disposition", `attachment; filename="youtube-media.${ext}"`);
