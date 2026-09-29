@@ -6,7 +6,7 @@ const FFMPEG_MODULE_URL = new URL("./FFmpeg/ffmpeg/index.js", import.meta.url).h
 const FFMPEG_CLASS_WORKER_URL = new URL("./FFmpeg/ffmpeg/worker.js", import.meta.url).href;
 const FFMPEG_CORE_BASE = new URL("./FFmpeg/core", import.meta.url).href;
 const MAX_BROWSER_WORK_BYTES = 700 * 1024 * 1024;
-const YOUTUBE_DOWNLOAD_CHUNK_BYTES = 5 * 1024 * 1024;
+const YOUTUBE_FULL_RANGE_DOWNLOAD = true;
 const YOUTUBE_AUTO_RETRY_DELAY_MS = 5000;
 const YOUTUBE_AUTO_RETRY_CODES = new Set(["YOUTUBE_PLAYER_RESPONSE_MISSING","YOUTUBE_RATE_LIMITED","YOUTUBE_PAGE_UNAVAILABLE","AUTH_REQUIRED","NO_MEDIA_ADDRESS"]);
 const DEFAULT_WORKER_URL = "https://owo-mo-downloader-api.kkwan812.workers.dev";
@@ -479,44 +479,39 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
   if (!Number.isFinite(total) || total <= 0) throw new Error(`${label}缺少可靠的完整媒體大小。`);
   if (total > MAX_BROWSER_WORK_BYTES) throw new Error(`${label}超過瀏覽器安全處理上限。`);
 
+  const requestedRange = `bytes=0-${total - 1}`;
+  log(`【YouTube 完整 Range】${label}總大小 ${humanBytes(total)}，使用單次完整範圍 ${requestedRange}。`);
+  const response = await fetch(mediaEndpoint(format), {
+    cache: "no-store",
+    headers: { ...platformRequestHeaders(), Range: requestedRange }
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    if (Array.isArray(body.steps)) body.steps.forEach(log);
+    throw new Error(String(body.error || `${label}完整 Range 下載失敗：HTTP ${response.status}。`));
+  }
+  if (!response.body) throw new Error(`${label}完整 Range 回應沒有可讀取的內容。`);
+
+  const range = contentRangeInfo(response.headers.get("Content-Range"));
+  if (range && (range.start !== 0 || range.end !== total - 1 || (range.total > 0 && range.total !== total))) {
+    throw new Error(`${label}完整 Range 不符：要求 ${requestedRange}，實際 ${response.headers.get("Content-Range") || "未提供"}。`);
+  }
+
+  const reader = response.body.getReader();
   const chunks = [];
   let received = 0;
-  let offset = 0;
-  let segmentIndex = 0;
-  const segmentTotal = Math.ceil(total / YOUTUBE_DOWNLOAD_CHUNK_BYTES);
-  log(`【YouTube 5 MiB 分段下載】${label}總大小 ${humanBytes(total)}，每段上限 5 MiB，共 ${segmentTotal} 段。`);
-
-  while (offset < total) {
-    const rangeEnd = Math.min(total - 1, offset + YOUTUBE_DOWNLOAD_CHUNK_BYTES - 1);
-    const requestedRange = `bytes=${offset}-${rangeEnd}`;
-    segmentIndex++;
-    const response = await fetch(mediaEndpoint(format), {
-      cache: "no-store",
-      headers: { ...platformRequestHeaders(), Range: requestedRange }
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      if (Array.isArray(body.steps)) body.steps.forEach(log);
-      log(`【YouTube 5 MiB 分段失敗】${label}第 ${segmentIndex}/${segmentTotal} 段；要求 ${requestedRange}；HTTP ${response.status}。`);
-      throw new Error(String(body.error || `${label}第 ${segmentIndex}/${segmentTotal} 段下載失敗：HTTP ${response.status}。`));
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value?.byteLength) continue;
+      chunks.push(value);
+      received += value.byteLength;
+      if (received > total) throw new Error(`收到的資料超過預期總長度 ${total} bytes。`);
+      setProgress(start + (end - start) * Math.min(1, received / total), `正在完整下載${label}：${humanBytes(received)} / ${humanBytes(total)}`);
     }
-
-    const range = contentRangeInfo(response.headers.get("Content-Range"));
-    const data = new Uint8Array(await response.arrayBuffer());
-    const expectedLength = rangeEnd - offset + 1;
-    if (!data.length) throw new Error(`${label}第 ${segmentIndex}/${segmentTotal} 段收到空白內容。`);
-    if (range && range.start !== offset) {
-      throw new Error(`${label}第 ${segmentIndex}/${segmentTotal} 段位置錯誤：預期 ${offset}，實際 ${range.start}。`);
-    }
-    if (data.byteLength !== expectedLength) {
-      throw new Error(`${label}第 ${segmentIndex}/${segmentTotal} 段大小不完整：預期 ${humanBytes(expectedLength)}，實際 ${humanBytes(data.byteLength)}。`);
-    }
-
-    chunks.push(data);
-    received += data.byteLength;
-    offset = rangeEnd + 1;
-    setProgress(start + (end - start) * Math.min(1, received / total), `正在分段下載${label}：${humanBytes(received)} / ${humanBytes(total)}`);
-    log(`【YouTube 5 MiB 分段下載】${label}第 ${segmentIndex}/${segmentTotal} 段完成：${requestedRange}。`);
+  } catch (error) {
+    throw new Error(`${label}完整 Range 串流中斷：${String(error?.message || error || "未知原因")}`);
   }
 
   if (received !== total) throw new Error(`${label}媒體不完整：預期 ${humanBytes(total)}，實際 ${humanBytes(received)}。`);
@@ -524,7 +519,7 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
   let position = 0;
   for (const chunk of chunks) { output.set(chunk, position); position += chunk.byteLength; }
   log(`【媒體完整性】${label}預期：${humanBytes(total)}；實際：${humanBytes(received)}。`);
-  log(`【YouTube 5 MiB 分段下載】${label}完成，共 ${chunks.length} 段。`);
+  log(`【YouTube 完整 Range】${label}完成；上游媒體請求 1 次。`);
   setProgress(end, `${label}下載完成。`);
   return output;
 }

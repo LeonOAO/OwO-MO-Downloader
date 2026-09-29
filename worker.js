@@ -1,5 +1,5 @@
 const VERSION = "1.0";
-const BUILD = "2026.09.29-v10-browser-5mib-segments";
+const BUILD = "2026.09.29-v10-single-full-range";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -1986,7 +1986,7 @@ async function freshMediaUrlFromContext(id, itag, sourceLabel, steps, wanted = {
   const url = resolveFormatUrl(format, { signature: null, n: null }, counters);
   if (!url) throw new Error(`${label} 重新取得的格式沒有可用媒體網址。`);
   const normalized = normalize({ ...format, _source: label }, url);
-  steps.push(`【直接 Player 刷新】只呼叫原始 ${label} Client 一次，取得${equivalent ? "等效格式" : "原 itag"}：itag ${format.itag}；${normalized?.quality || "未知畫質"}；${normalized?.container || "未知容器"}；${normalized?.codec || "未知編碼"}。`);
+  steps.push(`【直接 Player 刷新】只呼叫原始 ${label} Client 一次，取得${equivalent ? "等效格式" : "原 itag"}：itag ${format.itag}。`);
   return { url, sourceLabel: label, contentLength: Number(normalized?.contentLength || 0), selectedItag: String(format.itag), equivalent };
 }
 
@@ -2146,17 +2146,11 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
   }
   const mediaRejected = [403, 416].includes(upstream.status);
   if (mediaRejected && id && itag) {
-    steps.push(`【媒體單次刷新】${sourceLabel || "ANDROID"} / itag ${itag} 的 ${requestedRange?.header || "目前 5 MiB 區段"} 回傳 HTTP ${upstream.status}；只執行一次直接 Player 刷新，不重新 WATCH。`);
-    await deleteYoutubeFormatCache(id, itag, sourceLabel || "ANDROID", sessionId);
+    steps.push(`【媒體單次刷新】完整 Range ${requestedRange?.header || "未提供"} 回傳 HTTP ${upstream.status}；只執行一次原始 Client Player 刷新，不重新 WATCH。`);
     try {
       const fresh = await freshMediaUrlFromContext(id, itag, sourceLabel || "ANDROID", steps, wanted, refreshContext, youtubeCookie);
       if (fresh.equivalent && String(fresh.selectedItag || itag) !== String(itag)) {
-        return json({
-          error: `直接 Player 刷新取得不同 itag ${fresh.selectedItag}，5 MiB 分段下載不混接不同位元流，請重新解析後再下載。`,
-          code: "MEDIA_TRACK_CHANGED",
-          version: VERSION,
-          steps
-        }, 409);
+        return json({ error: `Player 刷新取得不同 itag ${fresh.selectedItag}，完整 Range 不混接不同位元流。`, code: "MEDIA_TRACK_CHANGED", version: VERSION, steps }, 409);
       }
       url = new URL(fresh.url);
       sourceLabel = fresh.sourceLabel;
@@ -2164,25 +2158,14 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
       resolutionMode = "single-player-refresh";
       mediaTotal = Number(fresh.contentLength || mediaTotal || 0);
       upstream = await fetchUpstream(url);
-      steps.push(`【媒體單次刷新】${requestedRange?.header || "目前 5 MiB 區段"} 使用刷新網址重試一次，回傳 HTTP ${upstream.status}。`);
+      steps.push(`【媒體單次刷新】完整 Range 使用刷新網址重試一次，回傳 HTTP ${upstream.status}。`);
     } catch (error) {
       steps.push(`【媒體單次刷新失敗】${error.message}`);
-      return json({
-        error: `媒體區段遭拒，單次 Player 刷新失敗：${error.message}`,
-        code: "MEDIA_REFRESH_FAILED",
-        version: VERSION,
-        steps
-      }, 422);
+      return json({ error: `完整 Range 遭拒，單次 Player 刷新失敗：${error.message}`, code: "MEDIA_REFRESH_FAILED", version: VERSION, steps }, 422);
     }
   }
-
   if ([403, 416].includes(upstream.status)) {
-    return json({
-      error: `Google Video Server 拒絕 5 MiB 媒體區段：HTTP ${upstream.status}。已執行原網址一次與 Player 刷新網址一次。`,
-      code: "MEDIA_URL_FORBIDDEN",
-      version: VERSION,
-      steps
-    }, upstream.status === 403 ? 403 : 409);
+    return json({ error: `Google Video Server 拒絕完整 Range：HTTP ${upstream.status}。`, code: "MEDIA_URL_FORBIDDEN", version: VERSION, steps }, upstream.status === 403 ? 403 : 409);
   }
 
   const output = new Headers(upstream.headers);
