@@ -1,5 +1,5 @@
 const VERSION = "1.0";
-const BUILD = "2026.09.29-v10-buffered-five-segments";
+const BUILD = "2026.09.29-v10-browser-5mib-segments";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -1975,24 +1975,19 @@ async function freshMediaUrlFromContext(id, itag, sourceLabel, steps, wanted = {
   const apiKey = String(context.apiKey || "");
   const visitorData = String(context.visitorData || "");
   if (!apiKey) throw new Error("解析工作階段未提供 Player API Key。");
-  const labels = [...new Set([sourceLabel, "ANDROID_VR", "ANDROID", "IOS", "WEB", "TV"].filter(Boolean))];
-  const failures = [];
-  for (const label of labels) {
-    try {
-      const player = await innertubePlayer(apiKey, visitorData, id, clientProfileByLabel(label), youtubeCookie);
-      let format = addressableFormats(player).find(item => String(item.itag) === String(itag));
-      let equivalent = false;
-      if (!format) { format = equivalentAddressableFormat(player, wanted); equivalent = Boolean(format); }
-      if (!format) { failures.push(`${label}: 無 itag ${itag} 或等效格式`); continue; }
-      const counters = { signature: 0, signatureFailed: 0, n: 0, nFailed: 0 };
-      const url = resolveFormatUrl(format, { signature: null, n: null }, counters);
-      if (!url) { failures.push(`${label}: 格式無可用網址`); continue; }
-      const normalized = normalize({ ...format, _source: label }, url);
-      steps.push(`【直接 Player 刷新】${label} 取得${equivalent ? "等效格式" : "原 itag"}：itag ${format.itag}；${normalized?.quality || "未知畫質"}；${normalized?.container || "未知容器"}；${normalized?.codec || "未知編碼"}。`);
-      return { url, sourceLabel: label, contentLength: Number(normalized?.contentLength || 0), selectedItag: String(format.itag), equivalent };
-    } catch (error) { failures.push(`${label}: ${error.message}`); }
-  }
-  throw new Error(`所有 Player Client 均未取得原 itag 或等效格式（${failures.join("；")}）。`);
+  const label = sourceLabel || "ANDROID";
+  const player = await innertubePlayer(apiKey, visitorData, id, clientProfileByLabel(label), youtubeCookie);
+  if (!player) throw new Error(`${label} Player API 未回傳播放器資料。`);
+  let format = addressableFormats(player).find(item => String(item.itag) === String(itag));
+  let equivalent = false;
+  if (!format) { format = equivalentAddressableFormat(player, wanted); equivalent = Boolean(format); }
+  if (!format) throw new Error(`${label} 未取得 itag ${itag} 或等效格式。`);
+  const counters = { signature: 0, signatureFailed: 0, n: 0, nFailed: 0 };
+  const url = resolveFormatUrl(format, { signature: null, n: null }, counters);
+  if (!url) throw new Error(`${label} 重新取得的格式沒有可用媒體網址。`);
+  const normalized = normalize({ ...format, _source: label }, url);
+  steps.push(`【直接 Player 刷新】只呼叫原始 ${label} Client 一次，取得${equivalent ? "等效格式" : "原 itag"}：itag ${format.itag}；${normalized?.quality || "未知畫質"}；${normalized?.container || "未知容器"}；${normalized?.codec || "未知編碼"}。`);
+  return { url, sourceLabel: label, contentLength: Number(normalized?.contentLength || 0), selectedItag: String(format.itag), equivalent };
 }
 
 async function freshMediaUrl(id,itag,sourceLabel,steps,wanted={},youtubeCookie=""){
@@ -2078,151 +2073,6 @@ async function freshMediaUrlWithRetry(id,itag,sourceLabel,steps,wanted={},youtub
   return freshMediaUrl(id,itag,sourceLabel,steps,wanted,youtubeCookie);
 }
 
-async function mediaFiveSegments(request, activeUrl, id, itag, sourceLabel, wanted, refreshContext, youtubeCookie, total, steps) {
-  const segmentCount = 5;
-  const segmentSize = Math.ceil(total / segmentCount);
-  let currentUrl = new URL(activeUrl.href);
-  let currentSource = sourceLabel;
-  let refreshUsed = false;
-  const segments = [];
-  let receivedTotal = 0;
-
-  for (let index = 0; index < segmentCount; index++) {
-    const rangeStart = index * segmentSize;
-    if (rangeStart >= total) break;
-    const rangeEnd = Math.min(total - 1, rangeStart + segmentSize - 1);
-    const rangeHeader = `bytes=${rangeStart}-${rangeEnd}`;
-    const expectedLength = rangeEnd - rangeStart + 1;
-
-    const fetchRange = async () => {
-      const headers = mediaRequestHeaders(request, currentSource);
-      headers.set("Range", rangeHeader);
-      return fetch(currentUrl, { method: "GET", headers, redirect: "follow", cache: "no-store" });
-    };
-
-    let upstream = await fetchRange();
-    if ([403, 416].includes(upstream.status) && !refreshUsed) {
-      refreshUsed = true;
-      try { await upstream.body?.cancel(); } catch {}
-      steps.push(`【Worker 五段下載】第 ${index + 1}/5 段 ${rangeHeader} 回傳 HTTP ${upstream.status}，執行整條媒體軌唯一一次直接 Player 刷新。`);
-      try {
-        const fresh = await freshMediaUrlFromContext(id, itag, currentSource, steps, wanted, refreshContext, youtubeCookie);
-        if (fresh.equivalent && String(fresh.selectedItag || itag) !== String(itag)) {
-          return json({
-            error: `Worker 五段下載第 ${index + 1}/5 段刷新取得不同 itag ${fresh.selectedItag}，未混接不同位元流。`,
-            code: "MEDIA_TRACK_CHANGED",
-            version: VERSION,
-            steps
-          }, 409);
-        }
-        currentUrl = new URL(fresh.url);
-        currentSource = fresh.sourceLabel;
-        upstream = await fetchRange();
-        steps.push(`【Worker 五段下載】第 ${index + 1}/5 段使用刷新網址重試一次，回傳 HTTP ${upstream.status}。`);
-      } catch (error) {
-        steps.push(`【Worker 五段下載失敗】第 ${index + 1}/5 段直接 Player 刷新失敗：${error.message}。`);
-        return json({
-          error: `Worker 五段下載第 ${index + 1}/5 段刷新失敗：${error.message}`,
-          code: "MEDIA_REFRESH_FAILED",
-          version: VERSION,
-          segment: index + 1,
-          range: rangeHeader,
-          expectedBytes: expectedLength,
-          actualBytes: 0,
-          steps
-        }, 422);
-      }
-    }
-
-    if (![200, 206].includes(upstream.status)) {
-      steps.push(`【Worker 五段下載失敗】第 ${index + 1}/5 段 ${rangeHeader} 回傳 HTTP ${upstream.status}。`);
-      return json({
-        error: `Worker 五段下載第 ${index + 1}/5 段失敗：${rangeHeader} 回傳 HTTP ${upstream.status}。`,
-        code: "MEDIA_SEGMENT_HTTP_ERROR",
-        version: VERSION,
-        segment: index + 1,
-        range: rangeHeader,
-        expectedBytes: expectedLength,
-        actualBytes: 0,
-        steps
-      }, upstream.status === 403 ? 403 : 422);
-    }
-
-    const contentRangeValue = String(upstream.headers.get("Content-Range") || "");
-    const contentRange = contentRangeValue.match(/^bytes\s+(\d+)-(\d+)\/(\d+|\*)$/i);
-    const data = new Uint8Array(await upstream.arrayBuffer());
-    const actualLength = data.byteLength;
-
-    if (!contentRange) {
-      steps.push(`【Worker 五段下載失敗】第 ${index + 1}/5 段缺少有效 Content-Range；要求 ${rangeHeader}；實際 ${actualLength} bytes。`);
-      return json({
-        error: `Worker 五段下載第 ${index + 1}/5 段缺少有效 Content-Range：要求 ${rangeHeader}；預期 ${expectedLength} bytes；實際 ${actualLength} bytes。`,
-        code: "MEDIA_SEGMENT_RANGE_MISSING",
-        version: VERSION,
-        segment: index + 1,
-        range: rangeHeader,
-        expectedBytes: expectedLength,
-        actualBytes: actualLength,
-        contentRange: contentRangeValue,
-        steps
-      }, 422);
-    }
-
-    const actualStart = Number(contentRange[1]);
-    const actualEnd = Number(contentRange[2]);
-    const actualTotal = contentRange[3] === "*" ? 0 : Number(contentRange[3]);
-    if (actualStart !== rangeStart || actualEnd !== rangeEnd || (actualTotal > 0 && actualTotal !== total) || actualLength !== expectedLength) {
-      steps.push(`【Worker 五段下載失敗】第 ${index + 1}/5 段不完整：要求 ${rangeHeader}；Content-Range ${contentRangeValue || "缺少"}；預期 ${expectedLength} bytes；實際 ${actualLength} bytes。`);
-      return json({
-        error: `Worker 五段下載第 ${index + 1}/5 段不完整：要求 ${rangeHeader}；預期 ${expectedLength} bytes；實際 ${actualLength} bytes。`,
-        code: "MEDIA_SEGMENT_INCOMPLETE",
-        version: VERSION,
-        segment: index + 1,
-        range: rangeHeader,
-        expectedBytes: expectedLength,
-        actualBytes: actualLength,
-        contentRange: contentRangeValue,
-        steps
-      }, 422);
-    }
-
-    segments.push(data);
-    receivedTotal += actualLength;
-    steps.push(`【Worker 五段下載】第 ${index + 1}/5 段驗證完成：${rangeHeader}；${actualLength} bytes。`);
-  }
-
-  if (segments.length !== segmentCount || receivedTotal !== total) {
-    steps.push(`【Worker 五段下載失敗】整體大小不完整：預期 ${total} bytes；實際 ${receivedTotal} bytes；完成 ${segments.length}/5 段。`);
-    return json({
-      error: `Worker 五段下載整體不完整：預期 ${total} bytes；實際 ${receivedTotal} bytes；完成 ${segments.length}/5 段。`,
-      code: "MEDIA_TOTAL_INCOMPLETE",
-      version: VERSION,
-      expectedBytes: total,
-      actualBytes: receivedTotal,
-      completedSegments: segments.length,
-      steps
-    }, 422);
-  }
-
-  const output = new Uint8Array(total);
-  let offset = 0;
-  for (const segment of segments) {
-    output.set(segment, offset);
-    offset += segment.byteLength;
-  }
-  steps.push(`【Worker 五段下載】五段全部驗證完成，合併後共 ${output.byteLength} bytes。`);
-
-  const headers = new Headers(cors());
-  headers.set("Content-Type", wanted.kind === "僅音訊" ? "audio/mp4" : "video/mp4");
-  headers.set("Content-Length", String(output.byteLength));
-  headers.set("Cache-Control", "no-store");
-  headers.set("X-OwO-Segment-Count", String(segmentCount));
-  headers.set("X-OwO-Media-Mode", "buffered-five-segments");
-  headers.set("X-OwO-Media-Source", currentSource || "UNKNOWN");
-  headers.set("X-OwO-Version", VERSION);
-  return new Response(output, { status: 200, headers });
-}
-
 async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",youtubeCookie="",refreshContext={}){
   const steps = [];
   let resolvedTarget = "";
@@ -2272,16 +2122,6 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
     return json({ error: "此媒體網域未列入允許清單。", code: "MEDIA_DOMAIN_DENIED", version: VERSION, steps }, 403);
   }
 
-  const requestUrl = new URL(request.url);
-  const fiveSegments = requestUrl.searchParams.get("fiveSegments") === "1";
-  const requestedTotal = Number(requestUrl.searchParams.get("total") || mediaTotal || 0);
-  if (fiveSegments) {
-    if (!Number.isFinite(requestedTotal) || requestedTotal <= 0) {
-      return json({ error: "固定五段串流缺少可靠的完整媒體大小。", code: "MEDIA_TOTAL_MISSING", version: VERSION, steps }, 422);
-    }
-    return mediaFiveSegments(request, url, id, itag, sourceLabel || "ANDROID", wanted, refreshContext, youtubeCookie, requestedTotal, steps);
-  }
-
   const requestedRange=requestedByteRange(request);
   async function fetchUpstream(activeUrl) {
     return fetch(activeUrl, {
@@ -2306,13 +2146,13 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
   }
   const mediaRejected = [403, 416].includes(upstream.status);
   if (mediaRejected && id && itag) {
-    steps.push(`【媒體單次刷新】${sourceLabel || "ANDROID"} / itag ${itag} 的 ${requestedRange?.header || "目前區段"} 回傳 HTTP ${upstream.status}；只執行一次直接 Player 刷新，不重新 WATCH。`);
+    steps.push(`【媒體單次刷新】${sourceLabel || "ANDROID"} / itag ${itag} 的 ${requestedRange?.header || "目前 5 MiB 區段"} 回傳 HTTP ${upstream.status}；只執行一次直接 Player 刷新，不重新 WATCH。`);
     await deleteYoutubeFormatCache(id, itag, sourceLabel || "ANDROID", sessionId);
     try {
       const fresh = await freshMediaUrlFromContext(id, itag, sourceLabel || "ANDROID", steps, wanted, refreshContext, youtubeCookie);
       if (fresh.equivalent && String(fresh.selectedItag || itag) !== String(itag)) {
         return json({
-          error: `直接 Player 刷新取得不同 itag ${fresh.selectedItag}，固定五段下載不混接不同位元流，請重新解析後再下載。`,
+          error: `直接 Player 刷新取得不同 itag ${fresh.selectedItag}，5 MiB 分段下載不混接不同位元流，請重新解析後再下載。`,
           code: "MEDIA_TRACK_CHANGED",
           version: VERSION,
           steps
@@ -2324,7 +2164,7 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
       resolutionMode = "single-player-refresh";
       mediaTotal = Number(fresh.contentLength || mediaTotal || 0);
       upstream = await fetchUpstream(url);
-      steps.push(`【媒體單次刷新】${requestedRange?.header || "目前區段"} 使用刷新網址重試一次，回傳 HTTP ${upstream.status}。`);
+      steps.push(`【媒體單次刷新】${requestedRange?.header || "目前 5 MiB 區段"} 使用刷新網址重試一次，回傳 HTTP ${upstream.status}。`);
     } catch (error) {
       steps.push(`【媒體單次刷新失敗】${error.message}`);
       return json({
@@ -2338,7 +2178,7 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
 
   if ([403, 416].includes(upstream.status)) {
     return json({
-      error: `Google Video Server 拒絕媒體區段：HTTP ${upstream.status}。固定五段下載已執行原網址一次與 Player 刷新網址一次。`,
+      error: `Google Video Server 拒絕 5 MiB 媒體區段：HTTP ${upstream.status}。已執行原網址一次與 Player 刷新網址一次。`,
       code: "MEDIA_URL_FORBIDDEN",
       version: VERSION,
       steps
