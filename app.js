@@ -497,7 +497,10 @@ function sameYoutubeResumeTrack(candidate, fingerprint) {
 }
 async function reanalyzeYoutubeTrackForResume(originalFormat, label, completedBytes) {
   const fingerprint = youtubeResumeFingerprint(originalFormat);
-  log(`【5 MiB 續傳重新解析】${label}已保留 ${humanBytes(completedBytes)}；執行一次完整 YouTube 重新解析以取得新媒體網址。`);
+  const retainedText = completedBytes > 0
+    ? `已保留 ${humanBytes(completedBytes)}`
+    : "目前尚未完成任何區段";
+  log(`【5 MiB 續傳重新解析】${label}${retainedText}；執行一次完整 YouTube 重新解析以取得新媒體網址。`);
   status(`${label}下載網址失效，正在重新解析後續傳…`, "working");
   const { response, data } = await requestYoutubeAll(state.videoId, 1);
   if (!response?.ok) {
@@ -551,7 +554,8 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       if (Array.isArray(body.steps)) body.steps.forEach(log);
-      log(`【YouTube 5 MiB 續傳失敗】${label}第 ${segmentIndex}/${segmentTotal} 段；已保留 ${humanBytes(received)}；要求 ${requestedRange}；HTTP ${response.status}。`);
+      const retainedText = received > 0 ? `已保留 ${humanBytes(received)}` : "目前尚未完成任何區段";
+      log(`【YouTube 5 MiB 續傳失敗】${label}第 ${segmentIndex}/${segmentTotal} 段；${retainedText}；要求 ${requestedRange}；HTTP ${response.status}。`);
       throw new Error(String(body.error || `${label}第 ${segmentIndex}/${segmentTotal} 段續傳失敗：HTTP ${response.status}。`));
     }
 
@@ -579,8 +583,74 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
   return output;
 }
 
+async function fetchYoutubeDirectMedia(format, label, start, end) {
+  const declaredLength = Number(format.contentLength || 0);
+  log(`【YouTube 影音合一直接下載】${label}使用單次直接下載，不套用 5 MiB 分段續傳。`);
+  const response = await fetch(mediaEndpoint(format), {
+    cache: "no-store",
+    headers: platformRequestHeaders()
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    if (Array.isArray(body.steps)) body.steps.forEach(log);
+    const error = new Error(body.error || `${label}直接下載失敗：HTTP ${response.status}。`);
+    error.code = body.code || "YOUTUBE_DIRECT_DOWNLOAD_FAILED";
+    error.httpStatus = response.status;
+    throw error;
+  }
+
+  const responseLength = Number(response.headers.get("Content-Length") || 0);
+  const expectedLength = declaredLength > 0 ? declaredLength : responseLength;
+  if (expectedLength > MAX_BROWSER_WORK_BYTES) {
+    throw new Error(`${label}大小 ${humanBytes(expectedLength)} 超過瀏覽器安全處理上限。`);
+  }
+  setProgress(start, `正在直接下載${label}…`);
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const data = new Uint8Array(await response.arrayBuffer());
+    if (expectedLength > 0 && data.byteLength !== expectedLength) {
+      throw new Error(`${label}直接下載不完整：預期 ${humanBytes(expectedLength)}，實際 ${humanBytes(data.byteLength)}。`);
+    }
+    setProgress(end, `${label}直接下載完成。`);
+    return data;
+  }
+
+  const chunks = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value?.byteLength) continue;
+    chunks.push(value);
+    received += value.byteLength;
+    if (received > MAX_BROWSER_WORK_BYTES) {
+      await reader.cancel();
+      throw new Error(`${label}超過瀏覽器安全處理上限。`);
+    }
+    if (expectedLength > 0) {
+      setProgress(start + (end - start) * Math.min(1, received / expectedLength), `正在直接下載${label}：${humanBytes(received)} / ${humanBytes(expectedLength)}`);
+    }
+  }
+  if (expectedLength > 0 && received !== expectedLength) {
+    throw new Error(`${label}直接下載不完整：預期 ${humanBytes(expectedLength)}，實際 ${humanBytes(received)}。`);
+  }
+  const output = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  log(`【YouTube 影音合一直接下載】${label}完成：${humanBytes(received)}。`);
+  setProgress(end, `${label}直接下載完成。`);
+  return output;
+}
+
 async function fetchMedia(format, label = "媒體", start = 5, end = 65) {
-  if (state.platform === "youtube") return fetchYoutubeMediaInChunks(format,label,start,end);
+  if (state.platform === "youtube") {
+    return normalizedKind(format) === "影音合一"
+      ? fetchYoutubeDirectMedia(format, label, start, end)
+      : fetchYoutubeMediaInChunks(format, label, start, end);
+  }
   const response = await fetch(mediaEndpoint(format), { cache: "no-store", headers: platformRequestHeaders() });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));

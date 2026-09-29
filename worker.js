@@ -1,5 +1,5 @@
 const VERSION = "1.0";
-const BUILD = "2026.09.29-v10-5mib-reanalysis-resume";
+const BUILD = "2026.09.29-v10-muxed-direct-hq-resume";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -2141,12 +2141,21 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
   let upstream=await fetchUpstream(url);
   steps.push(`【媒體請求】${sourceLabel || "UNKNOWN"} 回傳 HTTP ${upstream.status}。`);
   if ([403, 416].includes(upstream.status)) {
-    steps.push(`【媒體續傳交接】${sourceLabel || "ANDROID"} / itag ${itag} 的 ${requestedRange?.header || "目前 5 MiB 區段"} 回傳 HTTP ${upstream.status}；Worker 不刷新、不重新 WATCH，交由前端完整重新解析後續傳。`);
+    if (!requestedRange) {
+      steps.push(`【影音合一直接下載】${sourceLabel || "ANDROID"} / itag ${itag} 的單次直接請求回傳 HTTP ${upstream.status}。`);
+      return json({
+        error: `影音合一直接下載遭拒：HTTP ${upstream.status}。`,
+        code: "MUXED_DIRECT_DOWNLOAD_FAILED",
+        version: VERSION,
+        steps
+      }, upstream.status === 403 ? 403 : 409);
+    }
+    steps.push(`【媒體續傳交接】${sourceLabel || "ANDROID"} / itag ${itag} 的 ${requestedRange.header} 回傳 HTTP ${upstream.status}；Worker 不刷新、不重新 WATCH，交由前端完整重新解析後續傳。`);
     return json({
       error: `媒體網址已拒絕目前 5 MiB 區段：HTTP ${upstream.status}。請由前端重新解析後續傳。`,
       code: "MEDIA_REANALYSIS_REQUIRED",
       version: VERSION,
-      range: requestedRange?.header || "",
+      range: requestedRange.header,
       steps
     }, 409);
   }
