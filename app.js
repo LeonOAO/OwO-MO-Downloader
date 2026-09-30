@@ -481,6 +481,7 @@ function hqSegmentEndpoint(format, rangeStart, rangeEnd) {
     source: format.source || "ANDROID_VR",
     apiKey: format.refreshApiKey || "",
     visitorData: format.refreshVisitorData || "",
+    sessionId: format.sessionId || state.ytMediaSessionId || "",
     start: rangeStart,
     end: rangeEnd,
     kind: normalizedKind(format),
@@ -540,13 +541,14 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
 }
 async function fetchYoutubeSabr(format, label, start, end) {
   const track = normalizedKind(format) === "僅音訊" ? "audio" : "video";
-  log(`【VISIONOS SABR】${label}使用 UMP/SABR 串流下載，itag ${format.itag}；不使用 5 MiB Range。`);
+  log(`【VISIONOS SABR SESSION】${label}優先沿用解析階段 SABR Context，使用 UMP/SABR 串流下載，itag ${format.itag}；不使用 5 MiB Range。`);
   const response = await fetch(endpoint("/youtube-sabr-download", {
     id: state.videoId,
     itag: format.activeItag || format.itag,
     track,
     apiKey: format.refreshApiKey || "",
-    visitorData: format.refreshVisitorData || ""
+    visitorData: format.refreshVisitorData || "",
+    sessionId: format.sessionId || state.ytMediaSessionId || ""
   }), { cache: "no-store", headers: platformRequestHeaders("youtube") });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));

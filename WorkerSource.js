@@ -1,6 +1,6 @@
 import { SabrStream } from "googlevideo/sabr-stream";
 const VERSION = "1.0";
-const BUILD = "2026.09.30-v12-visionos-sabr";
+const BUILD = "2026.09.30-v13-visionos-sabr-session";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -711,6 +711,7 @@ async function youtube(id, mode = "quick", youtubeCookie = "") {
   const refreshApiKey = configValue(html, "INNERTUBE_API_KEY");
   const refreshVisitorData = stableVisitorData(configValue(html, "VISITOR_DATA"));
   const sessionFormats = formats.map(format => ({ ...format, sessionId: mediaSessionId, refreshApiKey, refreshVisitorData }));
+  if (visionSabrSource) await cacheYoutubeSabrSession(id, mediaSessionId, visionSabrSource.player, steps);
   await cacheYoutubeFormats(id,sessionFormats,steps,mediaSessionId);
   return json({ id, phase: mode, mediaSessionId, source: sources.filter(source => addressableFormats(source.player).length).map(source => source.label).join("+") || selected.label, version: VERSION, code: formats.length ? "OK" : "SIGNATURE_REQUIRED", title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "",
     lengthSeconds: details.lengthSeconds || "", formats: sessionFormats, steps,
@@ -1932,6 +1933,42 @@ function youtubeMediaLatestRequest(id, itag, sourceLabel) {
   return youtubeMediaCacheRequest(id, itag, sourceLabel, "latest");
 }
 
+const YOUTUBE_SABR_SESSION_TTL_SECONDS = 1200;
+function youtubeSabrSessionRequest(id, sessionId) {
+  return new Request(`https://owo.youtube-sabr.invalid/session/${encodeURIComponent(id)}/${encodeURIComponent(sessionId)}`);
+}
+async function cacheYoutubeSabrSession(id, sessionId, player, steps) {
+  if (typeof caches === "undefined" || !caches.default || !id || !sessionId || !player) return false;
+  const config = sabrConfiguration(player);
+  const formats = toSabrFormats(player);
+  if (!config.streamingUrl || !config.ustreamerConfig || !formats.length) return false;
+  const payload = {
+    id,
+    sessionId,
+    source: "VISIONOS",
+    streamingUrl: config.streamingUrl,
+    ustreamerConfig: config.ustreamerConfig,
+    formats,
+    createdAt: Date.now()
+  };
+  const headers = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": `public, max-age=${YOUTUBE_SABR_SESSION_TTL_SECONDS}` };
+  await caches.default.put(youtubeSabrSessionRequest(id, sessionId), new Response(JSON.stringify(payload), { headers }));
+  steps.push(`【VISIONOS SABR SESSION】Session ${String(sessionId).slice(0, 8)} 已保存完整 SABR Context，有效期約 ${YOUTUBE_SABR_SESSION_TTL_SECONDS} 秒。`);
+  return true;
+}
+async function readYoutubeSabrSession(id, sessionId) {
+  if (typeof caches === "undefined" || !caches.default || !id || !sessionId) return null;
+  const response = await caches.default.match(youtubeSabrSessionRequest(id, sessionId));
+  if (!response) return null;
+  try {
+    const value = await response.json();
+    const ageMs = Date.now() - Number(value.createdAt || 0);
+    if (ageMs > YOUTUBE_SABR_SESSION_TTL_SECONDS * 1000) return null;
+    if (!value.streamingUrl || !value.ustreamerConfig || !Array.isArray(value.formats)) return null;
+    return { ...value, ageMs };
+  } catch { return null; }
+}
+
 async function cacheYoutubeFormats(id,formats,steps,sessionId=""){
   if (typeof caches === "undefined" || !caches.default || !id) return;
   let stored = 0;
@@ -2154,44 +2191,56 @@ function toSabrFormats(player) {
     audioTrackId: format.audioTrack?.id || ""
   })).filter(format => format.itag && format.bitrate);
 }
-async function youtubeSabrDownload(request, id, selectedItag, track, apiKey, visitorData, youtubeCookie = "") {
+async function youtubeSabrDownload(request, id, selectedItag, track, apiKey, visitorData, sessionId, youtubeCookie = "") {
   const steps = [];
   if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) return json({ error: "影片 ID 格式錯誤。", code: "INVALID_VIDEO_ID", version: VERSION, steps }, 400);
-  if (!apiKey) return json({ error: "缺少 Player API Key，請重新解析影片。", code: "PLAYER_API_KEY_MISSING", version: VERSION, steps }, 409);
-  const profile = clientProfileByLabel("VISIONOS");
-  let player;
-  try { player = await innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie); }
-  catch (error) { return json({ error: `VISIONOS Player API 失敗：${error.message}`, code: "SABR_PLAYER_FAILED", version: VERSION, steps }, 422); }
-  const config = sabrConfiguration(player);
-  const formats = toSabrFormats(player);
+  let session = await readYoutubeSabrSession(id, sessionId);
+  if (session) {
+    steps.push(`【VISIONOS SABR 下載檢查】SABR Session：命中；Session ${String(sessionId).slice(0,8)}；快取約 ${Math.round(session.ageMs/1000)} 秒。`);
+  } else {
+    steps.push(`【VISIONOS SABR 下載檢查】SABR Session：未命中或已過期；Session ${String(sessionId||"none").slice(0,8)}。`);
+    if (!apiKey) return json({ error: "SABR Session 未命中且缺少 Player API Key，請重新解析影片。", code: "SABR_SESSION_EXPIRED", version: VERSION, steps }, 409);
+    const profile = clientProfileByLabel("VISIONOS");
+    let player;
+    try { player = await innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie); }
+    catch (error) { return json({ error: `VISIONOS Player API 失敗：${error.message}`, code: "SABR_PLAYER_FAILED", version: VERSION, steps }, 422); }
+    const config = sabrConfiguration(player);
+    const formats = toSabrFormats(player);
+    steps.push(`【VISIONOS SABR 下載檢查】Player 狀態：${playState(player).status}；原始格式：${rawFormats(player).length} 個；可用 itag：${formats.map(f=>f.itag).join("、")||"無"}。`);
+    steps.push(`【VISIONOS SABR 下載檢查】serverAbrStreamingUrl：${config.streamingUrl?"存在":"缺少"}；videoPlaybackUstreamerConfig：${config.ustreamerConfig?"存在":"缺少"}。`);
+    if (!config.streamingUrl) return json({ error: "VISIONOS Player Response 缺少 serverAbrStreamingUrl。", code: "SABR_STREAMING_URL_MISSING", version: VERSION, steps }, 409);
+    if (!config.ustreamerConfig) return json({ error: "VISIONOS Player Response 缺少 videoPlaybackUstreamerConfig。", code: "SABR_USTREAMER_CONFIG_MISSING", version: VERSION, steps }, 409);
+    session = { id, sessionId, source:"VISIONOS", streamingUrl:config.streamingUrl, ustreamerConfig:config.ustreamerConfig, formats, createdAt:Date.now(), ageMs:0 };
+    if (sessionId) await cacheYoutubeSabrSession(id, sessionId, player, steps);
+  }
+  const formats = session.formats;
   const wanted = formats.find(format => String(format.itag) === String(selectedItag));
-  if (!wanted || !config.streamingUrl || !config.ustreamerConfig) return json({ error: `VISIONOS SABR 本次未取得 itag ${selectedItag} 或完整串流設定。`, code: "SABR_FORMAT_MISSING", version: VERSION, steps }, 409);
+  const videos = formats.filter(f => String(f.mimeType || "").startsWith("video/"));
+  const audios = formats.filter(f => String(f.mimeType || "").startsWith("audio/") || f.audioQuality);
+  steps.push(`【VISIONOS SABR 下載檢查】要求軌道：${track}；要求 itag：${selectedItag}；可用視訊 itag：${videos.map(f=>f.itag).join("、")||"無"}；可用音訊 itag：${audios.map(f=>f.itag).join("、")||"無"}。`);
+  steps.push("【VISIONOS SABR 下載檢查】serverAbrStreamingUrl：存在；videoPlaybackUstreamerConfig：存在。 ");
+  if (!wanted) return json({ error: `SABR Session 中沒有原選擇的 itag ${selectedItag}。`, code: "SABR_SELECTED_ITAG_MISSING", version: VERSION, steps }, 409);
   const isVideo = String(wanted.mimeType || "").startsWith("video/");
-  const video = isVideo ? wanted : formats.filter(f => String(f.mimeType || "").startsWith("video/")).sort((a,b)=>b.bitrate-a.bitrate)[0];
-  const audio = !isVideo ? wanted : formats.filter(f => String(f.mimeType || "").startsWith("audio/") || f.audioQuality).sort((a,b)=>b.bitrate-a.bitrate)[0];
-  if (!video || !audio) return json({ error: "VISIONOS SABR 缺少成對的視訊或音訊格式。", code: "SABR_PAIR_MISSING", version: VERSION, steps }, 409);
+  const video = isVideo ? wanted : videos.sort((a,b)=>b.bitrate-a.bitrate)[0];
+  const audio = !isVideo ? wanted : audios.sort((a,b)=>b.bitrate-a.bitrate)[0];
+  if (!video || !audio) return json({ error: "SABR Session 缺少成對的視訊或音訊格式。", code: "SABR_PAIR_MISSING", version: VERSION, steps }, 409);
+  const profile = clientProfileByLabel("VISIONOS");
   const sabr = new SabrStream({
-    fetch: (input, init = {}) => {
-      const headers = new Headers(init.headers || {});
-      headers.set("User-Agent", youtubeMediaUserAgent("VISIONOS"));
-      headers.set("Accept-Language", "zh-TW,zh;q=0.9,en;q=0.8");
-      return fetch(input, { ...init, headers });
-    },
-    serverAbrStreamingUrl: config.streamingUrl,
-    videoPlaybackUstreamerConfig: config.ustreamerConfig,
+    fetch: (input, init = {}) => { const headers=new Headers(init.headers||{}); headers.set("User-Agent",youtubeMediaUserAgent("VISIONOS")); headers.set("Accept-Language","zh-TW,zh;q=0.9,en;q=0.8"); return fetch(input,{...init,headers}); },
+    serverAbrStreamingUrl: session.streamingUrl,
+    videoPlaybackUstreamerConfig: session.ustreamerConfig,
     durationMs: Number(wanted.approxDurationMs || video.approxDurationMs || audio.approxDurationMs || 0),
     formats,
-    clientInfo: { clientName: 5, clientVersion: profile.clientVersion, osName: profile.osName, osVersion: profile.osVersion, deviceMake: profile.deviceMake, deviceModel: profile.deviceModel, acceptLanguage: "zh-TW", acceptRegion: "TW" }
+    clientInfo: { clientName:5, clientVersion:profile.clientVersion, osName:profile.osName, osVersion:profile.osVersion, deviceMake:profile.deviceMake, deviceModel:profile.deviceModel, acceptLanguage:"zh-TW", acceptRegion:"TW" }
   });
   let streams;
-  try { streams = await sabr.start({ videoFormat: video.itag, audioFormat: audio.itag, maxRetries: 5, stallDetectionMs: 30000 }); }
-  catch (error) { return json({ error: `VISIONOS SABR 啟動失敗：${error.message}`, code: "SABR_START_FAILED", version: VERSION, steps }, 422); }
+  try { streams = await sabr.start({ videoFormat:video.itag, audioFormat:audio.itag, maxRetries:5, stallDetectionMs:30000 }); }
+  catch (error) { return json({ error:`VISIONOS SABR 啟動失敗：${error.message}`, code:"SABR_START_FAILED", version:VERSION, steps },422); }
   const selected = track === "audio" ? streams.audioStream : streams.videoStream;
   const discarded = track === "audio" ? streams.videoStream : streams.audioStream;
-  discarded.pipeTo(new WritableStream({ write() {} })).catch(() => {});
-  const headers = { ...cors(), "Content-Type": isVideo && track !== "audio" ? "video/mp4" : "audio/mp4", "Cache-Control": "no-store", "X-OwO-Media-Mode": "visionos-sabr", "X-OwO-Source": "VISIONOS", "X-OwO-Itag": String(selectedItag), "X-OwO-Version": VERSION };
-  steps.push(`【VISIONOS SABR】啟動成功：目標 ${track} itag ${selectedItag}；配對視訊 ${video.itag}；音訊 ${audio.itag}。`);
-  return new Response(selected, { status: 200, headers });
+  discarded.pipeTo(new WritableStream({write(){}})).catch(()=>{});
+  const headers={...cors(),"Content-Type":track==="audio"?"audio/mp4":"video/mp4","Cache-Control":"no-store","X-OwO-Media-Mode":"visionos-sabr-session","X-OwO-Source":"VISIONOS","X-OwO-Itag":String(selectedItag),"X-OwO-Sabr-Session":String(sessionId||""),"X-OwO-Version":VERSION};
+  return new Response(selected,{status:200,headers});
 }
 
 async function immediateYoutubeMedia(request,{id,itag,source,apiKey,visitorData,start,end,wanted,total,muxed=false},youtubeCookie=""){
@@ -2368,7 +2417,7 @@ export default {
       if (url.pathname === "/instagram" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "instagram", request, env);
       if (url.pathname === "/threads" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "threads", request, env);
       if (url.pathname === "/social-media" && ["GET", "HEAD"].includes(request.method)) return await metaSocialMedia(request, url.searchParams.get("url"), url.searchParams.get("platform") === "threads" ? "threads" : "instagram", env);
-      if (url.pathname === "/youtube-sabr-download" && request.method === "GET") return await youtubeSabrDownload(request,url.searchParams.get("id")||"",url.searchParams.get("itag")||"",url.searchParams.get("track")||"video",url.searchParams.get("apiKey")||"",url.searchParams.get("visitorData")||"",requestYoutubeCookie(request,env));
+      if (url.pathname === "/youtube-sabr-download" && request.method === "GET") return await youtubeSabrDownload(request,url.searchParams.get("id")||"",url.searchParams.get("itag")||"",url.searchParams.get("track")||"video",url.searchParams.get("apiKey")||"",url.searchParams.get("visitorData")||"",url.searchParams.get("sessionId")||"",requestYoutubeCookie(request,env));
       if (url.pathname === "/youtube-muxed-download" && request.method === "GET") return await immediateYoutubeMedia(request,{id:url.searchParams.get("id")||"",itag:url.searchParams.get("itag")||"18",apiKey:url.searchParams.get("apiKey")||"",visitorData:url.searchParams.get("visitorData")||"",muxed:true},requestYoutubeCookie(request,env));
       if (url.pathname === "/youtube-hq-segment" && request.method === "GET") return await immediateYoutubeMedia(request,{id:url.searchParams.get("id")||"",itag:url.searchParams.get("itag")||"",source:url.searchParams.get("source")||"ANDROID_VR",apiKey:url.searchParams.get("apiKey")||"",visitorData:url.searchParams.get("visitorData")||"",start:Number(url.searchParams.get("start")||0),end:Number(url.searchParams.get("end")||0),total:Number(url.searchParams.get("total")||0),wanted:{kind:url.searchParams.get("kind")||"",height:Number(url.searchParams.get("height")||0),fps:Number(url.searchParams.get("fps")||0),codec:url.searchParams.get("codec")||"",container:url.searchParams.get("container")||""}},requestYoutubeCookie(request,env));
       if (url.pathname === "/media" && ["GET", "HEAD"].includes(request.method)) {

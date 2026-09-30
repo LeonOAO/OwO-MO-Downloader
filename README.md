@@ -92,3 +92,10 @@ OwO-MO-Downloader-main/
 npm install
 npm run build:worker
 ```
+
+
+### VISIONOS SABR Session 延續
+- 解析階段取得完整 VISIONOS SABR Context 後，以 Media Session ID 保存 `serverAbrStreamingUrl`、`videoPlaybackUstreamerConfig` 與原始格式清單。
+- 視訊與音訊下載優先命中同一份 SABR Context；Session 未命中或過期才重新呼叫 VISIONOS Player API。
+- 下載檢查日誌分別顯示 Session、Player 狀態、可用 itag、Streaming URL 與 Ustreamer Config。
+- 錯誤碼拆分為 `SABR_SESSION_EXPIRED`、`SABR_SELECTED_ITAG_MISSING`、`SABR_STREAMING_URL_MISSING`、`SABR_USTREAMER_CONFIG_MISSING` 與 `SABR_PAIR_MISSING`。
