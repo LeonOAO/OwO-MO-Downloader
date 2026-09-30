@@ -1,6 +1,6 @@
 import { SabrStream } from "googlevideo/sabr-stream";
 const VERSION = "1.0";
-const BUILD = "2026.09.30-v14-ffmpeg-esm-unified-log";
+const BUILD = "2026.09.30-v15-sabr-complete-track";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -15,7 +15,7 @@ function cors(origin = "*") {
     "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
     "Access-Control-Allow-Headers": "Range,Content-Type,Cache-Control,X-FB-Session,X-IG-Session,X-TH-Session,X-YT-Session",
     "Access-Control-Max-Age": "86400",
-    "Access-Control-Expose-Headers": "Content-Length,Content-Range,Accept-Ranges,Content-Type,Content-Disposition,X-OwO-Media-Total,X-OwO-Media-Mode,X-OwO-Media-Source,X-OwO-Version,X-OwO-Track-Restart,X-OwO-Selected-Itag,X-OwO-Segment-Count",
+    "Access-Control-Expose-Headers": "Content-Length,Content-Range,Accept-Ranges,Content-Type,Content-Disposition,X-OwO-Media-Total,X-OwO-Media-Mode,X-OwO-Media-Source,X-OwO-Version,X-OwO-Track-Restart,X-OwO-Selected-Itag,X-OwO-Segment-Count,X-OwO-Expected-Bytes,X-OwO-Expected-Duration-Ms,X-OwO-Sabr-Track-Mode",
     "Vary": "Origin"
   };
 }
@@ -2233,13 +2233,36 @@ async function youtubeSabrDownload(request, id, selectedItag, track, apiKey, vis
     formats,
     clientInfo: { clientName:5, clientVersion:profile.clientVersion, osName:profile.osName, osVersion:profile.osVersion, deviceMake:profile.deviceMake, deviceModel:profile.deviceModel, acceptLanguage:"zh-TW", acceptRegion:"TW" }
   });
+  const expectedBytes = Number(wanted.contentLength || 0);
+  const expectedDurationMs = Number(wanted.approxDurationMs || video.approxDurationMs || audio.approxDurationMs || 0);
+  const enabledTrackTypes = track === "audio" ? 1 : 2;
+  steps.push(`【VISIONOS SABR 完整下載】${track === "audio" ? "音訊" : "視訊"}採單軌模式；預期大小：${expectedBytes || "未知"} bytes；預期時間：${expectedDurationMs || "未知"} ms。`);
   let streams;
-  try { streams = await sabr.start({ videoFormat:video.itag, audioFormat:audio.itag, maxRetries:5, stallDetectionMs:30000 }); }
-  catch (error) { return json({ error:`VISIONOS SABR 啟動失敗：${error.message}`, code:"SABR_START_FAILED", version:VERSION, steps },422); }
+  try {
+    streams = await sabr.start({
+      videoFormat: video.itag,
+      audioFormat: audio.itag,
+      enabledTrackTypes,
+      maxRetries: 8,
+      stallDetectionMs: 30000
+    });
+  } catch (error) {
+    return json({ error:`VISIONOS SABR 啟動失敗：${error.message}`, code:"SABR_START_FAILED", version:VERSION, steps },422);
+  }
   const selected = track === "audio" ? streams.audioStream : streams.videoStream;
-  const discarded = track === "audio" ? streams.videoStream : streams.audioStream;
-  discarded.pipeTo(new WritableStream({write(){}})).catch(()=>{});
-  const headers={...cors(),"Content-Type":track==="audio"?"audio/mp4":"video/mp4","Cache-Control":"no-store","X-OwO-Media-Mode":"visionos-sabr-session","X-OwO-Source":"VISIONOS","X-OwO-Itag":String(selectedItag),"X-OwO-Sabr-Session":String(sessionId||""),"X-OwO-Version":VERSION};
+  const headers={
+    ...cors(),
+    "Content-Type":track==="audio"?"audio/mp4":"video/mp4",
+    "Cache-Control":"no-store",
+    "X-OwO-Media-Mode":"visionos-sabr-complete-track",
+    "X-OwO-Media-Source":"VISIONOS",
+    "X-OwO-Itag":String(selectedItag),
+    "X-OwO-Sabr-Session":String(sessionId||""),
+    "X-OwO-Expected-Bytes":String(expectedBytes || 0),
+    "X-OwO-Expected-Duration-Ms":String(expectedDurationMs || 0),
+    "X-OwO-Sabr-Track-Mode":track === "audio" ? "audio-only" : "video-only",
+    "X-OwO-Version":VERSION
+  };
   return new Response(selected,{status:200,headers});
 }
 

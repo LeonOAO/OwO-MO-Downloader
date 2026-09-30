@@ -1,0 +1,9 @@
+OwO MO Downloader v1.5 SABR 完整軌道修正
+
+1. VISIONOS SABR 改為視訊單軌／音訊單軌下載。
+2. 不再同時抓兩軌後丟棄其中一軌。
+3. Worker 回傳預期 bytes、duration 與 track mode。
+4. 前端以預期 bytes 顯示真實下載比例。
+5. SABR 串流若只取得前段資料，會回報覆蓋率並停止 FFmpeg。
+6. 只有完整大小驗證通過後才進入 FFmpeg 合併。
+7. WorkerSource.js 與部署用 worker.js 已同步更新。

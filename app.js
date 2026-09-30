@@ -574,12 +574,31 @@ async function fetchYoutubeSabr(format, label, start, end) {
     if (Array.isArray(body.steps)) body.steps.forEach(log);
     throw new Error(body.error || `VISIONOS SABR 下載失敗：HTTP ${response.status}。`);
   }
+  const expectedBytes = Number(response.headers.get("X-OwO-Expected-Bytes") || format.contentLength || 0);
+  const expectedDurationMs = Number(response.headers.get("X-OwO-Expected-Duration-Ms") || format.approxDurationMs || 0);
+  const trackMode = response.headers.get("X-OwO-Sabr-Track-Mode") || track;
+  log(`【VISIONOS SABR 完整下載】${label}模式：${trackMode}；預期大小：${expectedBytes > 0 ? humanBytes(expectedBytes) : "未知"}；預期時間：${expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(2)} 秒` : "未知"}。`);
   const reader = response.body?.getReader();
-  if (!reader) return new Uint8Array(await response.arrayBuffer());
+  if (!reader) throw new Error(`VISIONOS SABR ${label}沒有可讀取的串流。`);
   const chunks=[]; let received=0;
-  while(true){const {done,value}=await reader.read();if(done)break;if(!value?.byteLength)continue;chunks.push(value);received+=value.byteLength;setProgress(start,`正在以 VISIONOS SABR 下載${label}：${humanBytes(received)}`);}
+  while(true){
+    const {done,value}=await reader.read();
+    if(done)break;
+    if(!value?.byteLength)continue;
+    chunks.push(value);
+    received+=value.byteLength;
+    if(received>MAX_BROWSER_WORK_BYTES){await reader.cancel();throw new Error(`${label}超過瀏覽器安全處理上限。`);}
+    const ratio=expectedBytes>0?Math.min(1,received/expectedBytes):0;
+    setProgress(start+(end-start)*ratio,`正在以 VISIONOS SABR 下載${label}：${humanBytes(received)}${expectedBytes>0?` / ${humanBytes(expectedBytes)}`:""}`);
+  }
+  if(expectedBytes>0&&received<expectedBytes){
+    const coverage=received/expectedBytes*100;
+    log(`【VISIONOS SABR 完整性失敗】${label}只收到 ${humanBytes(received)} / ${humanBytes(expectedBytes)}，覆蓋率 ${coverage.toFixed(2)}%。`);
+    throw new Error(`VISIONOS SABR ${label}不完整：只下載 ${coverage.toFixed(2)}%，已停止 FFmpeg 合併。`);
+  }
   const output=new Uint8Array(received);let offset=0;for(const chunk of chunks){output.set(chunk,offset);offset+=chunk.byteLength;}
-  log(`【VISIONOS SABR】${label}完成：${humanBytes(received)}。`);setProgress(end,`${label}下載完成。`);return output;
+  log(`【VISIONOS SABR 完整性】${label}實際：${humanBytes(received)}；預期：${expectedBytes>0?humanBytes(expectedBytes):"未知"}；驗證通過。`);
+  setProgress(end,`${label}完整下載完成。`);return output;
 }
 async function fetchYoutubeMuxed(format,label,start,end){
   const total=Number(format.contentLength||0);
