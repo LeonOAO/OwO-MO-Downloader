@@ -75,3 +75,11 @@ OwO-MO-Downloader-main/
 - 每段嚴格比對 itag、類型、解析度、FPS、容器、Codec 與 contentLength。
 - 暫時未取得格式時，前端保留已完成區段並依設定每 5 秒重試。
 - 360p 影音合一同工作階段下載完整保留。
+
+
+### 高畫質 Client 搜尋順位
+- ANDROID 仍先保留 360p 影音合一格式。
+- 高畫質搜尋以 VISIONOS 為第一順位，接著依序測試其他候選 Client。
+- ANDROID_VR 移至高畫質候選清單最後，僅在前面所有 Client 都沒有取得並通過分離影音實載驗證時才執行。
+- 任一前順位 Client 的分離視訊與音訊通過 256 KiB 實載驗證後，立即停止後續 Client 輪詢。
+- 高畫質下載沿用格式實際來源，不會把 VISIONOS 解析結果改用 ANDROID_VR 下載。

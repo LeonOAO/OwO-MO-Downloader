@@ -1,5 +1,5 @@
 const VERSION = "1.0";
-const BUILD = "2026.09.30-v11-hq-same-invocation";
+const BUILD = "2026.09.30-v11-visionos-first-android-vr-last";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -148,11 +148,22 @@ const PLAYER_CLIENTS = [
 ];
 
 const ALL_MODE_CLIENT_ORDER = [
-  "ANDROID", "ANDROID_VR", "WEB_EMBEDDED", "IOS", "WEB_KIDS",
-  "WEB_SAFARI", "WEB", "MWEB", "TV",
-  "ANDROID_CREATOR", "ANDROID_MUSIC", "IOS_CREATOR", "IOS_MUSIC",
-  "VISIONOS", "WEB_REMIX", "WEB_CREATOR", "TV_EMBEDDED",
-  "TV_SIMPLY", "ANDROID_TESTSUITE"
+  "ANDROID",
+  "VISIONOS", "IOS", "IOS_CREATOR", "IOS_MUSIC",
+  "WEB_EMBEDDED", "WEB_KIDS", "WEB_SAFARI", "WEB", "MWEB",
+  "TV", "TV_EMBEDDED", "TV_SIMPLY",
+  "ANDROID_CREATOR", "ANDROID_MUSIC", "ANDROID_TESTSUITE",
+  "WEB_REMIX", "WEB_CREATOR",
+  "ANDROID_VR"
+];
+
+const HQ_MODE_CLIENT_ORDER = [
+  "VISIONOS", "IOS", "IOS_CREATOR", "IOS_MUSIC",
+  "WEB_EMBEDDED", "WEB_KIDS", "WEB_SAFARI", "WEB", "MWEB",
+  "TV", "TV_EMBEDDED", "TV_SIMPLY",
+  "ANDROID_CREATOR", "ANDROID_MUSIC", "ANDROID_TESTSUITE",
+  "WEB_REMIX", "WEB_CREATOR",
+  "ANDROID_VR"
 ];
 
 const CLIENT_REQUEST_INTERVAL_MS = 1000;
@@ -162,9 +173,15 @@ function waitFor(milliseconds) {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
-function orderedAllModeProfiles() {
+function profilesByOrder(order) {
   const byLabel = new Map(PLAYER_CLIENTS.map(profile => [profile.label, profile]));
-  return ALL_MODE_CLIENT_ORDER.map(label => byLabel.get(label)).filter(Boolean);
+  return order.map(label => byLabel.get(label)).filter(Boolean);
+}
+function orderedAllModeProfiles() {
+  return profilesByOrder(ALL_MODE_CLIENT_ORDER);
+}
+function orderedHqModeProfiles() {
+  return profilesByOrder(HQ_MODE_CLIENT_ORDER);
 }
 
 function requestYoutubeCookie(request, env) {
@@ -254,15 +271,18 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
   steps.push(mode === "quick"
     ? "【快速解析】先使用 ANDROID 尋找可直接下載的影音合一格式。"
     : mode === "all"
-      ? "【單一工作階段】先使用 ANDROID 保留基本格式，再沿用相同上下文搜尋高畫質 Client。"
+      ? "【單一工作階段】先使用 ANDROID 保留基本格式，再以 VISIONOS 為第一順位搜尋高畫質，ANDROID_VR 僅作最後備援。"
       : "【高畫質搜尋】保留既有結果，繼續蒐集分離視訊與分離音訊格式。");
   let authCount = state.status === "LOGIN_REQUIRED" ? 1 : 0;
   const challengedPriorityClients = new Set();
+  if (mode !== "quick") {
+    steps.push(`【高畫質搜尋順序】${HQ_MODE_CLIENT_ORDER.join(" → ")}。`);
+  }
   const profiles = mode === "quick"
     ? PLAYER_CLIENTS.filter(profile => profile.label === "ANDROID")
     : mode === "all"
       ? orderedAllModeProfiles()
-      : PLAYER_CLIENTS.filter(profile => profile.label !== "ANDROID");
+      : orderedHqModeProfiles();
 
   for (let profileIndex = 0; profileIndex < profiles.length; profileIndex++) {
     const profile = profiles[profileIndex];
@@ -314,8 +334,8 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
       if (mode === "all" && state.status === "LOGIN_REQUIRED") {
         steps.push(`【登入限制】${profile.label} 要求登入；mode=all 繼續下一個匿名 Client。`);
       }
-      if (mode === "all" && profile.label === "ANDROID_VR" && state.status === "LOGIN_REQUIRED" && !addressCount) {
-        steps.push("【登入限制續跑】ANDROID_VR 未取得格式，繼續 WEB_EMBEDDED、IOS 與 TV 等備援 Client，不在此提前熔斷。");
+      if (mode === "all" && state.status === "LOGIN_REQUIRED" && !addressCount) {
+        steps.push(`【登入限制續跑】${profile.label} 未取得格式，繼續下一個高畫質候選 Client。`);
       }
     } catch (error) {
       steps.push(`【${profile.label}】請求失敗：${error.message}。`);
