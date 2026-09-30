@@ -4,7 +4,8 @@
   "description": "此版本包含完整前端、Cloudflare Worker、YouTube Media Session 修正，以及同源 FFmpeg WebAssembly 資源。",
   "main": "app.js",
   "scripts": {
-    "build:worker": "esbuild WorkerSource.js --bundle --format=esm --platform=browser --target=es2022 --minify --outfile=worker.js"
+    "build:worker": "npm run patch:googlevideo && esbuild WorkerSource.js --bundle --format=esm --platform=browser --target=es2022 --minify --outfile=worker.js",
+    "patch:googlevideo": "node PatchGoogleVideo.js"
   },
   "keywords": [],
   "author": "",

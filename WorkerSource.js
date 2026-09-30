@@ -1,6 +1,6 @@
 import { SabrStream } from "googlevideo/sabr-stream";
 const VERSION = "1.0";
-const BUILD = "2026.09.30-v15-sabr-complete-track";
+const BUILD = "2026.09.30-v16-sabr-realtime-pair";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -15,7 +15,7 @@ function cors(origin = "*") {
     "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
     "Access-Control-Allow-Headers": "Range,Content-Type,Cache-Control,X-FB-Session,X-IG-Session,X-TH-Session,X-YT-Session",
     "Access-Control-Max-Age": "86400",
-    "Access-Control-Expose-Headers": "Content-Length,Content-Range,Accept-Ranges,Content-Type,Content-Disposition,X-OwO-Media-Total,X-OwO-Media-Mode,X-OwO-Media-Source,X-OwO-Version,X-OwO-Track-Restart,X-OwO-Selected-Itag,X-OwO-Segment-Count,X-OwO-Expected-Bytes,X-OwO-Expected-Duration-Ms,X-OwO-Sabr-Track-Mode",
+    "Access-Control-Expose-Headers": "Content-Length,Content-Range,Accept-Ranges,Content-Type,Content-Disposition,X-OwO-Media-Total,X-OwO-Media-Mode,X-OwO-Media-Source,X-OwO-Version,X-OwO-Track-Restart,X-OwO-Selected-Itag,X-OwO-Segment-Count,X-OwO-Expected-Bytes,X-OwO-Expected-Duration-Ms,X-OwO-Sabr-Track-Mode,X-OwO-Expected-Video-Bytes,X-OwO-Expected-Audio-Bytes,X-OwO-Expected-Duration-Ms",
     "Vary": "Origin"
   };
 }
@@ -2266,6 +2266,51 @@ async function youtubeSabrDownload(request, id, selectedItag, track, apiKey, vis
   return new Response(selected,{status:200,headers});
 }
 
+function sabrPairFrame(track, chunk) {
+  const payload = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+  const frame = new Uint8Array(5 + payload.byteLength);
+  frame[0] = track === "audio" ? 2 : 1;
+  new DataView(frame.buffer).setUint32(1, payload.byteLength, false);
+  frame.set(payload, 5);
+  return frame;
+}
+async function youtubeSabrPairDownload(request, id, videoItag, audioItag, apiKey, visitorData, sessionId, youtubeCookie = "") {
+  const steps=[];
+  if(!/^[A-Za-z0-9_-]{11}$/.test(id||"")) return json({error:"影片 ID 格式錯誤。",code:"INVALID_VIDEO_ID",version:VERSION,steps},400);
+  let session=await readYoutubeSabrSession(id,sessionId);
+  if(!session){
+    if(!apiKey)return json({error:"SABR Session 已過期，請重新解析影片。",code:"SABR_SESSION_EXPIRED",version:VERSION,steps},409);
+    let player;
+    try{player=await innertubePlayer(apiKey,visitorData,id,clientProfileByLabel("VISIONOS"),youtubeCookie);}catch(error){return json({error:`VISIONOS Player API 失敗：${error.message}`,code:"SABR_PLAYER_FAILED",version:VERSION,steps},422);}
+    const config=sabrConfiguration(player),formats=toSabrFormats(player);
+    if(!config.streamingUrl)return json({error:"VISIONOS Player Response 缺少 serverAbrStreamingUrl。",code:"SABR_STREAMING_URL_MISSING",version:VERSION,steps},409);
+    if(!config.ustreamerConfig)return json({error:"VISIONOS Player Response 缺少 videoPlaybackUstreamerConfig。",code:"SABR_USTREAMER_CONFIG_MISSING",version:VERSION,steps},409);
+    session={streamingUrl:config.streamingUrl,ustreamerConfig:config.ustreamerConfig,formats,createdAt:Date.now(),ageMs:0};
+    if(sessionId)await cacheYoutubeSabrSession(id,sessionId,player,steps);
+  }
+  const video=session.formats.find(f=>String(f.itag)===String(videoItag)&&String(f.mimeType||"").startsWith("video/"));
+  const audio=session.formats.find(f=>String(f.itag)===String(audioItag)&&(String(f.mimeType||"").startsWith("audio/")||f.audioQuality));
+  if(!video||!audio)return json({error:"SABR Session 缺少所選視訊或音訊軌。",code:"SABR_PAIR_MISSING",version:VERSION,steps},409);
+  const profile=clientProfileByLabel("VISIONOS");
+  const sabr=new SabrStream({
+    fetch:(input,init={})=>{const headers=new Headers(init.headers||{});headers.set("User-Agent",youtubeMediaUserAgent("VISIONOS"));headers.set("Accept-Language","zh-TW,zh;q=0.9,en;q=0.8");return fetch(input,{...init,headers});},
+    serverAbrStreamingUrl:session.streamingUrl,videoPlaybackUstreamerConfig:session.ustreamerConfig,
+    durationMs:Number(video.approxDurationMs||audio.approxDurationMs||0),formats:session.formats,
+    clientInfo:{clientName:5,clientVersion:profile.clientVersion,osName:profile.osName,osVersion:profile.osVersion,deviceMake:profile.deviceMake,deviceModel:profile.deviceModel,acceptLanguage:"zh-TW",acceptRegion:"TW"}
+  });
+  let streams;
+  try{streams=await sabr.start({videoFormat:video.itag,audioFormat:audio.itag,enabledTrackTypes:0,maxRetries:12,stallDetectionMs:45000,maxReadaheadMs:45000});}
+  catch(error){return json({error:`VISIONOS SABR 雙軌啟動失敗：${error.message}`,code:"SABR_START_FAILED",version:VERSION,steps},422);}
+  const paired=new ReadableStream({
+    start(controller){
+      let open=2,failed=false;
+      const pump=async(stream,track)=>{const reader=stream.getReader();try{while(true){const {done,value}=await reader.read();if(done)break;if(value?.byteLength)controller.enqueue(sabrPairFrame(track,value));}}catch(error){if(!failed){failed=true;controller.error(error);}}finally{open--;if(open===0&&!failed)controller.close();}};
+      pump(streams.videoStream,"video");pump(streams.audioStream,"audio");
+    },
+    cancel(){try{sabr.abort();}catch{}}
+  });
+  return new Response(paired,{status:200,headers:{...cors(),"Content-Type":"application/x-owo-sabr-pair","Cache-Control":"no-store","X-OwO-Media-Mode":"visionos-sabr-realtime-pair","X-OwO-Expected-Video-Bytes":String(video.contentLength||0),"X-OwO-Expected-Audio-Bytes":String(audio.contentLength||0),"X-OwO-Expected-Duration-Ms":String(video.approxDurationMs||audio.approxDurationMs||0),"X-OwO-Version":VERSION}});
+}
 async function immediateYoutubeMedia(request,{id,itag,source,apiKey,visitorData,start,end,wanted,total,muxed=false},youtubeCookie=""){
   const steps=[];
   if(!/^[A-Za-z0-9_-]{11}$/.test(id||""))return json({error:"影片 ID 格式錯誤。",code:"INVALID_VIDEO_ID",version:VERSION,steps},400);
@@ -2440,6 +2485,7 @@ export default {
       if (url.pathname === "/instagram" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "instagram", request, env);
       if (url.pathname === "/threads" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "threads", request, env);
       if (url.pathname === "/social-media" && ["GET", "HEAD"].includes(request.method)) return await metaSocialMedia(request, url.searchParams.get("url"), url.searchParams.get("platform") === "threads" ? "threads" : "instagram", env);
+      if (url.pathname === "/youtube-sabr-pair-download" && request.method === "GET") return await youtubeSabrPairDownload(request,url.searchParams.get("id")||"",url.searchParams.get("videoItag")||"",url.searchParams.get("audioItag")||"",url.searchParams.get("apiKey")||"",url.searchParams.get("visitorData")||"",url.searchParams.get("sessionId")||"",requestYoutubeCookie(request,env));
       if (url.pathname === "/youtube-sabr-download" && request.method === "GET") return await youtubeSabrDownload(request,url.searchParams.get("id")||"",url.searchParams.get("itag")||"",url.searchParams.get("track")||"video",url.searchParams.get("apiKey")||"",url.searchParams.get("visitorData")||"",url.searchParams.get("sessionId")||"",requestYoutubeCookie(request,env));
       if (url.pathname === "/youtube-muxed-download" && request.method === "GET") return await immediateYoutubeMedia(request,{id:url.searchParams.get("id")||"",itag:url.searchParams.get("itag")||"18",apiKey:url.searchParams.get("apiKey")||"",visitorData:url.searchParams.get("visitorData")||"",muxed:true},requestYoutubeCookie(request,env));
       if (url.pathname === "/youtube-hq-segment" && request.method === "GET") return await immediateYoutubeMedia(request,{id:url.searchParams.get("id")||"",itag:url.searchParams.get("itag")||"",source:url.searchParams.get("source")||"ANDROID_VR",apiKey:url.searchParams.get("apiKey")||"",visitorData:url.searchParams.get("visitorData")||"",start:Number(url.searchParams.get("start")||0),end:Number(url.searchParams.get("end")||0),total:Number(url.searchParams.get("total")||0),wanted:{kind:url.searchParams.get("kind")||"",height:Number(url.searchParams.get("height")||0),fps:Number(url.searchParams.get("fps")||0),codec:url.searchParams.get("codec")||"",container:url.searchParams.get("container")||""}},requestYoutubeCookie(request,env));

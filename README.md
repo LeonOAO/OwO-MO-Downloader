@@ -115,3 +115,11 @@ npm run build:worker
 - 前端依預期 contentLength 顯示真實進度，串流結束後執行完整大小驗證。
 - 下載資料未達預期大小時，明確標示覆蓋率並停止 FFmpeg 合併，不再把第一批 SABR 片段誤記為完整影片。
 - SabrStream 分段重試上限提高為 8 次，停滯檢測維持 30 秒。
+
+
+##### v1.6 VISIONOS SABR 即時播放時鐘與雙軌工作
+- 視訊與音訊改由單一 SABR 工作同時接收，以自訂框架串流回前端並分離保存。
+- SABR Player Time 依實際經過時間推進，不再直接等同已下載媒體時間。
+- 當下載內容領先播放時鐘超過 45 秒時暫停請求，等待播放時間前進後續跑。
+- 同一個 SabrStream 保留 request number、SABR contexts、buffered ranges 與已下載媒體區段，避免重新從零開始。
+- 視訊與音訊完整性門檻均為 99.5%，兩軌皆通過才進入 FFmpeg。

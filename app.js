@@ -600,6 +600,24 @@ async function fetchYoutubeSabr(format, label, start, end) {
   log(`【VISIONOS SABR 完整性】${label}實際：${humanBytes(received)}；預期：${expectedBytes>0?humanBytes(expectedBytes):"未知"}；驗證通過。`);
   setProgress(end,`${label}完整下載完成。`);return output;
 }
+async function fetchYoutubeSabrPair(video, audio, start = 3, end = 58) {
+  log(`【VISIONOS SABR 即時雙軌】單一 SABR 工作同時接收視訊 itag ${video.itag} 與音訊 itag ${audio.itag}；播放時鐘依實際經過時間推進。`);
+  const response=await fetch(endpoint("/youtube-sabr-pair-download",{id:state.videoId,videoItag:video.activeItag||video.itag,audioItag:audio.activeItag||audio.itag,apiKey:video.refreshApiKey||audio.refreshApiKey||"",visitorData:video.refreshVisitorData||audio.refreshVisitorData||"",sessionId:video.sessionId||audio.sessionId||state.ytMediaSessionId||""}),{cache:"no-store",headers:platformRequestHeaders("youtube")});
+  if(!response.ok){const body=await response.json().catch(()=>({}));if(Array.isArray(body.steps))body.steps.forEach(log);throw new Error(body.error||`VISIONOS SABR 雙軌下載失敗：HTTP ${response.status}。`);}
+  const expectedVideo=Number(response.headers.get("X-OwO-Expected-Video-Bytes")||video.contentLength||0);
+  const expectedAudio=Number(response.headers.get("X-OwO-Expected-Audio-Bytes")||audio.contentLength||0);
+  const duration=Number(response.headers.get("X-OwO-Expected-Duration-Ms")||video.approxDurationMs||audio.approxDurationMs||0);
+  log(`【VISIONOS SABR 即時雙軌】預期視訊：${expectedVideo?humanBytes(expectedVideo):"未知"}；預期音訊：${expectedAudio?humanBytes(expectedAudio):"未知"}；播放時間：${duration?(duration/1000).toFixed(2)+" 秒":"未知"}。`);
+  const reader=response.body?.getReader();if(!reader)throw new Error("VISIONOS SABR 雙軌回應沒有可讀取串流。");
+  const videoChunks=[],audioChunks=[];let pending=new Uint8Array(0),videoBytes=0,audioBytes=0;
+  while(true){const {done,value}=await reader.read();if(done)break;if(!value?.byteLength)continue;const merged=new Uint8Array(pending.byteLength+value.byteLength);merged.set(pending);merged.set(value,pending.byteLength);let offset=0;while(merged.byteLength-offset>=5){const type=merged[offset],length=new DataView(merged.buffer,merged.byteOffset+offset+1,4).getUint32(0,false);if(merged.byteLength-offset-5<length)break;const chunk=merged.slice(offset+5,offset+5+length);if(type===1){videoChunks.push(chunk);videoBytes+=length;}else if(type===2){audioChunks.push(chunk);audioBytes+=length;}offset+=5+length;}pending=merged.slice(offset);const totalExpected=expectedVideo+expectedAudio,totalReceived=videoBytes+audioBytes;const ratio=totalExpected?Math.min(1,totalReceived/totalExpected):0;setProgress(start+(end-start)*ratio,`SABR 雙軌下載：視訊 ${humanBytes(videoBytes)}；音訊 ${humanBytes(audioBytes)}`);if(totalReceived>MAX_BROWSER_WORK_BYTES)throw new Error("SABR 雙軌資料超過瀏覽器安全處理上限。");}
+  if(pending.byteLength)throw new Error(`SABR 雙軌框架尾端不完整：${pending.byteLength} bytes。`);
+  const videoCoverage=expectedVideo?videoBytes/expectedVideo:1,audioCoverage=expectedAudio?audioBytes/expectedAudio:1;
+  log(`【VISIONOS SABR 雙軌完整性】視訊 ${humanBytes(videoBytes)} / ${expectedVideo?humanBytes(expectedVideo):"未知"}，${(videoCoverage*100).toFixed(2)}%；音訊 ${humanBytes(audioBytes)} / ${expectedAudio?humanBytes(expectedAudio):"未知"}，${(audioCoverage*100).toFixed(2)}%。`);
+  if(videoCoverage<0.995||audioCoverage<0.995)throw new Error(`VISIONOS SABR 雙軌不完整：視訊 ${(videoCoverage*100).toFixed(2)}%，音訊 ${(audioCoverage*100).toFixed(2)}%，已停止 FFmpeg 合併。`);
+  const join=(chunks,total)=>{const out=new Uint8Array(total);let at=0;for(const chunk of chunks){out.set(chunk,at);at+=chunk.byteLength;}return out;};
+  setProgress(end,"SABR 視訊與音訊完整下載完成。");return{videoData:join(videoChunks,videoBytes),audioData:join(audioChunks,audioBytes)};
+}
 async function fetchYoutubeMuxed(format,label,start,end){
   const total=Number(format.contentLength||0);
   log(`【影音合一同工作階段】${label}由專用端點重新取得 ANDROID itag ${format.activeItag||format.itag||18} 並立即串流。`);
@@ -690,8 +708,14 @@ async function mergeDownload() {
   let videoData;
   let audioData;
   try {
-    videoData = await fetchMedia(video,"高畫質視訊",3,31);
-    audioData = await fetchMedia(audio,"音訊",32,58);
+    if(video.protocol === "sabr" && audio.protocol === "sabr") {
+      const pair = await fetchYoutubeSabrPair(video, audio, 3, 58);
+      videoData = pair.videoData;
+      audioData = pair.audioData;
+    } else {
+      videoData = await fetchMedia(video,"高畫質視訊",3,31);
+      audioData = await fetchMedia(audio,"音訊",32,58);
+    }
   } catch (error) {
     const direct = lists().muxed[0];
     if (direct) {
