@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "", ytCookie: "", ytMediaSessionId: "" };
-const APP_VERSION = "v1.0";
+const APP_VERSION = "v1.7";
 const FFMPEG_MODULE_URL = new URL("./FFmpeg/ffmpeg/index.js", import.meta.url).href;
 const FFMPEG_CLASS_WORKER_URL = new URL("./FFmpeg/ffmpeg/worker.js", import.meta.url).href;
 const FFMPEG_CORE_BASE = new URL("./FFmpeg/core", import.meta.url).href;
@@ -371,7 +371,13 @@ function mediaPrefix(format) {
 }
 function displayFormat(format, audio = false) {
   const quality = audio ? `${Math.round((format.bitrate || 0) / 1000) || "未知"} kbps` : format.quality;
-  return `${mediaPrefix(format)}${quality} · ${String(format.container || "bin").toUpperCase()} · ${humanBytes(bytes(format))}`;
+  const source = String(format.source || "").toUpperCase();
+  const fallback = source === "ANDROID_VR"
+    ? " · 備援 1／ANDROID_VR"
+    : format.protocol === "sabr" || source === "VISIONOS"
+      ? " · 備援 2／VISIONOS SABR（實驗性）"
+      : "";
+  return `${mediaPrefix(format)}${quality} · ${String(format.container || "bin").toUpperCase()} · ${humanBytes(bytes(format))}${fallback}`;
 }
 function safeFileToken(value, fallback = "media") {
   const cleaned = String(value || "").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");

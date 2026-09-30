@@ -1,0 +1,13 @@
+OwO MO Downloader v1.7 Dual Fallback
+
+高畫質搜尋順位：
+1. ANDROID 保留影音合一基本格式。
+2. TV、WEB、IOS 等一般 HTTPS 高畫質來源。
+3. ANDROID_VR 作為備援 1。
+4. VISIONOS SABR 作為備援 2，也是最後備援。
+
+修正內容：
+- VISIONOS 不再於 ANDROID 之後立即攔截高畫質搜尋。
+- ANDROID_VR 與 VISIONOS 均改成備援來源。
+- 格式選單明確標示備援順位與 VISIONOS 實驗性狀態。
+- 保留 SABR 雙軌完整性門檻與 FFmpeg 合併保護。

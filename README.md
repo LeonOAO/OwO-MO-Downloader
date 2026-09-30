@@ -123,3 +123,13 @@ npm run build:worker
 - 當下載內容領先播放時鐘超過 45 秒時暫停請求，等待播放時間前進後續跑。
 - 同一個 SabrStream 保留 request number、SABR contexts、buffered ranges 與已下載媒體區段，避免重新從零開始。
 - 視訊與音訊完整性門檻均為 99.5%，兩軌皆通過才進入 FFmpeg。
+
+
+#### v1.7 一般 HTTPS 優先與雙備援順位
+- ANDROID 保留可靠的影音合一基本格式。
+- TV、WEB、IOS 等一般 HTTPS 高畫質 Client 優先輪詢。
+- ANDROID_VR 改為備援 1，只有主要高畫質 Client 全部失敗後才測試。
+- VISIONOS SABR 改為備援 2，也是最後備援。
+- VISIONOS 不再位於高畫質搜尋前段，也不會壓過已通過驗證的一般 HTTPS 格式。
+- 格式選單會明確標示 ANDROID_VR 與 VISIONOS SABR 備援來源。
+- VISIONOS SABR 仍保留 99.5% 雙軌完整性門檻，未達門檻時停止 FFmpeg 合併。
