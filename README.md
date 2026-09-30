@@ -69,24 +69,9 @@ OwO-MO-Downloader-main/
 - 任一段遭 403 或 416 時，整條媒體軌最多直接 Player 刷新一次；不重新 WATCH。
 
 
-### 5 MiB 分段重新解析續傳
-- 正式視訊與音訊恢復為瀏覽器逐段下載，每段固定上限 5 MiB。
-- 區段遭 HTTP 403 或 416 時，Worker 不執行 Player 刷新，也不重新 WATCH。
-- 前端保留已完成區段，完整重新解析 YouTube 一次，再比對影片 ID、itag、媒體類型、解析度、FPS、容器、Codec 與 contentLength。
-- 全部一致才以新媒體網址重試失敗區段並繼續；任一欄位不同即停止，不混接媒體軌。
-- 每條媒體軌最多自動完整重新解析一次。
-
-
-### 影音合一直接下載與高畫質續傳分流
-- YouTube 影音合一格式，例如 360p itag 18，恢復單次直接下載，不套用 5 MiB Range 分段。
-- 僅視訊與僅音訊格式繼續使用 5 MiB 分段重新解析續傳。
-- 音訊擷取、MP3 與 WAV 轉換所讀取的影音合一來源，也使用單次直接下載。
-- 續傳尚未完成任何區段時，紀錄顯示「目前尚未完成任何區段」，不再顯示「大小未知」。
-
-
-### 影音合一同一次 Worker 執行下載
-- 新增 `/youtube-muxed-download` 專用端點。
-- 360p 影音合一下載時，端點在同一次 Worker 執行內呼叫 ANDROID Player API、取得 itag 18 媒體網址並立即串流。
-- 此路徑不讀取 Media Session Cache、不使用 analysis-fallback URL、不附加 Range，也不套用 5 MiB 分段續傳。
-- 音訊擷取、MP3 與 WAV 所需的影音合一來源同樣使用此端點。
-- 高畫質僅視訊及僅音訊仍保留既有 5 MiB 分段重新解析續傳。
+### 高畫質區段同一次 Worker 執行
+- 新增 `/youtube-hq-segment`，每個 5 MiB 區段在同一次 Worker 執行內呼叫原始 Client Player API、取得指定 itag 並立即下載 Range。
+- 不使用 Media Session Cache、analysis-fallback 或解析階段保存的媒體網址。
+- 每段嚴格比對 itag、類型、解析度、FPS、容器、Codec 與 contentLength。
+- 暫時未取得格式時，前端保留已完成區段並依設定每 5 秒重試。
+- 360p 影音合一同工作階段下載完整保留。

@@ -1,5 +1,5 @@
 const VERSION = "1.0";
-const BUILD = "2026.09.29-v10-muxed-same-invocation";
+const BUILD = "2026.09.30-v11-hq-same-invocation";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -2078,76 +2078,35 @@ async function freshMediaUrlWithRetry(id,itag,sourceLabel,steps,wanted={},youtub
   return freshMediaUrl(id,itag,sourceLabel,steps,wanted,youtubeCookie);
 }
 
-async function youtubeMuxedDownload(request, id, itag, apiKey, visitorData, youtubeCookie = "") {
-  const steps = [];
-  if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) {
-    return json({ error: "影片 ID 格式錯誤。", code: "INVALID_VIDEO_ID", version: VERSION, steps }, 400);
-  }
-  const selectedItag = String(itag || "18");
-  if (!/^\d+$/.test(selectedItag)) {
-    return json({ error: "影音合一 itag 格式錯誤。", code: "INVALID_ITAG", version: VERSION, steps }, 400);
-  }
-  if (!apiKey) {
-    return json({ error: "缺少解析工作階段的 Player API Key，請重新解析影片。", code: "PLAYER_API_KEY_MISSING", version: VERSION, steps }, 409);
-  }
-
-  const profile = clientProfileByLabel("ANDROID");
-  steps.push(`【影音合一同工作階段】使用 ANDROID Player API 重新取得 itag ${selectedItag}，取得後立即在同一次 Worker 執行內發起媒體請求。`);
+function immediateFormatFingerprint(format, resolvedUrl) {
+  const n=normalize(format,resolvedUrl);
+  return n?{kind:n.kind,height:Number(n.height||0),fps:Number(n.fps||0),codec:String(n.codec||"").toLowerCase(),container:String(n.container||"").toLowerCase(),contentLength:Number(n.contentLength||0)}:null;
+}
+function fingerprintMatches(actual,wanted,total){return actual&&actual.kind===wanted.kind&&actual.height===Number(wanted.height||0)&&actual.fps===Number(wanted.fps||0)&&actual.codec===String(wanted.codec||"").toLowerCase()&&actual.container===String(wanted.container||"").toLowerCase()&&actual.contentLength===Number(total||0);}
+async function immediateYoutubeMedia(request,{id,itag,source,apiKey,visitorData,start,end,wanted,total,muxed=false},youtubeCookie=""){
+  const steps=[];
+  if(!/^[A-Za-z0-9_-]{11}$/.test(id||""))return json({error:"影片 ID 格式錯誤。",code:"INVALID_VIDEO_ID",version:VERSION,steps},400);
+  if(!apiKey)return json({error:"缺少 Player API Key，請重新解析影片。",code:"PLAYER_API_KEY_MISSING",version:VERSION,steps},409);
+  const label=muxed?"ANDROID":(source||"ANDROID_VR");
+  const profile=clientProfileByLabel(label);
+  steps.push(`【${muxed?"影音合一":"高畫質區段"}同工作階段】呼叫 ${label} Player API 取得 itag ${itag}。`);
   let player;
-  try {
-    player = await innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie);
-  } catch (error) {
-    steps.push(`【影音合一同工作階段失敗】ANDROID Player API：${error.message}。`);
-    return json({ error: `ANDROID Player API 失敗：${error.message}`, code: "MUXED_PLAYER_FAILED", version: VERSION, steps }, 422);
-  }
-
-  const playability = player?.playabilityStatus || {};
-  const format = addressableFormats(player).find(item => String(item.itag) === selectedItag);
-  if (!format) {
-    const reason = playability.reason || playability.messages?.[0] || "未取得指定影音合一格式";
-    steps.push(`【影音合一同工作階段失敗】ANDROID 未取得 itag ${selectedItag}；狀態 ${playability.status || "UNKNOWN"}；原因：${reason}。`);
-    return json({ error: `ANDROID 未取得 itag ${selectedItag}：${reason}`, code: "MUXED_FORMAT_MISSING", version: VERSION, steps }, 422);
-  }
-
-  const resolvedUrl = directUrl(format);
-  if (!resolvedUrl) {
-    steps.push(`【影音合一同工作階段失敗】itag ${selectedItag} 沒有可直接使用的媒體網址。`);
-    return json({ error: `itag ${selectedItag} 沒有可直接使用的媒體網址。`, code: "MUXED_URL_MISSING", version: VERSION, steps }, 422);
-  }
-
-  let mediaUrl;
-  try {
-    mediaUrl = new URL(resolvedUrl);
-  } catch {
-    return json({ error: "ANDROID 回傳的媒體網址無效。", code: "INVALID_MEDIA_URL", version: VERSION, steps }, 422);
-  }
-  if (mediaUrl.protocol !== "https:" || !MEDIA_SUFFIXES.some(suffix => mediaUrl.hostname.endsWith(suffix))) {
-    return json({ error: "ANDROID 回傳的媒體網域未列入允許清單。", code: "MEDIA_DOMAIN_DENIED", version: VERSION, steps }, 403);
-  }
-
-  const headers = mediaRequestHeaders(request, "ANDROID");
-  headers.delete("Range");
-  let upstream;
-  try {
-    upstream = await fetch(mediaUrl, { method: "GET", headers, redirect: "follow", cache: "no-store" });
-  } catch (error) {
-    steps.push(`【影音合一同工作階段失敗】媒體連線：${error.message}。`);
-    return json({ error: `影音合一媒體連線失敗：${error.message}`, code: "MUXED_MEDIA_FETCH_FAILED", version: VERSION, steps }, 502);
-  }
-  steps.push(`【影音合一同工作階段】ANDROID itag ${selectedItag} 媒體請求回傳 HTTP ${upstream.status}。`);
-  if (![200, 206].includes(upstream.status)) {
-    try { await upstream.body?.cancel(); } catch {}
-    return json({ error: `影音合一同工作階段下載遭拒：HTTP ${upstream.status}。`, code: "MUXED_SAME_INVOCATION_REJECTED", version: VERSION, steps }, upstream.status === 403 ? 403 : 422);
-  }
-
-  const output = new Headers(upstream.headers);
-  Object.entries(cors()).forEach(([key, value]) => output.set(key, value));
-  output.set("Cache-Control", "no-store");
-  output.set("X-OwO-Media-Mode", "muxed-same-invocation");
-  output.set("X-OwO-Media-Source", "ANDROID");
-  output.set("X-OwO-Selected-Itag", selectedItag);
-  output.set("X-OwO-Version", VERSION);
-  return new Response(upstream.body, { status: upstream.status, headers: output });
+  try{player=await innertubePlayer(apiKey,visitorData,id,profile,youtubeCookie);}catch(e){return json({error:`${label} Player API 失敗：${e.message}`,code:"PLAYER_TEMPORARILY_FAILED",version:VERSION,steps},422);}
+  const format=addressableFormats(player).find(x=>String(x.itag)===String(itag));
+  if(!format)return json({error:`${label} 本次未提供 itag ${itag}。`,code:"HQ_FORMAT_TEMPORARILY_MISSING",version:VERSION,steps},409);
+  const media=directUrl(format);
+  if(!media)return json({error:`${label} itag ${itag} 沒有可用媒體網址。`,code:"MEDIA_URL_MISSING",version:VERSION,steps},409);
+  const fp=immediateFormatFingerprint(format,media);
+  if(!muxed&&!fingerprintMatches(fp,wanted,total))return json({error:"即時取得的媒體軌與原選擇不一致，未混接區段。",code:"MEDIA_TRACK_CHANGED",version:VERSION,actual:fp,steps},409);
+  const u=new URL(media);
+  if(u.protocol!=="https:"||!MEDIA_SUFFIXES.some(x=>u.hostname.endsWith(x)))return json({error:"媒體網域未列入允許清單。",code:"MEDIA_DOMAIN_DENIED",version:VERSION,steps},403);
+  const headers=mediaRequestHeaders(request,label);
+  if(muxed)headers.delete("Range");else headers.set("Range",`bytes=${start}-${end}`);
+  const upstream=await fetch(u,{method:"GET",headers,redirect:"follow",cache:"no-store"});
+  steps.push(`【${muxed?"影音合一":"高畫質區段"}同工作階段】${label} itag ${itag}${muxed?"":` bytes=${start}-${end}`} 回傳 HTTP ${upstream.status}。`);
+  if(![200,206].includes(upstream.status)){try{await upstream.body?.cancel();}catch{}return json({error:`同工作階段媒體請求遭拒：HTTP ${upstream.status}。`,code:"IMMEDIATE_MEDIA_REJECTED",version:VERSION,steps},upstream.status===403?403:422);}
+  const out=new Headers(upstream.headers);Object.entries(cors()).forEach(([k,v])=>out.set(k,v));out.set("Cache-Control","no-store");out.set("X-OwO-Media-Mode",muxed?"muxed-same-invocation":"hq-segment-same-invocation");out.set("X-OwO-Media-Source",label);out.set("X-OwO-Version",VERSION);
+  return new Response(upstream.body,{status:upstream.status,headers:out});
 }
 
 async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",youtubeCookie="",refreshContext={}){
@@ -2212,24 +2171,54 @@ async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",y
   steps.push(`【媒體請求】使用 ${sourceLabel||"UNKNOWN"} Client 身分存取 ${resolutionMode||"legacy"} 網址${requestedRange?`，區段 ${requestedRange.header}`:""}。`);
   let upstream=await fetchUpstream(url);
   steps.push(`【媒體請求】${sourceLabel || "UNKNOWN"} 回傳 HTTP ${upstream.status}。`);
-  if ([403, 416].includes(upstream.status)) {
-    if (!requestedRange) {
-      steps.push(`【影音合一直接下載】${sourceLabel || "ANDROID"} / itag ${itag} 的單次直接請求回傳 HTTP ${upstream.status}。`);
+  if (upstream.status === 403 && id && itag && resolutionMode === "analysis-url") {
+    const cached = await readYoutubeFormatCache(id,itag,sourceLabel||"ANDROID",sessionId);
+    if (cached?.url && cached.url !== url.href) {
+      steps.push(`【媒體工作階段】解析網址遭拒，改用 ${sourceLabel} / itag ${itag} 的短效快取網址。`);
+      url = new URL(cached.url); resolutionMode = "session-cache";
+      upstream=await fetchUpstream(url);
+      steps.push(`【媒體請求】短效快取網址回傳 HTTP ${upstream.status}。`);
+    }
+  }
+  const mediaRejected = [403, 416].includes(upstream.status);
+  if (mediaRejected && id && itag) {
+    steps.push(`【媒體單次刷新】${sourceLabel || "ANDROID"} / itag ${itag} 的 ${requestedRange?.header || "目前區段"} 回傳 HTTP ${upstream.status}；只執行一次直接 Player 刷新，不重新 WATCH。`);
+    await deleteYoutubeFormatCache(id, itag, sourceLabel || "ANDROID", sessionId);
+    try {
+      const fresh = await freshMediaUrlFromContext(id, itag, sourceLabel || "ANDROID", steps, wanted, refreshContext, youtubeCookie);
+      if (fresh.equivalent && String(fresh.selectedItag || itag) !== String(itag)) {
+        return json({
+          error: `直接 Player 刷新取得不同 itag ${fresh.selectedItag}，固定五段下載不混接不同位元流，請重新解析後再下載。`,
+          code: "MEDIA_TRACK_CHANGED",
+          version: VERSION,
+          steps
+        }, 409);
+      }
+      url = new URL(fresh.url);
+      sourceLabel = fresh.sourceLabel;
+      selectedItag = String(fresh.selectedItag || itag);
+      resolutionMode = "single-player-refresh";
+      mediaTotal = Number(fresh.contentLength || mediaTotal || 0);
+      upstream = await fetchUpstream(url);
+      steps.push(`【媒體單次刷新】${requestedRange?.header || "目前區段"} 使用刷新網址重試一次，回傳 HTTP ${upstream.status}。`);
+    } catch (error) {
+      steps.push(`【媒體單次刷新失敗】${error.message}`);
       return json({
-        error: `影音合一直接下載遭拒：HTTP ${upstream.status}。`,
-        code: "MUXED_DIRECT_DOWNLOAD_FAILED",
+        error: `媒體區段遭拒，單次 Player 刷新失敗：${error.message}`,
+        code: "MEDIA_REFRESH_FAILED",
         version: VERSION,
         steps
-      }, upstream.status === 403 ? 403 : 409);
+      }, 422);
     }
-    steps.push(`【媒體續傳交接】${sourceLabel || "ANDROID"} / itag ${itag} 的 ${requestedRange.header} 回傳 HTTP ${upstream.status}；Worker 不刷新、不重新 WATCH，交由前端完整重新解析後續傳。`);
+  }
+
+  if ([403, 416].includes(upstream.status)) {
     return json({
-      error: `媒體網址已拒絕目前 5 MiB 區段：HTTP ${upstream.status}。請由前端重新解析後續傳。`,
-      code: "MEDIA_REANALYSIS_REQUIRED",
+      error: `Google Video Server 拒絕媒體區段：HTTP ${upstream.status}。固定五段下載已執行原網址一次與 Player 刷新網址一次。`,
+      code: "MEDIA_URL_FORBIDDEN",
       version: VERSION,
-      range: requestedRange.header,
       steps
-    }, 409);
+    }, upstream.status === 403 ? 403 : 409);
   }
 
   const output = new Headers(upstream.headers);
@@ -2268,16 +2257,8 @@ export default {
       if (url.pathname === "/instagram" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "instagram", request, env);
       if (url.pathname === "/threads" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "threads", request, env);
       if (url.pathname === "/social-media" && ["GET", "HEAD"].includes(request.method)) return await metaSocialMedia(request, url.searchParams.get("url"), url.searchParams.get("platform") === "threads" ? "threads" : "instagram", env);
-      if (url.pathname === "/youtube-muxed-download" && request.method === "GET") {
-        return await youtubeMuxedDownload(
-          request,
-          url.searchParams.get("id") || "",
-          url.searchParams.get("itag") || "18",
-          url.searchParams.get("apiKey") || "",
-          url.searchParams.get("visitorData") || "",
-          requestYoutubeCookie(request, env)
-        );
-      }
+      if (url.pathname === "/youtube-muxed-download" && request.method === "GET") return await immediateYoutubeMedia(request,{id:url.searchParams.get("id")||"",itag:url.searchParams.get("itag")||"18",apiKey:url.searchParams.get("apiKey")||"",visitorData:url.searchParams.get("visitorData")||"",muxed:true},requestYoutubeCookie(request,env));
+      if (url.pathname === "/youtube-hq-segment" && request.method === "GET") return await immediateYoutubeMedia(request,{id:url.searchParams.get("id")||"",itag:url.searchParams.get("itag")||"",source:url.searchParams.get("source")||"ANDROID_VR",apiKey:url.searchParams.get("apiKey")||"",visitorData:url.searchParams.get("visitorData")||"",start:Number(url.searchParams.get("start")||0),end:Number(url.searchParams.get("end")||0),total:Number(url.searchParams.get("total")||0),wanted:{kind:url.searchParams.get("kind")||"",height:Number(url.searchParams.get("height")||0),fps:Number(url.searchParams.get("fps")||0),codec:url.searchParams.get("codec")||"",container:url.searchParams.get("container")||""}},requestYoutubeCookie(request,env));
       if (url.pathname === "/media" && ["GET", "HEAD"].includes(request.method)) {
         return await media(
           request,
@@ -2300,7 +2281,7 @@ export default {
           }
         );
       }
-      return json({ service: SERVICE, version: VERSION, build: BUILD, facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, youtubeSession: Boolean(requestYoutubeCookie(request, env)), endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq|all", "GET /youtube-muxed-download?id=VIDEO_ID&itag=18&apiKey=KEY&visitorData=VISITOR", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT&url=SIGNED_URL", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
+      return json({ service: SERVICE, version: VERSION, build: BUILD, facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, youtubeSession: Boolean(requestYoutubeCookie(request, env)), endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq|all", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT&url=SIGNED_URL", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
     } catch (error) {
       return json({ error: error.message || "Worker 執行失敗", code: error.code || "WORKER_INTERNAL_ERROR", version: VERSION, steps: Array.isArray(error.steps) ? error.steps : [] }, Number(error.httpStatus || 500));
     }
