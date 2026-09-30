@@ -1,7 +1,7 @@
 {
   "name": "owo-mo-downloader-worker",
-  "version": "1.7.0",
-  "description": "一般 HTTPS 高畫質優先，ANDROID_VR 與 VISIONOS SABR 雙備援版本。",
+  "version": "1.8.0",
+  "description": "WEB_SAFARI HLS 優先，ANDROID_VR 與 VISIONOS 保持備援。",
   "main": "app.js",
   "scripts": {
     "build:worker": "npm run patch:googlevideo && esbuild WorkerSource.js --bundle --format=esm --platform=browser --target=es2022 --minify --outfile=worker.js",

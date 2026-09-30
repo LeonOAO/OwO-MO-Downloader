@@ -1,6 +1,6 @@
 import { SabrStream } from "googlevideo/sabr-stream";
 const VERSION = "1.0";
-const BUILD = "2026.09.30-v17-dual-fallback";
+const BUILD = "2026.09.30-v18-web-safari-hls";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -87,8 +87,6 @@ function normalize(format, resolvedUrl = "") {
     height: Number(format.height || 0),
     fps: Number(format.fps || 0),
     source: format._source || format.source || "",
-    fallback: (format._source || format.source) === "ANDROID_VR",
-    fallbackRank: (format._source || format.source) === "ANDROID_VR" ? 1 : 0,
     generatedAt: Date.now(),
     url
   };
@@ -114,8 +112,6 @@ function normalizeSabrFormat(format, source = "VISIONOS") {
     height: Number(format.height || 0),
     fps: Number(format.fps || 0),
     source,
-    fallback: true,
-    fallbackRank: 2,
     protocol: "sabr",
     generatedAt: Date.now(),
     url: `sabr://${source.toLowerCase()}/${format.itag}`
@@ -191,15 +187,15 @@ const PLAYER_CLIENTS = [
 ];
 
 const ALL_MODE_CLIENT_ORDER = [
-  // ANDROID only preserves the reliable muxed base format.
   "ANDROID",
-  // Primary high-quality clients. Stop as soon as a verified HTTPS pair is found.
-  "TV", "TV_EMBEDDED", "TV_SIMPLY", "WEB_EMBEDDED", "WEB_KIDS",
-  "WEB_SAFARI", "WEB", "MWEB", "IOS", "IOS_CREATOR", "IOS_MUSIC",
-  "ANDROID_CREATOR", "ANDROID_MUSIC", "ANDROID_TESTSUITE",
-  "WEB_REMIX", "WEB_CREATOR",
-  // Dual fallback tier. ANDROID_VR is attempted first; VISIONOS SABR is last.
-  "ANDROID_VR", "VISIONOS"
+  // New primary path: Safari HLS is attempted before the existing fallbacks.
+  "WEB_SAFARI",
+  // Existing ANDROID_VR and VISIONOS implementations remain available as fallbacks.
+  "VISIONOS", "IOS", "IOS_CREATOR", "IOS_MUSIC",
+  "WEB_EMBEDDED", "WEB_KIDS", "WEB", "MWEB",
+  "TV", "TV_EMBEDDED", "TV_SIMPLY", "ANDROID_CREATOR",
+  "ANDROID_MUSIC", "ANDROID_TESTSUITE", "WEB_REMIX", "WEB_CREATOR",
+  "ANDROID_VR"
 ];
 
 const CLIENT_REQUEST_INTERVAL_MS = 1000;
@@ -301,7 +297,7 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
   steps.push(mode === "quick"
     ? "【快速解析】先使用 ANDROID 尋找可直接下載的影音合一格式。"
     : mode === "all"
-      ? "【單一工作階段】先使用 ANDROID 保留基本格式，再依序搜尋一般 HTTPS 高畫質；ANDROID_VR 與 VISIONOS 均只作備援。"
+      ? "【單一工作階段】先使用 ANDROID 保留基本格式，再優先搜尋 WEB_SAFARI HLS；ANDROID_VR 與 VISIONOS 維持既有備援路徑。"
       : "【高畫質搜尋】保留既有結果，繼續蒐集分離視訊與分離音訊格式。");
   let authCount = state.status === "LOGIN_REQUIRED" ? 1 : 0;
   const challengedPriorityClients = new Set();
@@ -333,6 +329,11 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
       steps.push(`【${profile.label}】狀態：${state.status}；原始格式：「${rawCount}」個；含網址或密文：「${addressCount}」個；HLS：${clientHls ? "存在" : "無"}；DASH：${clientDash ? "存在" : "無"}；SABR：${clientSabr ? "存在" : "無"}；原因：${state.reason}。`);
       output.push({ label: profile.label, player });
 
+      if (mode === "all" && profile.label === "WEB_SAFARI" && clientHls) {
+        steps.push("【WEB_SAFARI HLS】已取得 HLS Manifest，優先採用不依賴 ANDROID_VR 或 VISIONOS SABR 的高畫質路徑。");
+        break;
+      }
+
       if (mode === "quick" && addressCount) {
         steps.push(`【快速解析】${profile.label} 已取得「${addressCount}」個可解析格式，先回傳基本結果。`);
         break;
@@ -347,10 +348,10 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
       const muxed = all.some(format => String(format.mimeType || "").startsWith("video/") && Boolean(format.audioQuality));
 
       if (profile.label === "VISIONOS" && hasSabrSeparatedFormats(player)) {
-        steps.push("【備援 2／VISIONOS SABR】一般 HTTPS 高畫質與 ANDROID_VR 備援均未成功；已取得完整 SABR 描述，採用 VISIONOS 作最後備援。");
+        steps.push("【VISIONOS SABR】已取得分離視訊、分離音訊、serverAbrStreamingUrl 與 videoPlaybackUstreamerConfig，採用 SABR 高畫質路徑並停止其餘 Client 輪詢。");
         break;
       }
-      if(videoOnly&&audioOnly){const p=await probeYoutubeFormats(player,profile.label,steps);if(p.videoOnly&&p.audioOnly){const fallbackTag=profile.label==="ANDROID_VR"?"【備援 1／ANDROID_VR】":"【高畫質】";steps.push(`${fallbackTag}${profile.label} 的分離視訊與音訊已通過實載驗證，停止其餘 Client 輪詢。`);break;}steps.push(`【高畫質續搜】${profile.label} 未通過實載驗證，繼續下一個 Client。`);}
+      if(videoOnly&&audioOnly){const p=await probeYoutubeFormats(player,profile.label,steps);if(p.videoOnly&&p.audioOnly){steps.push(`【高畫質】${profile.label} 的分離視訊與音訊已通過實載驗證，停止其餘 Client 輪詢。`);break;}steps.push(`【高畫質續搜】${profile.label} 未通過實載驗證，繼續下一個 Client。`);}
 
       if (mode !== "all" && muxed && authCount >= 4) {
         steps.push("【快速停止】已有影音合一格式，且多個來源要求登入，停止其餘 Client 輪詢。");
@@ -623,6 +624,80 @@ async function fetchYoutubeWatchPage(id, steps, youtubeCookie = "") {
   };
 }
 
+function hlsAttributes(line) {
+  const text = line.slice(line.indexOf(":") + 1);
+  const result = {};
+  const pattern = /([A-Z0-9-]+)=("[^"]*"|[^,]*)/g;
+  let match;
+  while ((match = pattern.exec(text))) result[match[1]] = match[2].replace(/^"|"$/g, "");
+  return result;
+}
+async function parseHlsMasterFormats(manifestUrl, steps) {
+  if (!manifestUrl) return [];
+  let response;
+  try { response = await fetch(manifestUrl, { headers: { "User-Agent": youtubeMediaUserAgent("WEB_SAFARI"), "Accept": "application/vnd.apple.mpegurl,*/*" }, cache: "no-store" }); }
+  catch (error) { steps.push(`【WEB_SAFARI HLS】Master Manifest 連線失敗：${error.message}。`); return []; }
+  if (!response.ok) { steps.push(`【WEB_SAFARI HLS】Master Manifest 回傳 HTTP ${response.status}。`); return []; }
+  const text = await response.text();
+  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const formats = [];
+  for (let index = 0; index < lines.length; index++) {
+    if (!lines[index].startsWith("#EXT-X-STREAM-INF:")) continue;
+    const attrs = hlsAttributes(lines[index]);
+    const next = lines.slice(index + 1).find(line => !line.startsWith("#"));
+    if (!next) continue;
+    const resolution = String(attrs.RESOLUTION || "").match(/(\d+)x(\d+)/);
+    const codecs = String(attrs.CODECS || "");
+    const height = Number(resolution?.[2] || 0);
+    const width = Number(resolution?.[1] || 0);
+    const fps = Number(attrs["FRAME-RATE"] || 0);
+    const bitrate = Number(attrs["AVERAGE-BANDWIDTH"] || attrs.BANDWIDTH || 0);
+    formats.push({
+      itag: `hls-${height || formats.length + 1}-${bitrate}`,
+      quality: height ? `${height}p` : "HLS",
+      kind: "影音合一",
+      container: "ts",
+      mimeType: "video/mp2t",
+      codec: codecs,
+      bitrate,
+      contentLength: "",
+      width, height, fps,
+      source: "WEB_SAFARI",
+      protocol: "hls",
+      generatedAt: Date.now(),
+      url: new URL(next, manifestUrl).href
+    });
+  }
+  steps.push(`【WEB_SAFARI HLS】Master Manifest 取得「${formats.length}」個 HLS Variant。`);
+  return formats.sort((a,b)=>b.height-a.height||b.bitrate-a.bitrate);
+}
+function allowedHlsUrl(value) {
+  try { const u=new URL(value); return u.protocol==="https:" && (u.hostname.endsWith(".googlevideo.com") || u.hostname.endsWith(".youtube.com") || u.hostname==="youtube.com"); } catch { return false; }
+}
+async function youtubeHlsPlaylist(url) {
+  if (!allowedHlsUrl(url)) return json({ error:"HLS 網址未列入允許清單。", code:"HLS_DOMAIN_DENIED", version:VERSION },403);
+  const response=await fetch(url,{headers:{"User-Agent":youtubeMediaUserAgent("WEB_SAFARI"),"Accept":"application/vnd.apple.mpegurl,*/*"},cache:"no-store",redirect:"follow"});
+  if(!response.ok)return json({error:`HLS Media Playlist 回傳 HTTP ${response.status}。`,code:"HLS_PLAYLIST_FAILED",version:VERSION},422);
+  const text=await response.text();
+  const lines=text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+  const segments=[];let initUrl="";let encrypted=false;let duration=0;
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
+    if(line.startsWith("#EXT-X-KEY:")&&!/METHOD=NONE/.test(line)) encrypted=true;
+    if(line.startsWith("#EXT-X-MAP:")){const attrs=hlsAttributes(line);if(attrs.URI)initUrl=new URL(attrs.URI,url).href;}
+    if(line.startsWith("#EXTINF:")){duration+=Number(line.slice(8).split(",")[0]||0);const next=lines.slice(i+1).find(x=>!x.startsWith("#"));if(next)segments.push(new URL(next,url).href);}
+  }
+  if(encrypted)return json({error:"此 HLS Playlist 使用加密 Segment，目前不加入下載。",code:"HLS_ENCRYPTED",version:VERSION},422);
+  if(!segments.length)return json({error:"HLS Playlist 沒有媒體 Segment。",code:"HLS_SEGMENTS_MISSING",version:VERSION},422);
+  return json({initUrl,segments,duration,version:VERSION});
+}
+async function youtubeHlsSegment(url) {
+  if (!allowedHlsUrl(url)) return json({ error:"HLS Segment 網址未列入允許清單。", code:"HLS_DOMAIN_DENIED", version:VERSION },403);
+  const response=await fetch(url,{headers:{"User-Agent":youtubeMediaUserAgent("WEB_SAFARI"),"Accept":"*/*","Accept-Encoding":"identity"},cache:"no-store",redirect:"follow"});
+  if(!response.ok)return json({error:`HLS Segment 回傳 HTTP ${response.status}。`,code:"HLS_SEGMENT_FAILED",version:VERSION},response.status===403?403:422);
+  const headers=new Headers(response.headers);Object.entries(cors()).forEach(([k,v])=>headers.set(k,v));headers.set("Cache-Control","no-store");headers.set("X-OwO-Media-Mode","web-safari-hls");return new Response(response.body,{status:200,headers});
+}
+
 async function youtube(id, mode = "quick", youtubeCookie = "") {
   if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) return json({ error: "影片 ID 格式錯誤" }, 400);
   const steps = [];
@@ -702,7 +777,12 @@ async function youtube(id, mode = "quick", youtubeCookie = "") {
     .filter(Boolean)
     .sort((a, b) => b.bitrate - a.bitrate);
   let formats = await verifyYoutubeFormats(candidateFormats, steps);
-  const visionSabrSource = sources.find(source => source.label === "VISIONOS" && hasSabrSeparatedFormats(source.player));
+  const safariHlsSource = sources.find(source => source.label === "WEB_SAFARI" && source.player?.streamingData?.hlsManifestUrl);
+  if (safariHlsSource) {
+    const hlsFormats = await parseHlsMasterFormats(safariHlsSource.player.streamingData.hlsManifestUrl, steps);
+    formats = [...formats, ...hlsFormats];
+  }
+  const visionSabrSource = safariHlsSource ? null : sources.find(source => source.label === "VISIONOS" && hasSabrSeparatedFormats(source.player));
   if (visionSabrSource) {
     const sabrFormats = rawFormats(visionSabrSource.player)
       .map(format => normalizeSabrFormat(format, "VISIONOS"))
@@ -710,7 +790,7 @@ async function youtube(id, mode = "quick", youtubeCookie = "") {
     const merged = new Map(formats.map(format => [`${format.itag}|${format.kind}|${format.codec}`, format]));
     for (const format of sabrFormats) merged.set(`${format.itag}|${format.kind}|${format.codec}`, format);
     formats = [...merged.values()].sort((a, b) => b.bitrate - a.bitrate);
-    steps.push(`【備援 2／VISIONOS SABR】加入「${sabrFormats.length}」個實驗性 SABR 高畫質格式；只有一般 HTTPS 與 ANDROID_VR 均未成功時才使用。`);
+    steps.push(`【VISIONOS SABR】加入「${sabrFormats.length}」個 SABR 高畫質格式；正式下載將使用 UMP/SABR，不使用傳統 Range。`);
   }
   steps.push(`【網址】Signature 成功：「${counters.signature}」個；失敗：「${counters.signatureFailed}」個。`);
   steps.push(`【網址】N 參數成功：「${counters.n}」個；未處理：「${counters.nFailed}」個。`);
@@ -2494,6 +2574,8 @@ export default {
       if (url.pathname === "/threads" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "threads", request, env);
       if (url.pathname === "/social-media" && ["GET", "HEAD"].includes(request.method)) return await metaSocialMedia(request, url.searchParams.get("url"), url.searchParams.get("platform") === "threads" ? "threads" : "instagram", env);
       if (url.pathname === "/youtube-sabr-pair-download" && request.method === "GET") return await youtubeSabrPairDownload(request,url.searchParams.get("id")||"",url.searchParams.get("videoItag")||"",url.searchParams.get("audioItag")||"",url.searchParams.get("apiKey")||"",url.searchParams.get("visitorData")||"",url.searchParams.get("sessionId")||"",requestYoutubeCookie(request,env));
+      if (url.pathname === "/youtube-hls-playlist" && request.method === "GET") return await youtubeHlsPlaylist(url.searchParams.get("url")||"");
+      if (url.pathname === "/youtube-hls-segment" && request.method === "GET") return await youtubeHlsSegment(url.searchParams.get("url")||"");
       if (url.pathname === "/youtube-sabr-download" && request.method === "GET") return await youtubeSabrDownload(request,url.searchParams.get("id")||"",url.searchParams.get("itag")||"",url.searchParams.get("track")||"video",url.searchParams.get("apiKey")||"",url.searchParams.get("visitorData")||"",url.searchParams.get("sessionId")||"",requestYoutubeCookie(request,env));
       if (url.pathname === "/youtube-muxed-download" && request.method === "GET") return await immediateYoutubeMedia(request,{id:url.searchParams.get("id")||"",itag:url.searchParams.get("itag")||"18",apiKey:url.searchParams.get("apiKey")||"",visitorData:url.searchParams.get("visitorData")||"",muxed:true},requestYoutubeCookie(request,env));
       if (url.pathname === "/youtube-hq-segment" && request.method === "GET") return await immediateYoutubeMedia(request,{id:url.searchParams.get("id")||"",itag:url.searchParams.get("itag")||"",source:url.searchParams.get("source")||"ANDROID_VR",apiKey:url.searchParams.get("apiKey")||"",visitorData:url.searchParams.get("visitorData")||"",start:Number(url.searchParams.get("start")||0),end:Number(url.searchParams.get("end")||0),total:Number(url.searchParams.get("total")||0),wanted:{kind:url.searchParams.get("kind")||"",height:Number(url.searchParams.get("height")||0),fps:Number(url.searchParams.get("fps")||0),codec:url.searchParams.get("codec")||"",container:url.searchParams.get("container")||""}},requestYoutubeCookie(request,env));

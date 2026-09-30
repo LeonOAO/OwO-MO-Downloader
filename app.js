@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "", ytCookie: "", ytMediaSessionId: "" };
-const APP_VERSION = "v1.7";
+const APP_VERSION = "v1.8";
 const FFMPEG_MODULE_URL = new URL("./FFmpeg/ffmpeg/index.js", import.meta.url).href;
 const FFMPEG_CLASS_WORKER_URL = new URL("./FFmpeg/ffmpeg/worker.js", import.meta.url).href;
 const FFMPEG_CORE_BASE = new URL("./FFmpeg/core", import.meta.url).href;
@@ -371,13 +371,8 @@ function mediaPrefix(format) {
 }
 function displayFormat(format, audio = false) {
   const quality = audio ? `${Math.round((format.bitrate || 0) / 1000) || "未知"} kbps` : format.quality;
-  const source = String(format.source || "").toUpperCase();
-  const fallback = source === "ANDROID_VR"
-    ? " · 備援 1／ANDROID_VR"
-    : format.protocol === "sabr" || source === "VISIONOS"
-      ? " · 備援 2／VISIONOS SABR（實驗性）"
-      : "";
-  return `${mediaPrefix(format)}${quality} · ${String(format.container || "bin").toUpperCase()} · ${humanBytes(bytes(format))}${fallback}`;
+  const sourceLabel = format.protocol === "hls" ? " · WEB_SAFARI HLS" : "";
+  return `${mediaPrefix(format)}${quality} · ${String(format.container || "bin").toUpperCase()} · ${humanBytes(bytes(format))}${sourceLabel}`;
 }
 function safeFileToken(value, fallback = "media") {
   const cleaned = String(value || "").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
@@ -564,6 +559,23 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
   setProgress(end,`${label}下載完成。`);
   return output;
 }
+async function fetchYoutubeHls(format, label, start, end) {
+  log(`【WEB_SAFARI HLS】${label}開始解析 HLS Media Playlist。`);
+  const playlistResponse=await fetch(endpoint("/youtube-hls-playlist",{url:format.url}),{cache:"no-store",headers:platformRequestHeaders("youtube")});
+  const playlist=await playlistResponse.json().catch(()=>({}));
+  if(!playlistResponse.ok)throw new Error(playlist.error||`HLS Playlist 失敗：HTTP ${playlistResponse.status}。`);
+  const urls=[...(playlist.initUrl?[playlist.initUrl]:[]),...(playlist.segments||[])];
+  const chunks=[];let received=0;
+  for(let index=0;index<urls.length;index++){
+    const response=await fetch(endpoint("/youtube-hls-segment",{url:urls[index]}),{cache:"no-store",headers:platformRequestHeaders("youtube")});
+    if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||`HLS Segment ${index+1}/${urls.length} 失敗：HTTP ${response.status}。`);}
+    const chunk=new Uint8Array(await response.arrayBuffer());chunks.push(chunk);received+=chunk.byteLength;
+    if(received>MAX_BROWSER_WORK_BYTES)throw new Error("HLS 資料超過瀏覽器安全處理上限。");
+    setProgress(start+(end-start)*((index+1)/urls.length),`WEB_SAFARI HLS：${index+1}/${urls.length}；${humanBytes(received)}`);
+  }
+  const output=new Uint8Array(received);let offset=0;for(const chunk of chunks){output.set(chunk,offset);offset+=chunk.byteLength;}
+  log(`【WEB_SAFARI HLS】${label}完成：${urls.length} 個資源，共 ${humanBytes(received)}。`);return output;
+}
 async function fetchYoutubeSabr(format, label, start, end) {
   const track = normalizedKind(format) === "僅音訊" ? "audio" : "video";
   log(`【VISIONOS SABR SESSION】${label}優先沿用解析階段 SABR Context，使用 UMP/SABR 串流下載，itag ${format.itag}；不使用 5 MiB Range。`);
@@ -636,6 +648,7 @@ async function fetchYoutubeMuxed(format,label,start,end){
 
 async function fetchMedia(format, label = "媒體", start = 5, end = 65) {
   if (state.platform === "youtube") {
+    if (format.protocol === "hls") return fetchYoutubeHls(format, label, start, end);
     if (format.protocol === "sabr") return fetchYoutubeSabr(format, label, start, end);
     return normalizedKind(format) === "影音合一" ? fetchYoutubeMuxed(format,label,start,end) : fetchYoutubeMediaInChunks(format,label,start,end);
   }

@@ -1,0 +1,6 @@
+OwO MO Downloader v1.8 WEB_SAFARI HLS
+- 新增 WEB_SAFARI HLS 高畫質優先來源。
+- 新增 Master M3U8 Variant 解析。
+- 新增 HLS Media Playlist 與 Segment 代理端點。
+- 前端循序下載 HLS Segments。
+- ANDROID_VR 與 VISIONOS 備援保持原樣。

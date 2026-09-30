@@ -125,11 +125,10 @@ npm run build:worker
 - 視訊與音訊完整性門檻均為 99.5%，兩軌皆通過才進入 FFmpeg。
 
 
-#### v1.7 一般 HTTPS 優先與雙備援順位
-- ANDROID 保留可靠的影音合一基本格式。
-- TV、WEB、IOS 等一般 HTTPS 高畫質 Client 優先輪詢。
-- ANDROID_VR 改為備援 1，只有主要高畫質 Client 全部失敗後才測試。
-- VISIONOS SABR 改為備援 2，也是最後備援。
-- VISIONOS 不再位於高畫質搜尋前段，也不會壓過已通過驗證的一般 HTTPS 格式。
-- 格式選單會明確標示 ANDROID_VR 與 VISIONOS SABR 備援來源。
-- VISIONOS SABR 仍保留 99.5% 雙軌完整性門檻，未達門檻時停止 FFmpeg 合併。
+### v1.8 WEB_SAFARI HLS 建議版
+- WEB_SAFARI HLS 在 ANDROID 基本格式之後優先搜尋。
+- 取得 HLS Manifest 時，解析 Master Playlist 並顯示 HLS Variant。
+- 前端逐一透過 Worker 代理下載初始化資料與媒體 Segment，避免單次 Worker 消耗大量 Subrequest。
+- 加密 HLS Playlist 會停止並顯示明確錯誤。
+- ANDROID_VR 與 VISIONOS 的既有備援下載邏輯保持不變。
+- 保留 `PO_TOKEN_PROVIDER_URL` 的後續整合位置；本版不會把 Provider URL 暴露給前端。
