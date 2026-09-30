@@ -538,6 +538,28 @@ async function fetchYoutubeMediaInChunks(format, label, start, end) {
   setProgress(end,`${label}下載完成。`);
   return output;
 }
+async function fetchYoutubeSabr(format, label, start, end) {
+  const track = normalizedKind(format) === "僅音訊" ? "audio" : "video";
+  log(`【VISIONOS SABR】${label}使用 UMP/SABR 串流下載，itag ${format.itag}；不使用 5 MiB Range。`);
+  const response = await fetch(endpoint("/youtube-sabr-download", {
+    id: state.videoId,
+    itag: format.activeItag || format.itag,
+    track,
+    apiKey: format.refreshApiKey || "",
+    visitorData: format.refreshVisitorData || ""
+  }), { cache: "no-store", headers: platformRequestHeaders("youtube") });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    if (Array.isArray(body.steps)) body.steps.forEach(log);
+    throw new Error(body.error || `VISIONOS SABR 下載失敗：HTTP ${response.status}。`);
+  }
+  const reader = response.body?.getReader();
+  if (!reader) return new Uint8Array(await response.arrayBuffer());
+  const chunks=[]; let received=0;
+  while(true){const {done,value}=await reader.read();if(done)break;if(!value?.byteLength)continue;chunks.push(value);received+=value.byteLength;setProgress(start,`正在以 VISIONOS SABR 下載${label}：${humanBytes(received)}`);}
+  const output=new Uint8Array(received);let offset=0;for(const chunk of chunks){output.set(chunk,offset);offset+=chunk.byteLength;}
+  log(`【VISIONOS SABR】${label}完成：${humanBytes(received)}。`);setProgress(end,`${label}下載完成。`);return output;
+}
 async function fetchYoutubeMuxed(format,label,start,end){
   const total=Number(format.contentLength||0);
   log(`【影音合一同工作階段】${label}由專用端點重新取得 ANDROID itag ${format.activeItag||format.itag||18} 並立即串流。`);
@@ -549,7 +571,10 @@ async function fetchYoutubeMuxed(format,label,start,end){
 }
 
 async function fetchMedia(format, label = "媒體", start = 5, end = 65) {
-  if (state.platform === "youtube") return normalizedKind(format) === "影音合一" ? fetchYoutubeMuxed(format,label,start,end) : fetchYoutubeMediaInChunks(format,label,start,end);
+  if (state.platform === "youtube") {
+    if (format.protocol === "sabr") return fetchYoutubeSabr(format, label, start, end);
+    return normalizedKind(format) === "影音合一" ? fetchYoutubeMuxed(format,label,start,end) : fetchYoutubeMediaInChunks(format,label,start,end);
+  }
   const response = await fetch(mediaEndpoint(format), { cache: "no-store", headers: platformRequestHeaders() });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));

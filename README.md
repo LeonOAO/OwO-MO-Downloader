@@ -77,9 +77,18 @@ OwO-MO-Downloader-main/
 - 360p 影音合一同工作階段下載完整保留。
 
 
-### 高畫質 Client 搜尋順位
-- ANDROID 仍先保留 360p 影音合一格式。
-- 高畫質搜尋以 VISIONOS 為第一順位，接著依序測試其他候選 Client。
-- ANDROID_VR 移至高畫質候選清單最後，僅在前面所有 Client 都沒有取得並通過分離影音實載驗證時才執行。
-- 任一前順位 Client 的分離視訊與音訊通過 256 KiB 實載驗證後，立即停止後續 Client 輪詢。
-- 高畫質下載沿用格式實際來源，不會把 VISIONOS 解析結果改用 ANDROID_VR 下載。
+### VISIONOS SABR／UMP 高畫質下載
+- VISIONOS 為第一順位高畫質 Client；ANDROID_VR 僅作最後備援。
+- VISIONOS 只提供 `serverAbrStreamingUrl` 時，Worker 會使用 GoogleVideo 4.1.1 的 `SabrStream` 實作處理 UMP／SABR。
+- 解析階段會確認分離視訊、分離音訊、`serverAbrStreamingUrl` 與 `videoPlaybackUstreamerConfig` 完整後，直接採用 VISIONOS 並停止後續 Client。
+- SABR 下載不使用傳統 GoogleVideo URL、Media Session Cache、5 MiB Range 或 ANDROID_VR。
+- 視訊與音訊仍分別回傳前端，沿用既有瀏覽器 FFmpeg 合併、M4A、MP3 與 WAV 流程。
+- 360p 影音合一仍使用已驗證的 ANDROID 同工作階段下載。
+
+### 建置 Worker
+完整可維護來源位於 `WorkerSource.js`。部署用 `worker.js` 已完成 bundle。重新建置：
+
+```bash
+npm install
+npm run build:worker
+```
