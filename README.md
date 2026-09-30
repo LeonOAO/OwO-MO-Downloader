@@ -99,3 +99,11 @@ npm run build:worker
 - 視訊與音訊下載優先命中同一份 SABR Context；Session 未命中或過期才重新呼叫 VISIONOS Player API。
 - 下載檢查日誌分別顯示 Session、Player 狀態、可用 itag、Streaming URL 與 Ustreamer Config。
 - 錯誤碼拆分為 `SABR_SESSION_EXPIRED`、`SABR_SELECTED_ITAG_MISSING`、`SABR_STREAMING_URL_MISSING`、`SABR_USTREAMER_CONFIG_MISSING` 與 `SABR_PAIR_MISSING`。
+
+
+### FFmpeg ES Module Core 與統一紀錄格式
+- `FFmpeg/core/ffmpeg-core.js` 已切換為與 Module Worker 相容的 ES Module Core，修正 `failed to import ffmpeg-core.js`。
+- `ffmpeg-core.wasm` 維持相同核心版本與 SHA-256，載入時由同源 URL 明確指定。
+- FFmpeg 載入前會分別記錄 Class Worker、ES Module Core 與 WebAssembly URL，便於部署診斷。
+- 所有執行紀錄統一為 `[時間] 【分類】內容`。未帶分類的既有訊息會自動補上 `【系統】`。
+- 影片解析起始紀錄統一為 `【開始解析影片】ID：VIDEO_ID`，錯誤統一為 `【處理失敗】錯誤內容`。

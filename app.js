@@ -11,11 +11,30 @@ const YOUTUBE_AUTO_RETRY_DELAY_MS = 5000;
 const YOUTUBE_AUTO_RETRY_CODES = new Set(["YOUTUBE_PLAYER_RESPONSE_MISSING","YOUTUBE_RATE_LIMITED","YOUTUBE_PAGE_UNAVAILABLE","AUTH_REQUIRED","NO_MEDIA_ADDRESS"]);
 const DEFAULT_WORKER_URL = "https://owo-mo-downloader-api.kkwan812.workers.dev";
 
+function normalizeLogMessage(message) {
+  const text = String(message ?? "").trim();
+  if (!text) return "【系統】未提供紀錄內容。";
+  if (/^【[^】]+】/.test(text)) return text;
+  const rules = [
+    [/^開始解析影片\s+ID[：:]\s*(.+)$/i, match => `【開始解析影片】ID：${match[1]}`],
+    [/^處理失敗[：:]\s*(.+)$/i, match => `【處理失敗】${match[1]}`],
+    [/^解析失敗[：:]\s*(.+)$/i, match => `【解析失敗】${match[1]}`],
+    [/^下載失敗[：:]\s*(.+)$/i, match => `【下載失敗】${match[1]}`],
+    [/^已辨識平台[：:]\s*(.+)$/i, match => `【平台辨識】${match[1]}`],
+    [/^開始(.+)$/i, match => `【開始執行】${match[1]}`],
+    [/^(.+)$/s, match => `【系統】${match[1]}`]
+  ];
+  for (const [pattern, formatter] of rules) {
+    const match = text.match(pattern);
+    if (match) return formatter(match);
+  }
+  return `【系統】${text}`;
+}
 function log(message) {
   const time = new Date().toLocaleTimeString("zh-TW", { hour12: false });
   const box = $("log");
   if (box.textContent === "尚未執行。") box.textContent = "";
-  box.textContent += `[${time}] ${message}\n`;
+  box.textContent += `[${time}] ${normalizeLogMessage(message)}\n`;
   box.scrollTop = box.scrollHeight;
 }
 function status(message, kind = "idle") {
@@ -392,7 +411,7 @@ async function requestYoutubeAll(id, attempts = 3) {
   return { response: lastResponse, data: lastData };
 }
 async function analyzeYoutube(id) {
-  log(`開始解析影片 ID：${id}`);
+  log(`【開始解析影片】ID：${id}`);
   log("【單一工作階段】基本格式與高畫質 Client 共用同一次 watch 頁面、API Key、Visitor Data 與 Player Response。");
   const { response, data } = await requestYoutubeAll(id, 3);
   if (!response || !response.ok) { const error=new Error(data.error||data.note||`YouTube 單一工作階段回傳 HTTP ${response?.status||"未知"}。`); error.code=String(data.code||"YOUTUBE_ANALYSIS_FAILED"); throw error; }
@@ -624,7 +643,12 @@ async function ensureFFmpeg() {
     ffmpeg.on("log", ({ message }) => message && log(`【FFMPEG】${message}`));
     ffmpeg.on("progress", ({ progress }) => Number.isFinite(progress) && setProgress(65 + Math.max(0,Math.min(1,progress))*30, "正在執行瀏覽器影音處理…"));
     try {
-      await ffmpeg.load({ classWorkerURL: FFMPEG_CLASS_WORKER_URL, coreURL: `${FFMPEG_CORE_BASE}/ffmpeg-core.js`, wasmURL: `${FFMPEG_CORE_BASE}/ffmpeg-core.wasm` });
+      const coreURL = `${FFMPEG_CORE_BASE}/ffmpeg-core.js`;
+      const wasmURL = `${FFMPEG_CORE_BASE}/ffmpeg-core.wasm`;
+      log(`【FFMPEG 載入】Class Worker：${FFMPEG_CLASS_WORKER_URL}。`);
+      log(`【FFMPEG 載入】ES Module Core：${coreURL}。`);
+      log(`【FFMPEG 載入】WebAssembly：${wasmURL}。`);
+      await ffmpeg.load({ classWorkerURL: FFMPEG_CLASS_WORKER_URL, coreURL, wasmURL });
     } catch (reason) {
       try { ffmpeg.terminate(); } catch {}
       const detail = reason instanceof Error ? reason.message : typeof reason === "string" ? reason : JSON.stringify(reason ?? null);
@@ -847,7 +871,7 @@ async function download() {
     await (state.mode === "hq" ? mergeDownload() : directDownload());
     status("處理完成，檔案已交給瀏覽器儲存。", "success");
   } catch (error) {
-    status(error.message, "error"); log(`處理失敗：${error.message}`);
+    status(error.message, "error"); log(`【處理失敗】${error.message}`);
   } finally { state.busy = false; updateButton(); }
 }
 
