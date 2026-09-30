@@ -1,7 +1,7 @@
 {
   "name": "owo-mo-downloader-worker",
-  "version": "1.8.0",
-  "description": "WEB_SAFARI HLS 優先，ANDROID_VR 與 VISIONOS 保持備援。",
+  "version": "1.8.1",
+  "description": "WEB_SAFARI HLS 與一般 Client 優先，ANDROID_VR 備援 1，VISIONOS 備援 2。",
   "main": "app.js",
   "scripts": {
     "build:worker": "npm run patch:googlevideo && esbuild WorkerSource.js --bundle --format=esm --platform=browser --target=es2022 --minify --outfile=worker.js",

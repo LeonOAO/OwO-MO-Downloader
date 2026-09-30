@@ -1,6 +1,6 @@
 import { SabrStream } from "googlevideo/sabr-stream";
 const VERSION = "1.0";
-const BUILD = "2026.09.30-v18-web-safari-hls";
+const BUILD = "2026.09.30-v181-hls-fallback-order";
 const SERVICE = "OwO MO Downloader Worker";
 const MEDIA_SUFFIXES = [".googlevideo.com"];
 const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
@@ -188,14 +188,16 @@ const PLAYER_CLIENTS = [
 
 const ALL_MODE_CLIENT_ORDER = [
   "ANDROID",
-  // New primary path: Safari HLS is attempted before the existing fallbacks.
+  // Primary HLS candidate.
   "WEB_SAFARI",
-  // Existing ANDROID_VR and VISIONOS implementations remain available as fallbacks.
-  "VISIONOS", "IOS", "IOS_CREATOR", "IOS_MUSIC",
+  // Continue through all ordinary non-fallback clients when Safari HLS is unavailable.
+  "TV", "TV_EMBEDDED", "TV_SIMPLY",
   "WEB_EMBEDDED", "WEB_KIDS", "WEB", "MWEB",
-  "TV", "TV_EMBEDDED", "TV_SIMPLY", "ANDROID_CREATOR",
-  "ANDROID_MUSIC", "ANDROID_TESTSUITE", "WEB_REMIX", "WEB_CREATOR",
-  "ANDROID_VR"
+  "IOS", "IOS_CREATOR", "IOS_MUSIC",
+  "ANDROID_CREATOR", "ANDROID_MUSIC", "ANDROID_TESTSUITE",
+  "WEB_REMIX", "WEB_CREATOR",
+  // Existing implementations remain unchanged; only their search positions are corrected.
+  "ANDROID_VR", "VISIONOS"
 ];
 
 const CLIENT_REQUEST_INTERVAL_MS = 1000;
@@ -297,7 +299,7 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
   steps.push(mode === "quick"
     ? "【快速解析】先使用 ANDROID 尋找可直接下載的影音合一格式。"
     : mode === "all"
-      ? "【單一工作階段】先使用 ANDROID 保留基本格式，再優先搜尋 WEB_SAFARI HLS；ANDROID_VR 與 VISIONOS 維持既有備援路徑。"
+      ? "【單一工作階段】先使用 ANDROID 保留基本格式，再搜尋 WEB_SAFARI HLS 與全部一般 Client；ANDROID_VR 為備援 1，VISIONOS 為最後備援。"
       : "【高畫質搜尋】保留既有結果，繼續蒐集分離視訊與分離音訊格式。");
   let authCount = state.status === "LOGIN_REQUIRED" ? 1 : 0;
   const challengedPriorityClients = new Set();
@@ -348,10 +350,10 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
       const muxed = all.some(format => String(format.mimeType || "").startsWith("video/") && Boolean(format.audioQuality));
 
       if (profile.label === "VISIONOS" && hasSabrSeparatedFormats(player)) {
-        steps.push("【VISIONOS SABR】已取得分離視訊、分離音訊、serverAbrStreamingUrl 與 videoPlaybackUstreamerConfig，採用 SABR 高畫質路徑並停止其餘 Client 輪詢。");
+        steps.push("【備援 2／VISIONOS SABR】一般來源與 ANDROID_VR 均未成功；已取得完整 SABR 描述，採用最後備援並結束搜尋。");
         break;
       }
-      if(videoOnly&&audioOnly){const p=await probeYoutubeFormats(player,profile.label,steps);if(p.videoOnly&&p.audioOnly){steps.push(`【高畫質】${profile.label} 的分離視訊與音訊已通過實載驗證，停止其餘 Client 輪詢。`);break;}steps.push(`【高畫質續搜】${profile.label} 未通過實載驗證，繼續下一個 Client。`);}
+      if(videoOnly&&audioOnly){const p=await probeYoutubeFormats(player,profile.label,steps);if(p.videoOnly&&p.audioOnly){const category=profile.label==="ANDROID_VR"?"【備援 1／ANDROID_VR】":"【高畫質】";steps.push(`${category}${profile.label} 的分離視訊與音訊已通過實載驗證，停止其餘 Client 輪詢。`);break;}steps.push(`【高畫質續搜】${profile.label} 未通過實載驗證，繼續下一個 Client。`);}
 
       if (mode !== "all" && muxed && authCount >= 4) {
         steps.push("【快速停止】已有影音合一格式，且多個來源要求登入，停止其餘 Client 輪詢。");

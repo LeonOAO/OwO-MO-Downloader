@@ -1,0 +1,4 @@
+OwO MO Downloader v1.8.1
+- 修正 v1.8 的 Client 搜尋順位。
+- 順序：ANDROID -> WEB_SAFARI -> 一般 Client -> ANDROID_VR -> VISIONOS。
+- ANDROID_VR 與 VISIONOS 下載邏輯保持不變。

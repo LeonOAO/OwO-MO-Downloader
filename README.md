@@ -132,3 +132,10 @@ npm run build:worker
 - 加密 HLS Playlist 會停止並顯示明確錯誤。
 - ANDROID_VR 與 VISIONOS 的既有備援下載邏輯保持不變。
 - 保留 `PO_TOKEN_PROVIDER_URL` 的後續整合位置；本版不會把 Provider URL 暴露給前端。
+
+
+### v1.8.1 Client 順位修正
+- WEB_SAFARI HLS 失敗後會繼續測試全部一般 Client。
+- ANDROID_VR 移至倒數第二，作為備援 1。
+- VISIONOS 移至最後，作為備援 2。
+- ANDROID_VR 與 VISIONOS 的下載實作、Session、完整性保護及 FFmpeg 路徑均未修改。

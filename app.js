@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const state = { formats: [], mode: "hq", ffmpeg: null, ffmpegLoaded: false, ffmpegLoading: null, busy: false, videoId: "", baseReady: false, platform: "youtube", fbCookie: "", igCookie: "", thCookie: "", ytCookie: "", ytMediaSessionId: "" };
-const APP_VERSION = "v1.8";
+const APP_VERSION = "v1.8.1";
 const FFMPEG_MODULE_URL = new URL("./FFmpeg/ffmpeg/index.js", import.meta.url).href;
 const FFMPEG_CLASS_WORKER_URL = new URL("./FFmpeg/ffmpeg/worker.js", import.meta.url).href;
 const FFMPEG_CORE_BASE = new URL("./FFmpeg/core", import.meta.url).href;
