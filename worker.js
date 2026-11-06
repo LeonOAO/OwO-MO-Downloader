@@ -1,3 +1,2807 @@
-function At(){let e=this.buf,n=this.pos,t=0,o=0;for(let i=0;i<28;i+=7){let a=e[n++];if(t|=(a&127)<<i,(a&128)==0){this.pos=n,this.assertBounds(),this.varint64Lo=t,this.varint64Hi=o;return}}let r=e[n++];if(t|=(r&15)<<28,o=(r&112)>>4,(r&128)==0){this.pos=n,this.assertBounds(),this.varint64Lo=t,this.varint64Hi=o;return}for(let i=3;i<=31;i+=7){let a=e[n++];if(o|=(a&127)<<i,(a&128)==0){this.pos=n,this.assertBounds(),this.varint64Lo=t,this.varint64Hi=o;return}}throw new Error("invalid varint")}var me=4294967296;function Le(e){let n=e[0]==="-";n&&(e=e.slice(1));let t=1e6,o=0,r=0;function i(a,s){let c=Number(e.slice(a,s));r*=t,o=o*t+c,o>=me&&(r=r+(o/me|0),o=o%me)}return i(-24,-18),i(-18,-12),i(-12,-6),i(-6),n?Tt(o,r):Ue(o,r)}function yt(e,n){let t=Ue(e,n),o=t.hi&2147483648;o&&(t=Tt(t.lo,t.hi));let r=xe(t.lo,t.hi);return o?"-"+r:r}function xe(e,n){if({lo:e,hi:n}=Cn(e,n),n<=2097151)return String(me*n+e);let t=e&16777215,o=(e>>>24|n<<8)&16777215,r=n>>16&65535,i=t+o*6777216+r*6710656,a=o+r*8147497,s=r*2,c=1e7;return i>=c&&(a+=Math.floor(i/c),i%=c),a>=c&&(s+=Math.floor(a/c),a%=c),s.toString()+gt(a)+gt(i)}function Cn(e,n){return{lo:e>>>0,hi:n>>>0}}function Ue(e,n){return{lo:e|0,hi:n|0}}function Tt(e,n){return n=~n,e?e=~e+1:n+=1,Ue(e,n)}var gt=e=>{let n=String(e);return"0000000".slice(n.length)+n};function kt(){let e=this.buf[this.pos++];if((e&128)===0)return this.assertBounds(),e;let n=e&127;if(e=this.buf[this.pos++],n|=(e&127)<<7,(e&128)===0)return this.assertBounds(),n;if(e=this.buf[this.pos++],n|=(e&127)<<14,(e&128)===0)return this.assertBounds(),n;if(e=this.buf[this.pos++],n|=(e&127)<<21,(e&128)===0)return this.assertBounds(),n;e=this.buf[this.pos++],n|=(e&15)<<28;for(let t=5;(e&128)!==0&&t<10;t++)e=this.buf[this.pos++];if((e&128)!==0)throw new Error("invalid varint");return this.assertBounds(),n>>>0}var V=Pn();function Pn(){let e=new DataView(new ArrayBuffer(8));if(typeof BigInt=="function"&&typeof e.getBigInt64=="function"&&typeof e.getBigUint64=="function"&&typeof e.setBigInt64=="function"&&typeof e.setBigUint64=="function"&&(!!globalThis.Deno||!!globalThis.Bun||typeof process!="object"||typeof process.env!="object"||process.env.BUF_BIGINT_DISABLE!=="1")){let t=BigInt("-9223372036854775808"),o=BigInt("9223372036854775807"),r=BigInt("0"),i=BigInt("18446744073709551615");return{zero:BigInt(0),supported:!0,parse(a){let s=typeof a=="bigint"?a:BigInt(a);if(s>o||s<t)throw new Error(`invalid int64: ${a}`);return s},uParse(a){let s=typeof a=="bigint"?a:BigInt(a);if(s>i||s<r)throw new Error(`invalid uint64: ${a}`);return s},enc(a){return e.setBigInt64(0,this.parse(a),!0),{lo:e.getInt32(0,!0),hi:e.getInt32(4,!0)}},uEnc(a){return e.setBigInt64(0,this.uParse(a),!0),{lo:e.getInt32(0,!0),hi:e.getInt32(4,!0)}},dec(a,s){return e.setInt32(0,a,!0),e.setInt32(4,s,!0),e.getBigInt64(0,!0)},uDec(a,s){return e.setInt32(0,a,!0),e.setInt32(4,s,!0),e.getBigUint64(0,!0)}}}return{zero:"0",supported:!1,parse(t){return typeof t!="string"&&(t=t.toString()),Ot(t),t},uParse(t){return typeof t!="string"&&(t=t.toString()),Nt(t),t},enc(t){return typeof t!="string"&&(t=t.toString()),Ot(t),Le(t)},uEnc(t){return typeof t!="string"&&(t=t.toString()),Nt(t),Le(t)},dec(t,o){return yt(t,o)},uDec(t,o){return xe(t,o)}}}function Ot(e){if(!/^-?[0-9]+$/.test(e))throw new Error("invalid int64: "+e)}function Nt(e){if(!/^[0-9]+$/.test(e))throw new Error("invalid uint64: "+e)}var Be;function Mn(e){var n;Be=Object.assign(Object.assign({},e),{encodeUtf8Into:(n=e.encodeUtf8Into)!==null&&n!==void 0?n:Fe(e.encodeUtf8.bind(e))})}function ve(){if(!Be){let e=globalThis;if(!e.TextEncoder||!e.TextDecoder)throw new Error("encoding API missing: install TextEncoder and TextDecoder on globalThis");let n=new e.TextEncoder,t=new e.TextDecoder,o,r={encodeUtf8(a){return n.encode(a)},decodeUtf8(a,s){return s?(o||(o=new e.TextDecoder("utf-8",{fatal:!0})),o.decode(a)):t.decode(a)},checkUtf8(a){try{return encodeURIComponent(a),!0}catch{return!1}}};n.encodeInto&&(r.encodeUtf8Into=n.encodeInto.bind(n));let i=String.prototype.isWellFormed;i&&(r.checkUtf8=a=>i.call(a)),Mn(r)}return Be}function Fe(e){return(n,t)=>{let o=e(n);return t.set(o),{written:o.byteLength}}}var j;(function(e){e[e.Varint=0]="Varint",e[e.Bit64=1]="Bit64",e[e.LengthDelimited=2]="LengthDelimited",e[e.StartGroup=3]="StartGroup",e[e.EndGroup=4]="EndGroup",e[e.Bit32=5]="Bit32"})(j||(j={}));var wn=4294967295,Dn=2147483647,Ln=-2147483648,A=class{constructor(n){this.stackPos=[],this.encodeUtf8Into=n?Fe(n):ve().encodeUtf8Into,this.buffer=Pt,this.viewCache=Un,this.pos=0}ensureCapacity(n){let t=this.pos+n;if(t>this.buffer.length){let o=this.buffer.length||xn;for(;o<t;)o*=2;let r=new Uint8Array(o);this.pos>0&&r.set(this.buffer),this.buffer=r}}view(){let n=this.buffer,t=this.viewCache;if(t.byteLength===n.byteLength)return t;let o=new DataView(n.buffer);return this.viewCache=o,o}finish(){let n=this.buffer.slice(0,this.pos);return this.pos=0,this.stackPos=[],n}fork(){return this.stackPos.push(this.pos),this.ensureCapacity(ce),this.buffer[this.pos++]=0,this}join(){let n=this.stackPos.pop();if(n===void 0)throw new Error("invalid state, fork stack empty");let t=this.pos-n-ce,o=$e(t);return o>ce&&(this.ensureCapacity(o-ce),this.buffer.copyWithin(n+o,n+ce,this.pos)),this.pos=n,this.uint32(t),this.pos+=t,this}tag(n,t){return this.uint32((n<<3|t)>>>0)}raw(n){return this.ensureCapacity(n.length),this.buffer.set(n,this.pos),this.pos+=n.length,this}uint32(n){if(Ct(n),this.ensureCapacity(5),n<128)return this.buffer[this.pos++]=n,this;for(;n>127;)this.buffer[this.pos++]=n&127|128,n>>>=7;return this.buffer[this.pos++]=n,this}int32(n){if(He(n),n>=0)return this.uint32(n);this.ensureCapacity(10);for(let t=0;t<9;t++)this.buffer[this.pos++]=n&127|128,n>>=7;return this.buffer[this.pos++]=1,this}bool(n){return this.ensureCapacity(1),this.buffer[this.pos++]=n?1:0,this}bytes(n){return this.uint32(n.byteLength),this.raw(n)}string(n){typeof n!="string"&&(n=String(n));let t=n.length;if(t<=Mt){this.ensureCapacity(t+1);let c=this.buffer,d=this.pos;c[d++]=t;let u=0;for(;u<t;u++){let f=n.charCodeAt(u);if(f>127)break;c[d++]=f}if(u==t)return this.pos=d,this}this.ensureCapacity(t*3+5);let o=$e(t),r=this.buffer,i=this.pos,{written:a}=this.encodeUtf8Into(n,r.subarray(i+o)),s=$e(a);return s!=o&&r.copyWithin(i+s,i+o,i+o+a),this.uint32(a),this.pos+=a,this}float(n){return Bn(n),this.ensureCapacity(4),this.view().setFloat32(this.pos,n,!0),this.pos+=4,this}double(n){return this.ensureCapacity(8),this.view().setFloat64(this.pos,n,!0),this.pos+=8,this}fixed32(n){return Ct(n),this.ensureCapacity(4),this.view().setUint32(this.pos,n,!0),this.pos+=4,this}sfixed32(n){return He(n),this.ensureCapacity(4),this.view().setInt32(this.pos,n,!0),this.pos+=4,this}sint32(n){return He(n),this.uint32((n<<1^n>>31)>>>0)}sfixed64(n){let t=V.enc(n);this.ensureCapacity(8);let o=this.view();return o.setInt32(this.pos,t.lo,!0),o.setInt32(this.pos+4,t.hi,!0),this.pos+=8,this}fixed64(n){let t=V.uEnc(n);this.ensureCapacity(8);let o=this.view();return o.setInt32(this.pos,t.lo,!0),o.setInt32(this.pos+4,t.hi,!0),this.pos+=8,this}int64(n){let t=V.enc(n);return this.writeVarint64(t.lo,t.hi)}sint64(n){let t=V.enc(n),o=t.hi>>31,r=t.lo<<1^o,i=(t.hi<<1|t.lo>>>31)^o;return this.writeVarint64(r,i)}uint64(n){let t=V.uEnc(n);return this.writeVarint64(t.lo,t.hi)}writeVarint64(n,t){this.ensureCapacity(10);let o=this.buffer,r=this.pos;for(let s=0;s<28;s=s+7){let c=n>>>s,d=!(!(c>>>7)&&t==0);if(o[r++]=(d?c|128:c)&255,!d)return this.pos=r,this}let i=n>>>28&15|(t&7)<<4,a=t>>3!=0;if(o[r++]=(a?i|128:i)&255,!a)return this.pos=r,this;for(let s=3;s<31;s=s+7){let c=t>>>s,d=!!(c>>>7);if(o[r++]=(d?c|128:c)&255,!d)return this.pos=r,this}return o[r++]=t>>>31&1,this.pos=r,this}},xn=128,ce=1,Pt=new Uint8Array(0),Un=new DataView(Pt.buffer),Mt=32;function $e(e){return e<128?1:e<16384?2:e<2097152?3:e<268435456?4:5}var p=class{constructor(n,t=ve().decodeUtf8){this.decodeUtf8=t,this.varint64Lo=0,this.varint64Hi=0,this.varint64=At,this.uint32=kt,this.buf=n,this.len=n.length,this.pos=0,this.view=new DataView(n.buffer,n.byteOffset,n.byteLength)}tag(){let n=this.pos,t=this.uint32(),o=this.pos-n;if(o>5||o==5&&this.buf[this.pos-1]>15)throw new Error("illegal tag: varint overflows uint32");let r=t>>>3,i=t&7;if(r<=0||i>5)throw new Error("illegal tag: field no "+r+" wire type "+i);return[r,i]}skip(n,t,o=100){let r=this.pos;switch(n){case j.Varint:for(;this.buf[this.pos++]&128;);break;case j.Bit64:this.pos+=4;case j.Bit32:this.pos+=4;break;case j.LengthDelimited:let i=this.uint32();this.pos+=i;break;case j.StartGroup:if(o<=0)throw new Error("maximum recursion depth reached");for(;;){let[a,s]=this.tag();if(s===j.EndGroup){if(t!==void 0&&a!==t)throw new Error("invalid end group tag");break}this.skip(s,a,o-1)}break;default:throw new Error("cant skip wire type "+n)}return this.assertBounds(),this.buf.subarray(r,this.pos)}assertBounds(){if(this.pos>this.len)throw new RangeError("premature EOF")}int32(){return this.uint32()|0}sint32(){let n=this.uint32();return n>>>1^-(n&1)}int64(){return this.varint64(),V.dec(this.varint64Lo,this.varint64Hi)}uint64(){return this.varint64(),V.uDec(this.varint64Lo,this.varint64Hi)}sint64(){this.varint64();let n=this.varint64Lo,t=this.varint64Hi,o=-(n&1);return n=(n>>>1|(t&1)<<31)^o,t=t>>>1^o,V.dec(n,t)}bool(){let n=this.buf[this.pos];return n<128?(this.pos++,n!==0):(this.varint64(),this.varint64Lo!==0||this.varint64Hi!==0)}fixed32(){return this.view.getUint32((this.pos+=4)-4,!0)}sfixed32(){return this.view.getInt32((this.pos+=4)-4,!0)}fixed64(){return V.uDec(this.sfixed32(),this.sfixed32())}sfixed64(){return V.dec(this.sfixed32(),this.sfixed32())}float(){return this.view.getFloat32((this.pos+=4)-4,!0)}double(){return this.view.getFloat64((this.pos+=8)-8,!0)}bytes(){let n=this.uint32(),t=this.pos;return this.pos+=n,this.assertBounds(),this.buf.subarray(t,t+n)}string(n){let t=this.bytes(),o=t.length;if(o<=Mt){let r=new Array(o);for(let i=0;i<o;i++){let a=t[i];if(a>127)return this.decodeUtf8(t,n);r[i]=a}return String.fromCharCode.apply(String,r)}return this.decodeUtf8(t,n)}};function He(e){if(typeof e=="string")e=Number(e);else if(typeof e!="number")throw new Error("invalid int32: "+typeof e);if(!Number.isInteger(e)||e>Dn||e<Ln)throw new Error("invalid int32: "+e)}function Ct(e){if(typeof e=="string")e=Number(e);else if(typeof e!="number")throw new Error("invalid uint32: "+typeof e);if(!Number.isInteger(e)||e>wn||e<0)throw new Error("invalid uint32: "+e)}function Bn(e){if(typeof e=="string"){let n=e;if(e=Number(e),Number.isNaN(e)&&n!=="NaN")throw new Error("invalid float32: "+n)}else if(typeof e!="number")throw new Error("invalid float32: "+typeof e);if(!Number.isFinite(Math.fround(e))&&Number.isFinite(e))throw new Error("invalid float32: "+e)}function vn(){return{itag:0,lastModified:"0",xtags:""}}var L={encode(e,n=new A){return e.itag!==void 0&&e.itag!==0&&n.uint32(8).int32(e.itag),e.lastModified!==void 0&&e.lastModified!=="0"&&n.uint32(16).uint64(e.lastModified),e.xtags!==void 0&&e.xtags!==""&&n.uint32(26).string(e.xtags),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=vn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.itag=t.int32();continue}case 2:{if(i!==16)break;r.lastModified=t.uint64().toString();continue}case 3:{if(i!==26)break;r.xtags=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Fn(){return{legacyStart:0,legacyEnd:0,start:0,end:0}}var re={encode(e,n=new A){return e.legacyStart!==void 0&&e.legacyStart!==0&&n.uint32(8).int32(e.legacyStart),e.legacyEnd!==void 0&&e.legacyEnd!==0&&n.uint32(16).int32(e.legacyEnd),e.start!==void 0&&e.start!==0&&n.uint32(24).int32(e.start),e.end!==void 0&&e.end!==0&&n.uint32(32).int32(e.end),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Fn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.legacyStart=t.int32();continue}case 2:{if(i!==16)break;r.legacyEnd=t.int32();continue}case 3:{if(i!==24)break;r.start=t.int32();continue}case 4:{if(i!==32)break;r.end=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function $n(){return{trackType:0,isHdr:!1}}var Ve={encode(e,n=new A){return e.trackType!==void 0&&e.trackType!==0&&n.uint32(8).int32(e.trackType),e.isHdr!==void 0&&e.isHdr!==!1&&n.uint32(16).bool(e.isHdr),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=$n();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.trackType=t.int32();continue}case 2:{if(i!==16)break;r.isHdr=t.bool();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Hn(){return{authorizedFormats:[],sabrLicenseConstraint:new Uint8Array(0)}}var _e={encode(e,n=new A){for(let t of e.authorizedFormats)Ve.encode(t,n.uint32(10).fork()).join();return e.sabrLicenseConstraint!==void 0&&e.sabrLicenseConstraint.length!==0&&n.uint32(18).bytes(e.sabrLicenseConstraint),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Hn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.authorizedFormats.push(Ve.decode(t,t.uint32()));continue}case 2:{if(i!==18)break;r.sabrLicenseConstraint=t.bytes();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Vn(){return{videoId:"",formatId:void 0,endTimeMs:"0",endSegmentNumber:"0",mimeType:"",initRange:void 0,indexRange:void 0,field8:"0",durationUnits:"0",durationTimescale:"0"}}var We={encode(e,n=new A){return e.videoId!==void 0&&e.videoId!==""&&n.uint32(10).string(e.videoId),e.formatId!==void 0&&L.encode(e.formatId,n.uint32(18).fork()).join(),e.endTimeMs!==void 0&&e.endTimeMs!=="0"&&n.uint32(24).int64(e.endTimeMs),e.endSegmentNumber!==void 0&&e.endSegmentNumber!=="0"&&n.uint32(32).int64(e.endSegmentNumber),e.mimeType!==void 0&&e.mimeType!==""&&n.uint32(42).string(e.mimeType),e.initRange!==void 0&&re.encode(e.initRange,n.uint32(50).fork()).join(),e.indexRange!==void 0&&re.encode(e.indexRange,n.uint32(58).fork()).join(),e.field8!==void 0&&e.field8!=="0"&&n.uint32(64).int64(e.field8),e.durationUnits!==void 0&&e.durationUnits!=="0"&&n.uint32(72).int64(e.durationUnits),e.durationTimescale!==void 0&&e.durationTimescale!=="0"&&n.uint32(80).int64(e.durationTimescale),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Vn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.videoId=t.string();continue}case 2:{if(i!==18)break;r.formatId=L.decode(t,t.uint32());continue}case 3:{if(i!==24)break;r.endTimeMs=t.int64().toString();continue}case 4:{if(i!==32)break;r.endSegmentNumber=t.int64().toString();continue}case 5:{if(i!==42)break;r.mimeType=t.string();continue}case 6:{if(i!==50)break;r.initRange=re.decode(t,t.uint32());continue}case 7:{if(i!==58)break;r.indexRange=re.decode(t,t.uint32());continue}case 8:{if(i!==64)break;r.field8=t.int64().toString();continue}case 9:{if(i!==72)break;r.durationUnits=t.int64().toString();continue}case 10:{if(i!==80)break;r.durationTimescale=t.int64().toString();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Wn(){return{startTicks:"0",durationTicks:"0",timescale:0}}var Y={encode(e,n=new A){return e.startTicks!==void 0&&e.startTicks!=="0"&&n.uint32(8).int64(e.startTicks),e.durationTicks!==void 0&&e.durationTicks!=="0"&&n.uint32(16).int64(e.durationTicks),e.timescale!==void 0&&e.timescale!==0&&n.uint32(24).int32(e.timescale),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Wn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.startTicks=t.int64().toString();continue}case 2:{if(i!==16)break;r.durationTicks=t.int64().toString();continue}case 3:{if(i!==24)break;r.timescale=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Kn(){return{headerId:0,videoId:"",itag:0,lmt:"0",xtags:"",startRange:"0",compressionAlgorithm:0,isInitSeg:!1,sequenceNumber:0,bitrateBps:"0",startMs:"0",durationMs:"0",formatId:void 0,contentLength:"0",timeRange:void 0,sequenceLmt:"0"}}var Ke={encode(e,n=new A){return e.headerId!==void 0&&e.headerId!==0&&n.uint32(8).uint32(e.headerId),e.videoId!==void 0&&e.videoId!==""&&n.uint32(18).string(e.videoId),e.itag!==void 0&&e.itag!==0&&n.uint32(24).int32(e.itag),e.lmt!==void 0&&e.lmt!=="0"&&n.uint32(32).uint64(e.lmt),e.xtags!==void 0&&e.xtags!==""&&n.uint32(42).string(e.xtags),e.startRange!==void 0&&e.startRange!=="0"&&n.uint32(48).int64(e.startRange),e.compressionAlgorithm!==void 0&&e.compressionAlgorithm!==0&&n.uint32(56).int32(e.compressionAlgorithm),e.isInitSeg!==void 0&&e.isInitSeg!==!1&&n.uint32(64).bool(e.isInitSeg),e.sequenceNumber!==void 0&&e.sequenceNumber!==0&&n.uint32(72).int32(e.sequenceNumber),e.bitrateBps!==void 0&&e.bitrateBps!=="0"&&n.uint32(80).int64(e.bitrateBps),e.startMs!==void 0&&e.startMs!=="0"&&n.uint32(88).int64(e.startMs),e.durationMs!==void 0&&e.durationMs!=="0"&&n.uint32(96).int64(e.durationMs),e.formatId!==void 0&&L.encode(e.formatId,n.uint32(106).fork()).join(),e.contentLength!==void 0&&e.contentLength!=="0"&&n.uint32(112).int64(e.contentLength),e.timeRange!==void 0&&Y.encode(e.timeRange,n.uint32(122).fork()).join(),e.sequenceLmt!==void 0&&e.sequenceLmt!=="0"&&n.uint32(128).uint64(e.sequenceLmt),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Kn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.headerId=t.uint32();continue}case 2:{if(i!==18)break;r.videoId=t.string();continue}case 3:{if(i!==24)break;r.itag=t.int32();continue}case 4:{if(i!==32)break;r.lmt=t.uint64().toString();continue}case 5:{if(i!==42)break;r.xtags=t.string();continue}case 6:{if(i!==48)break;r.startRange=t.int64().toString();continue}case 7:{if(i!==56)break;r.compressionAlgorithm=t.int32();continue}case 8:{if(i!==64)break;r.isInitSeg=t.bool();continue}case 9:{if(i!==72)break;r.sequenceNumber=t.int32();continue}case 10:{if(i!==80)break;r.bitrateBps=t.int64().toString();continue}case 11:{if(i!==88)break;r.startMs=t.int64().toString();continue}case 12:{if(i!==96)break;r.durationMs=t.int64().toString();continue}case 13:{if(i!==106)break;r.formatId=L.decode(t,t.uint32());continue}case 14:{if(i!==112)break;r.contentLength=t.int64().toString();continue}case 15:{if(i!==122)break;r.timeRange=Y.decode(t,t.uint32());continue}case 16:{if(i!==128)break;r.sequenceLmt=t.uint64().toString();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Gn(){return{formatId:void 0,startTimeMs:"0",durationMs:"0",startSegmentIndex:0,endSegmentIndex:0,timeRange:void 0,field9:void 0,field11:void 0,field12:void 0}}var ee={encode(e,n=new A){return e.formatId!==void 0&&L.encode(e.formatId,n.uint32(10).fork()).join(),e.startTimeMs!=="0"&&n.uint32(16).int64(e.startTimeMs),e.durationMs!=="0"&&n.uint32(24).int64(e.durationMs),e.startSegmentIndex!==0&&n.uint32(32).int32(e.startSegmentIndex),e.endSegmentIndex!==0&&n.uint32(40).int32(e.endSegmentIndex),e.timeRange!==void 0&&Y.encode(e.timeRange,n.uint32(50).fork()).join(),e.field9!==void 0&&wt.encode(e.field9,n.uint32(74).fork()).join(),e.field11!==void 0&&Re.encode(e.field11,n.uint32(90).fork()).join(),e.field12!==void 0&&Re.encode(e.field12,n.uint32(98).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Gn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.formatId=L.decode(t,t.uint32());continue}case 2:{if(i!==16)break;r.startTimeMs=t.int64().toString();continue}case 3:{if(i!==24)break;r.durationMs=t.int64().toString();continue}case 4:{if(i!==32)break;r.startSegmentIndex=t.int32();continue}case 5:{if(i!==40)break;r.endSegmentIndex=t.int32();continue}case 6:{if(i!==50)break;r.timeRange=Y.decode(t,t.uint32());continue}case 9:{if(i!==74)break;r.field9=wt.decode(t,t.uint32());continue}case 11:{if(i!==90)break;r.field11=Re.decode(t,t.uint32());continue}case 12:{if(i!==98)break;r.field12=Re.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Yn(){return{field1:[]}}var wt={encode(e,n=new A){for(let t of e.field1)Dt.encode(t,n.uint32(10).fork()).join();return n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Yn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.field1.push(Dt.decode(t,t.uint32()));continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function qn(){return{videoId:"",lmt:"0"}}var Dt={encode(e,n=new A){return e.videoId!==void 0&&e.videoId!==""&&n.uint32(10).string(e.videoId),e.lmt!==void 0&&e.lmt!=="0"&&n.uint32(16).uint64(e.lmt),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=qn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.videoId=t.string();continue}case 2:{if(i!==16)break;r.lmt=t.uint64().toString();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function zn(){return{field1:0,field2:0,field3:0}}var Re={encode(e,n=new A){return e.field1!==void 0&&e.field1!==0&&n.uint32(8).int32(e.field1),e.field2!==void 0&&e.field2!==0&&n.uint32(16).int32(e.field2),e.field3!==void 0&&e.field3!==0&&n.uint32(24).int32(e.field3),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=zn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.field1=t.int32();continue}case 2:{if(i!==16)break;r.field2=t.int32();continue}case 3:{if(i!==24)break;r.field3=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Xn(){return{videoFormatCapabilities:[],audioFormatCapabilities:[],hdrModeBitmask:0}}var Ie={encode(e,n=new A){for(let t of e.videoFormatCapabilities)Lt.encode(t,n.uint32(10).fork()).join();for(let t of e.audioFormatCapabilities)xt.encode(t,n.uint32(18).fork()).join();return e.hdrModeBitmask!==void 0&&e.hdrModeBitmask!==0&&n.uint32(40).int32(e.hdrModeBitmask),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Xn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.videoFormatCapabilities.push(Lt.decode(t,t.uint32()));continue}case 2:{if(i!==18)break;r.audioFormatCapabilities.push(xt.decode(t,t.uint32()));continue}case 5:{if(i!==40)break;r.hdrModeBitmask=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function jn(){return{videoCodec:0,maxHeight:0,maxWidth:0,maxFramerate:0,maxBitrateBps:0,is10BitSupported:!1}}var Lt={encode(e,n=new A){return e.videoCodec!==void 0&&e.videoCodec!==0&&n.uint32(8).int32(e.videoCodec),e.maxHeight!==void 0&&e.maxHeight!==0&&n.uint32(24).int32(e.maxHeight),e.maxWidth!==void 0&&e.maxWidth!==0&&n.uint32(32).int32(e.maxWidth),e.maxFramerate!==void 0&&e.maxFramerate!==0&&n.uint32(88).int32(e.maxFramerate),e.maxBitrateBps!==void 0&&e.maxBitrateBps!==0&&n.uint32(96).int32(e.maxBitrateBps),e.is10BitSupported!==void 0&&e.is10BitSupported!==!1&&n.uint32(120).bool(e.is10BitSupported),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=jn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.videoCodec=t.int32();continue}case 3:{if(i!==24)break;r.maxHeight=t.int32();continue}case 4:{if(i!==32)break;r.maxWidth=t.int32();continue}case 11:{if(i!==88)break;r.maxFramerate=t.int32();continue}case 12:{if(i!==96)break;r.maxBitrateBps=t.int32();continue}case 15:{if(i!==120)break;r.is10BitSupported=t.bool();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Qn(){return{audioCodec:0,numChannels:0,maxBitrateBps:0,spatialCapabilityBitmask:0}}var xt={encode(e,n=new A){return e.audioCodec!==void 0&&e.audioCodec!==0&&n.uint32(8).int32(e.audioCodec),e.numChannels!==void 0&&e.numChannels!==0&&n.uint32(16).int32(e.numChannels),e.maxBitrateBps!==void 0&&e.maxBitrateBps!==0&&n.uint32(24).int32(e.maxBitrateBps),e.spatialCapabilityBitmask!==void 0&&e.spatialCapabilityBitmask!==0&&n.uint32(48).int32(e.spatialCapabilityBitmask),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Qn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.audioCodec=t.int32();continue}case 2:{if(i!==16)break;r.numChannels=t.int32();continue}case 3:{if(i!==24)break;r.maxBitrateBps=t.int32();continue}case 6:{if(i!==48)break;r.spatialCapabilityBitmask=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Zn(){return{resolution:0,field2:0,videoFmt:void 0,audioFmt:void 0}}var oe={encode(e,n=new A){return e.resolution!==void 0&&e.resolution!==0&&n.uint32(8).int32(e.resolution),e.field2!==void 0&&e.field2!==0&&n.uint32(16).int32(e.field2),e.videoFmt!==void 0&&L.encode(e.videoFmt,n.uint32(58).fork()).join(),e.audioFmt!==void 0&&L.encode(e.audioFmt,n.uint32(66).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Zn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.resolution=t.int32();continue}case 2:{if(i!==16)break;r.field2=t.int32();continue}case 7:{if(i!==58)break;r.videoFmt=L.decode(t,t.uint32());continue}case 8:{if(i!==66)break;r.audioFmt=L.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Jn(){return{timeSinceLastManualFormatSelectionMs:"0",lastManualDirection:0,lastManualSelectedResolution:0,detailedNetworkType:0,clientViewportWidth:0,clientViewportHeight:0,clientBitrateCapBytesPerSec:"0",stickyResolution:0,clientViewportIsFlexible:!1,bandwidthEstimate:"0",minAudioQuality:0,maxAudioQuality:0,videoQualitySetting:0,audioRoute:0,playerTimeMs:"0",timeSinceLastSeek:"0",dataSaverMode:!1,networkMeteredState:0,visibility:0,playbackRate:0,elapsedWallTimeMs:"0",mediaCapabilities:void 0,timeSinceLastActionMs:"0",enabledTrackTypesBitfield:0,maxPacingRate:0,playerState:"0",drcEnabled:!1,field48:0,field50:0,field51:0,sabrReportRequestCancellationInfo:0,disableStreamingXhr:!1,field57:"0",preferVp9:!1,av1QualityThreshold:0,field60:0,isPrefetch:!1,sabrSupportQualityConstraints:!1,sabrLicenseConstraint:new Uint8Array(0),allowProximaLiveLatency:0,sabrForceProxima:0,field67:0,sabrForceMaxNetworkInterruptionDurationMs:"0",audioTrackId:"",enableVoiceBoost:!1,playbackAuthorization:void 0}}var de={encode(e,n=new A){return e.timeSinceLastManualFormatSelectionMs!==void 0&&e.timeSinceLastManualFormatSelectionMs!=="0"&&n.uint32(104).int64(e.timeSinceLastManualFormatSelectionMs),e.lastManualDirection!==void 0&&e.lastManualDirection!==0&&n.uint32(112).sint32(e.lastManualDirection),e.lastManualSelectedResolution!==void 0&&e.lastManualSelectedResolution!==0&&n.uint32(128).int32(e.lastManualSelectedResolution),e.detailedNetworkType!==void 0&&e.detailedNetworkType!==0&&n.uint32(136).int32(e.detailedNetworkType),e.clientViewportWidth!==void 0&&e.clientViewportWidth!==0&&n.uint32(144).int32(e.clientViewportWidth),e.clientViewportHeight!==void 0&&e.clientViewportHeight!==0&&n.uint32(152).int32(e.clientViewportHeight),e.clientBitrateCapBytesPerSec!==void 0&&e.clientBitrateCapBytesPerSec!=="0"&&n.uint32(160).int64(e.clientBitrateCapBytesPerSec),e.stickyResolution!==void 0&&e.stickyResolution!==0&&n.uint32(168).int32(e.stickyResolution),e.clientViewportIsFlexible!==void 0&&e.clientViewportIsFlexible!==!1&&n.uint32(176).bool(e.clientViewportIsFlexible),e.bandwidthEstimate!==void 0&&e.bandwidthEstimate!=="0"&&n.uint32(184).int64(e.bandwidthEstimate),e.minAudioQuality!==void 0&&e.minAudioQuality!==0&&n.uint32(192).int32(e.minAudioQuality),e.maxAudioQuality!==void 0&&e.maxAudioQuality!==0&&n.uint32(200).int32(e.maxAudioQuality),e.videoQualitySetting!==void 0&&e.videoQualitySetting!==0&&n.uint32(208).int32(e.videoQualitySetting),e.audioRoute!==void 0&&e.audioRoute!==0&&n.uint32(216).int32(e.audioRoute),e.playerTimeMs!==void 0&&e.playerTimeMs!=="0"&&n.uint32(224).int64(e.playerTimeMs),e.timeSinceLastSeek!==void 0&&e.timeSinceLastSeek!=="0"&&n.uint32(232).int64(e.timeSinceLastSeek),e.dataSaverMode!==void 0&&e.dataSaverMode!==!1&&n.uint32(240).bool(e.dataSaverMode),e.networkMeteredState!==void 0&&e.networkMeteredState!==0&&n.uint32(256).int32(e.networkMeteredState),e.visibility!==void 0&&e.visibility!==0&&n.uint32(272).int32(e.visibility),e.playbackRate!==void 0&&e.playbackRate!==0&&n.uint32(285).float(e.playbackRate),e.elapsedWallTimeMs!==void 0&&e.elapsedWallTimeMs!=="0"&&n.uint32(288).int64(e.elapsedWallTimeMs),e.mediaCapabilities!==void 0&&Ie.encode(e.mediaCapabilities,n.uint32(306).fork()).join(),e.timeSinceLastActionMs!==void 0&&e.timeSinceLastActionMs!=="0"&&n.uint32(312).int64(e.timeSinceLastActionMs),e.enabledTrackTypesBitfield!==void 0&&e.enabledTrackTypesBitfield!==0&&n.uint32(320).int32(e.enabledTrackTypesBitfield),e.maxPacingRate!==void 0&&e.maxPacingRate!==0&&n.uint32(344).int32(e.maxPacingRate),e.playerState!==void 0&&e.playerState!=="0"&&n.uint32(352).int64(e.playerState),e.drcEnabled!==void 0&&e.drcEnabled!==!1&&n.uint32(368).bool(e.drcEnabled),e.field48!==void 0&&e.field48!==0&&n.uint32(384).int32(e.field48),e.field50!==void 0&&e.field50!==0&&n.uint32(400).int32(e.field50),e.field51!==void 0&&e.field51!==0&&n.uint32(408).int32(e.field51),e.sabrReportRequestCancellationInfo!==void 0&&e.sabrReportRequestCancellationInfo!==0&&n.uint32(432).int32(e.sabrReportRequestCancellationInfo),e.disableStreamingXhr!==void 0&&e.disableStreamingXhr!==!1&&n.uint32(448).bool(e.disableStreamingXhr),e.field57!==void 0&&e.field57!=="0"&&n.uint32(456).int64(e.field57),e.preferVp9!==void 0&&e.preferVp9!==!1&&n.uint32(464).bool(e.preferVp9),e.av1QualityThreshold!==void 0&&e.av1QualityThreshold!==0&&n.uint32(472).int32(e.av1QualityThreshold),e.field60!==void 0&&e.field60!==0&&n.uint32(480).int32(e.field60),e.isPrefetch!==void 0&&e.isPrefetch!==!1&&n.uint32(488).bool(e.isPrefetch),e.sabrSupportQualityConstraints!==void 0&&e.sabrSupportQualityConstraints!==!1&&n.uint32(496).bool(e.sabrSupportQualityConstraints),e.sabrLicenseConstraint!==void 0&&e.sabrLicenseConstraint.length!==0&&n.uint32(506).bytes(e.sabrLicenseConstraint),e.allowProximaLiveLatency!==void 0&&e.allowProximaLiveLatency!==0&&n.uint32(512).int32(e.allowProximaLiveLatency),e.sabrForceProxima!==void 0&&e.sabrForceProxima!==0&&n.uint32(528).int32(e.sabrForceProxima),e.field67!==void 0&&e.field67!==0&&n.uint32(536).int32(e.field67),e.sabrForceMaxNetworkInterruptionDurationMs!==void 0&&e.sabrForceMaxNetworkInterruptionDurationMs!=="0"&&n.uint32(544).int64(e.sabrForceMaxNetworkInterruptionDurationMs),e.audioTrackId!==void 0&&e.audioTrackId!==""&&n.uint32(554).string(e.audioTrackId),e.enableVoiceBoost!==void 0&&e.enableVoiceBoost!==!1&&n.uint32(608).bool(e.enableVoiceBoost),e.playbackAuthorization!==void 0&&_e.encode(e.playbackAuthorization,n.uint32(634).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Jn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 13:{if(i!==104)break;r.timeSinceLastManualFormatSelectionMs=t.int64().toString();continue}case 14:{if(i!==112)break;r.lastManualDirection=t.sint32();continue}case 16:{if(i!==128)break;r.lastManualSelectedResolution=t.int32();continue}case 17:{if(i!==136)break;r.detailedNetworkType=t.int32();continue}case 18:{if(i!==144)break;r.clientViewportWidth=t.int32();continue}case 19:{if(i!==152)break;r.clientViewportHeight=t.int32();continue}case 20:{if(i!==160)break;r.clientBitrateCapBytesPerSec=t.int64().toString();continue}case 21:{if(i!==168)break;r.stickyResolution=t.int32();continue}case 22:{if(i!==176)break;r.clientViewportIsFlexible=t.bool();continue}case 23:{if(i!==184)break;r.bandwidthEstimate=t.int64().toString();continue}case 24:{if(i!==192)break;r.minAudioQuality=t.int32();continue}case 25:{if(i!==200)break;r.maxAudioQuality=t.int32();continue}case 26:{if(i!==208)break;r.videoQualitySetting=t.int32();continue}case 27:{if(i!==216)break;r.audioRoute=t.int32();continue}case 28:{if(i!==224)break;r.playerTimeMs=t.int64().toString();continue}case 29:{if(i!==232)break;r.timeSinceLastSeek=t.int64().toString();continue}case 30:{if(i!==240)break;r.dataSaverMode=t.bool();continue}case 32:{if(i!==256)break;r.networkMeteredState=t.int32();continue}case 34:{if(i!==272)break;r.visibility=t.int32();continue}case 35:{if(i!==285)break;r.playbackRate=t.float();continue}case 36:{if(i!==288)break;r.elapsedWallTimeMs=t.int64().toString();continue}case 38:{if(i!==306)break;r.mediaCapabilities=Ie.decode(t,t.uint32());continue}case 39:{if(i!==312)break;r.timeSinceLastActionMs=t.int64().toString();continue}case 40:{if(i!==320)break;r.enabledTrackTypesBitfield=t.int32();continue}case 43:{if(i!==344)break;r.maxPacingRate=t.int32();continue}case 44:{if(i!==352)break;r.playerState=t.int64().toString();continue}case 46:{if(i!==368)break;r.drcEnabled=t.bool();continue}case 48:{if(i!==384)break;r.field48=t.int32();continue}case 50:{if(i!==400)break;r.field50=t.int32();continue}case 51:{if(i!==408)break;r.field51=t.int32();continue}case 54:{if(i!==432)break;r.sabrReportRequestCancellationInfo=t.int32();continue}case 56:{if(i!==448)break;r.disableStreamingXhr=t.bool();continue}case 57:{if(i!==456)break;r.field57=t.int64().toString();continue}case 58:{if(i!==464)break;r.preferVp9=t.bool();continue}case 59:{if(i!==472)break;r.av1QualityThreshold=t.int32();continue}case 60:{if(i!==480)break;r.field60=t.int32();continue}case 61:{if(i!==488)break;r.isPrefetch=t.bool();continue}case 62:{if(i!==496)break;r.sabrSupportQualityConstraints=t.bool();continue}case 63:{if(i!==506)break;r.sabrLicenseConstraint=t.bytes();continue}case 64:{if(i!==512)break;r.allowProximaLiveLatency=t.int32();continue}case 66:{if(i!==528)break;r.sabrForceProxima=t.int32();continue}case 67:{if(i!==536)break;r.field67=t.int32();continue}case 68:{if(i!==544)break;r.sabrForceMaxNetworkInterruptionDurationMs=t.int64().toString();continue}case 69:{if(i!==554)break;r.audioTrackId=t.string();continue}case 76:{if(i!==608)break;r.enableVoiceBoost=t.bool();continue}case 79:{if(i!==634)break;r.playbackAuthorization=_e.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ei(){return{clientInfo:void 0,poToken:new Uint8Array(0),playbackCookie:new Uint8Array(0),field4:new Uint8Array(0),sabrContexts:[],unsentSabrContexts:[],field7:"",field8:void 0}}var ue={encode(e,n=new A){e.clientInfo!==void 0&&Ge.encode(e.clientInfo,n.uint32(10).fork()).join(),e.poToken!==void 0&&e.poToken.length!==0&&n.uint32(18).bytes(e.poToken),e.playbackCookie!==void 0&&e.playbackCookie.length!==0&&n.uint32(26).bytes(e.playbackCookie),e.field4!==void 0&&e.field4.length!==0&&n.uint32(34).bytes(e.field4);for(let t of e.sabrContexts)Bt.encode(t,n.uint32(42).fork()).join();n.uint32(50).fork();for(let t of e.unsentSabrContexts)n.int32(t);return n.join(),e.field7!==void 0&&e.field7!==""&&n.uint32(58).string(e.field7),e.field8!==void 0&&vt.encode(e.field8,n.uint32(66).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ei();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.clientInfo=Ge.decode(t,t.uint32());continue}case 2:{if(i!==18)break;r.poToken=t.bytes();continue}case 3:{if(i!==26)break;r.playbackCookie=t.bytes();continue}case 4:{if(i!==34)break;r.field4=t.bytes();continue}case 5:{if(i!==42)break;r.sabrContexts.push(Bt.decode(t,t.uint32()));continue}case 6:{if(i===48){r.unsentSabrContexts.push(t.int32());continue}if(i===50){let a=t.uint32()+t.pos;for(;t.pos<a;)r.unsentSabrContexts.push(t.int32());continue}break}case 7:{if(i!==58)break;r.field7=t.string();continue}case 8:{if(i!==66)break;r.field8=vt.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ti(){return{deviceMake:"",deviceModel:"",clientName:0,clientVersion:"",osName:"",osVersion:"",acceptLanguage:"",acceptRegion:"",screenWidthPoints:0,screenHeightPoints:0,screenWidthInches:0,screenHeightInches:0,screenPixelDensity:0,clientFormFactor:0,gmscoreVersionCode:0,windowWidthPoints:0,windowHeightPoints:0,androidSdkVersion:0,screenDensityFloat:0,utcOffsetMinutes:"0",timeZone:"",chipset:"",glDeviceInfo:void 0}}var Ge={encode(e,n=new A){return e.deviceMake!==void 0&&e.deviceMake!==""&&n.uint32(98).string(e.deviceMake),e.deviceModel!==void 0&&e.deviceModel!==""&&n.uint32(106).string(e.deviceModel),e.clientName!==void 0&&e.clientName!==0&&n.uint32(128).int32(e.clientName),e.clientVersion!==void 0&&e.clientVersion!==""&&n.uint32(138).string(e.clientVersion),e.osName!==void 0&&e.osName!==""&&n.uint32(146).string(e.osName),e.osVersion!==void 0&&e.osVersion!==""&&n.uint32(154).string(e.osVersion),e.acceptLanguage!==void 0&&e.acceptLanguage!==""&&n.uint32(170).string(e.acceptLanguage),e.acceptRegion!==void 0&&e.acceptRegion!==""&&n.uint32(178).string(e.acceptRegion),e.screenWidthPoints!==void 0&&e.screenWidthPoints!==0&&n.uint32(296).int32(e.screenWidthPoints),e.screenHeightPoints!==void 0&&e.screenHeightPoints!==0&&n.uint32(304).int32(e.screenHeightPoints),e.screenWidthInches!==void 0&&e.screenWidthInches!==0&&n.uint32(317).float(e.screenWidthInches),e.screenHeightInches!==void 0&&e.screenHeightInches!==0&&n.uint32(325).float(e.screenHeightInches),e.screenPixelDensity!==void 0&&e.screenPixelDensity!==0&&n.uint32(328).int32(e.screenPixelDensity),e.clientFormFactor!==void 0&&e.clientFormFactor!==0&&n.uint32(368).int32(e.clientFormFactor),e.gmscoreVersionCode!==void 0&&e.gmscoreVersionCode!==0&&n.uint32(400).int32(e.gmscoreVersionCode),e.windowWidthPoints!==void 0&&e.windowWidthPoints!==0&&n.uint32(440).int32(e.windowWidthPoints),e.windowHeightPoints!==void 0&&e.windowHeightPoints!==0&&n.uint32(448).int32(e.windowHeightPoints),e.androidSdkVersion!==void 0&&e.androidSdkVersion!==0&&n.uint32(512).int32(e.androidSdkVersion),e.screenDensityFloat!==void 0&&e.screenDensityFloat!==0&&n.uint32(525).float(e.screenDensityFloat),e.utcOffsetMinutes!==void 0&&e.utcOffsetMinutes!=="0"&&n.uint32(536).int64(e.utcOffsetMinutes),e.timeZone!==void 0&&e.timeZone!==""&&n.uint32(642).string(e.timeZone),e.chipset!==void 0&&e.chipset!==""&&n.uint32(738).string(e.chipset),e.glDeviceInfo!==void 0&&Ut.encode(e.glDeviceInfo,n.uint32(818).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ti();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 12:{if(i!==98)break;r.deviceMake=t.string();continue}case 13:{if(i!==106)break;r.deviceModel=t.string();continue}case 16:{if(i!==128)break;r.clientName=t.int32();continue}case 17:{if(i!==138)break;r.clientVersion=t.string();continue}case 18:{if(i!==146)break;r.osName=t.string();continue}case 19:{if(i!==154)break;r.osVersion=t.string();continue}case 21:{if(i!==170)break;r.acceptLanguage=t.string();continue}case 22:{if(i!==178)break;r.acceptRegion=t.string();continue}case 37:{if(i!==296)break;r.screenWidthPoints=t.int32();continue}case 38:{if(i!==304)break;r.screenHeightPoints=t.int32();continue}case 39:{if(i!==317)break;r.screenWidthInches=t.float();continue}case 40:{if(i!==325)break;r.screenHeightInches=t.float();continue}case 41:{if(i!==328)break;r.screenPixelDensity=t.int32();continue}case 46:{if(i!==368)break;r.clientFormFactor=t.int32();continue}case 50:{if(i!==400)break;r.gmscoreVersionCode=t.int32();continue}case 55:{if(i!==440)break;r.windowWidthPoints=t.int32();continue}case 56:{if(i!==448)break;r.windowHeightPoints=t.int32();continue}case 64:{if(i!==512)break;r.androidSdkVersion=t.int32();continue}case 65:{if(i!==525)break;r.screenDensityFloat=t.float();continue}case 67:{if(i!==536)break;r.utcOffsetMinutes=t.int64().toString();continue}case 80:{if(i!==642)break;r.timeZone=t.string();continue}case 92:{if(i!==738)break;r.chipset=t.string();continue}case 102:{if(i!==818)break;r.glDeviceInfo=Ut.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ni(){return{glRenderer:"",glEsVersionMajor:0,glEsVersionMinor:0}}var Ut={encode(e,n=new A){return e.glRenderer!==void 0&&e.glRenderer!==""&&n.uint32(10).string(e.glRenderer),e.glEsVersionMajor!==void 0&&e.glEsVersionMajor!==0&&n.uint32(16).int32(e.glEsVersionMajor),e.glEsVersionMinor!==void 0&&e.glEsVersionMinor!==0&&n.uint32(24).int32(e.glEsVersionMinor),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ni();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.glRenderer=t.string();continue}case 2:{if(i!==16)break;r.glEsVersionMajor=t.int32();continue}case 3:{if(i!==24)break;r.glEsVersionMinor=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ii(){return{type:0,value:new Uint8Array(0)}}var Bt={encode(e,n=new A){return e.type!==void 0&&e.type!==0&&n.uint32(8).int32(e.type),e.value!==void 0&&e.value.length!==0&&n.uint32(18).bytes(e.value),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ii();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.type=t.int32();continue}case 2:{if(i!==18)break;r.value=t.bytes();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ri(){return{field1:new Uint8Array(0),field2:void 0}}var vt={encode(e,n=new A){return e.field1!==void 0&&e.field1.length!==0&&n.uint32(10).bytes(e.field1),e.field2!==void 0&&Ft.encode(e.field2,n.uint32(18).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ri();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.field1=t.bytes();continue}case 2:{if(i!==18)break;r.field2=Ft.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function oi(){return{code:0,message:""}}var Ft={encode(e,n=new A){return e.code!==void 0&&e.code!==0&&n.uint32(8).int32(e.code),e.message!==void 0&&e.message!==""&&n.uint32(18).string(e.message),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=oi();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.code=t.int32();continue}case 2:{if(i!==18)break;r.message=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ai(){return{clientAbrState:void 0,selectedFormatIds:[],bufferedRanges:[],playerTimeMs:"0",videoPlaybackUstreamerConfig:new Uint8Array(0),field6:void 0,preferredAudioFormatIds:[],preferredVideoFormatIds:[],preferredSubtitleFormatIds:[],streamerContext:void 0,field21:void 0,field22:0,field23:0,field1000:[]}}var Ye={encode(e,n=new A){e.clientAbrState!==void 0&&de.encode(e.clientAbrState,n.uint32(10).fork()).join();for(let t of e.selectedFormatIds)L.encode(t,n.uint32(18).fork()).join();for(let t of e.bufferedRanges)ee.encode(t,n.uint32(26).fork()).join();e.playerTimeMs!==void 0&&e.playerTimeMs!=="0"&&n.uint32(32).int64(e.playerTimeMs),e.videoPlaybackUstreamerConfig!==void 0&&e.videoPlaybackUstreamerConfig.length!==0&&n.uint32(42).bytes(e.videoPlaybackUstreamerConfig),e.field6!==void 0&&$t.encode(e.field6,n.uint32(50).fork()).join();for(let t of e.preferredAudioFormatIds)L.encode(t,n.uint32(130).fork()).join();for(let t of e.preferredVideoFormatIds)L.encode(t,n.uint32(138).fork()).join();for(let t of e.preferredSubtitleFormatIds)L.encode(t,n.uint32(146).fork()).join();e.streamerContext!==void 0&&ue.encode(e.streamerContext,n.uint32(154).fork()).join(),e.field21!==void 0&&Ht.encode(e.field21,n.uint32(170).fork()).join(),e.field22!==void 0&&e.field22!==0&&n.uint32(176).int32(e.field22),e.field23!==void 0&&e.field23!==0&&n.uint32(184).int32(e.field23);for(let t of e.field1000)Vt.encode(t,n.uint32(8002).fork()).join();return n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ai();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.clientAbrState=de.decode(t,t.uint32());continue}case 2:{if(i!==18)break;r.selectedFormatIds.push(L.decode(t,t.uint32()));continue}case 3:{if(i!==26)break;r.bufferedRanges.push(ee.decode(t,t.uint32()));continue}case 4:{if(i!==32)break;r.playerTimeMs=t.int64().toString();continue}case 5:{if(i!==42)break;r.videoPlaybackUstreamerConfig=t.bytes();continue}case 6:{if(i!==50)break;r.field6=$t.decode(t,t.uint32());continue}case 16:{if(i!==130)break;r.preferredAudioFormatIds.push(L.decode(t,t.uint32()));continue}case 17:{if(i!==138)break;r.preferredVideoFormatIds.push(L.decode(t,t.uint32()));continue}case 18:{if(i!==146)break;r.preferredSubtitleFormatIds.push(L.decode(t,t.uint32()));continue}case 19:{if(i!==154)break;r.streamerContext=ue.decode(t,t.uint32());continue}case 21:{if(i!==170)break;r.field21=Ht.decode(t,t.uint32());continue}case 22:{if(i!==176)break;r.field22=t.int32();continue}case 23:{if(i!==184)break;r.field23=t.int32();continue}case 1e3:{if(i!==8002)break;r.field1000.push(Vt.decode(t,t.uint32()));continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function si(){return{formatId:void 0,lmt:"0",sequenceNumber:0,timeRange:void 0,field5:0}}var $t={encode(e,n=new A){return e.formatId!==void 0&&L.encode(e.formatId,n.uint32(10).fork()).join(),e.lmt!==void 0&&e.lmt!=="0"&&n.uint32(16).sint64(e.lmt),e.sequenceNumber!==void 0&&e.sequenceNumber!==0&&n.uint32(24).int32(e.sequenceNumber),e.timeRange!==void 0&&Y.encode(e.timeRange,n.uint32(34).fork()).join(),e.field5!==void 0&&e.field5!==0&&n.uint32(40).int32(e.field5),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=si();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.formatId=L.decode(t,t.uint32());continue}case 2:{if(i!==16)break;r.lmt=t.sint64().toString();continue}case 3:{if(i!==24)break;r.sequenceNumber=t.int32();continue}case 4:{if(i!==34)break;r.timeRange=Y.decode(t,t.uint32());continue}case 5:{if(i!==40)break;r.field5=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ci(){return{field1:[],field2:new Uint8Array(0),field3:"",field4:0,field5:0,field6:""}}var Ht={encode(e,n=new A){for(let t of e.field1)n.uint32(10).string(t);return e.field2!==void 0&&e.field2.length!==0&&n.uint32(18).bytes(e.field2),e.field3!==void 0&&e.field3!==""&&n.uint32(26).string(e.field3),e.field4!==void 0&&e.field4!==0&&n.uint32(32).int32(e.field4),e.field5!==void 0&&e.field5!==0&&n.uint32(40).int32(e.field5),e.field6!==void 0&&e.field6!==""&&n.uint32(50).string(e.field6),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ci();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.field1.push(t.string());continue}case 2:{if(i!==18)break;r.field2=t.bytes();continue}case 3:{if(i!==26)break;r.field3=t.string();continue}case 4:{if(i!==32)break;r.field4=t.int32();continue}case 5:{if(i!==40)break;r.field5=t.int32();continue}case 6:{if(i!==50)break;r.field6=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function di(){return{formatIds:[],ud:[],clipId:""}}var Vt={encode(e,n=new A){for(let t of e.formatIds)L.encode(t,n.uint32(10).fork()).join();for(let t of e.ud)ee.encode(t,n.uint32(18).fork()).join();return e.clipId!==void 0&&e.clipId!==""&&n.uint32(26).string(e.clipId),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=di();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.formatIds.push(L.decode(t,t.uint32()));continue}case 2:{if(i!==18)break;r.ud.push(ee.decode(t,t.uint32()));continue}case 3:{if(i!==26)break;r.clipId=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ui(){return{targetAudioReadaheadMs:0,targetVideoReadaheadMs:0,maxTimeSinceLastRequestMs:0,backoffTimeMs:0,minAudioReadaheadMs:0,minVideoReadaheadMs:0,playbackCookie:void 0,videoId:""}}var qe={encode(e,n=new A){return e.targetAudioReadaheadMs!==void 0&&e.targetAudioReadaheadMs!==0&&n.uint32(8).int32(e.targetAudioReadaheadMs),e.targetVideoReadaheadMs!==void 0&&e.targetVideoReadaheadMs!==0&&n.uint32(16).int32(e.targetVideoReadaheadMs),e.maxTimeSinceLastRequestMs!==void 0&&e.maxTimeSinceLastRequestMs!==0&&n.uint32(24).int32(e.maxTimeSinceLastRequestMs),e.backoffTimeMs!==void 0&&e.backoffTimeMs!==0&&n.uint32(32).int32(e.backoffTimeMs),e.minAudioReadaheadMs!==void 0&&e.minAudioReadaheadMs!==0&&n.uint32(40).int32(e.minAudioReadaheadMs),e.minVideoReadaheadMs!==void 0&&e.minVideoReadaheadMs!==0&&n.uint32(48).int32(e.minVideoReadaheadMs),e.playbackCookie!==void 0&&oe.encode(e.playbackCookie,n.uint32(58).fork()).join(),e.videoId!==void 0&&e.videoId!==""&&n.uint32(66).string(e.videoId),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ui();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.targetAudioReadaheadMs=t.int32();continue}case 2:{if(i!==16)break;r.targetVideoReadaheadMs=t.int32();continue}case 3:{if(i!==24)break;r.maxTimeSinceLastRequestMs=t.int32();continue}case 4:{if(i!==32)break;r.backoffTimeMs=t.int32();continue}case 5:{if(i!==40)break;r.minAudioReadaheadMs=t.int32();continue}case 6:{if(i!==48)break;r.minVideoReadaheadMs=t.int32();continue}case 7:{if(i!==58)break;r.playbackCookie=oe.decode(t,t.uint32());continue}case 8:{if(i!==66)break;r.videoId=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function fi(){return{type:"",code:0}}var ze={encode(e,n=new A){return e.type!==void 0&&e.type!==""&&n.uint32(10).string(e.type),e.code!==void 0&&e.code!==0&&n.uint32(16).int32(e.code),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=fi();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.type=t.string();continue}case 2:{if(i!==16)break;r.code=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function li(){return{url:""}}var Xe={encode(e,n=new A){return e.url!==void 0&&e.url!==""&&n.uint32(10).string(e.url),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=li();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.url=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function hi(){return{token:""}}var ge={encode(e,n=new A){return e.token!==void 0&&e.token!==""&&n.uint32(10).string(e.token),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=hi();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.token=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function pi(){return{reloadPlaybackParams:void 0}}var je={encode(e,n=new A){return e.reloadPlaybackParams!==void 0&&ge.encode(e.reloadPlaybackParams,n.uint32(10).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=pi();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.reloadPlaybackParams=ge.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};var Qe={UNSPECIFIED:0,0:"UNSPECIFIED",OVERWRITE:1,1:"OVERWRITE",KEEP_EXISTING:2,2:"KEEP_EXISTING",UNRECOGNIZED:-1,"-1":"UNRECOGNIZED"};function Ei(){return{type:0,scope:0,value:new Uint8Array(0),sendByDefault:!1,writePolicy:0}}var Ze={encode(e,n=new A){return e.type!==void 0&&e.type!==0&&n.uint32(8).int32(e.type),e.scope!==void 0&&e.scope!==0&&n.uint32(16).int32(e.scope),e.value!==void 0&&e.value.length!==0&&n.uint32(26).bytes(e.value),e.sendByDefault!==void 0&&e.sendByDefault!==!1&&n.uint32(32).bool(e.sendByDefault),e.writePolicy!==void 0&&e.writePolicy!==0&&n.uint32(40).int32(e.writePolicy),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Ei();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.type=t.int32();continue}case 2:{if(i!==16)break;r.scope=t.int32();continue}case 3:{if(i!==26)break;r.value=t.bytes();continue}case 4:{if(i!==32)break;r.sendByDefault=t.bool();continue}case 5:{if(i!==40)break;r.writePolicy=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function mi(){return{startPolicy:[],stopPolicy:[],discardPolicy:[]}}var Je={encode(e,n=new A){n.uint32(10).fork();for(let t of e.startPolicy)n.int32(t);n.join(),n.uint32(18).fork();for(let t of e.stopPolicy)n.int32(t);n.join(),n.uint32(26).fork();for(let t of e.discardPolicy)n.int32(t);return n.join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=mi();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i===8){r.startPolicy.push(t.int32());continue}if(i===10){let a=t.uint32()+t.pos;for(;t.pos<a;)r.startPolicy.push(t.int32());continue}break}case 2:{if(i===16){r.stopPolicy.push(t.int32());continue}if(i===18){let a=t.uint32()+t.pos;for(;t.pos<a;)r.stopPolicy.push(t.int32());continue}break}case 3:{if(i===24){r.discardPolicy.push(t.int32());continue}if(i===26){let a=t.uint32()+t.pos;for(;t.pos<a;)r.discardPolicy.push(t.int32());continue}break}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function _i(){return{status:0,maxRetries:0}}var et={encode(e,n=new A){return e.status!==void 0&&e.status!==0&&n.uint32(8).int32(e.status),e.maxRetries!==void 0&&e.maxRetries!==0&&n.uint32(16).int32(e.maxRetries),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=_i();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.status=t.int32();continue}case 2:{if(i!==16)break;r.maxRetries=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};var $={UNKNOWN:0,0:"UNKNOWN",ONESIE_HEADER:10,10:"ONESIE_HEADER",ONESIE_DATA:11,11:"ONESIE_DATA",ONESIE_ENCRYPTED_MEDIA:12,12:"ONESIE_ENCRYPTED_MEDIA",MEDIA_HEADER:20,20:"MEDIA_HEADER",MEDIA:21,21:"MEDIA",MEDIA_END:22,22:"MEDIA_END",CONFIG:30,30:"CONFIG",LIVE_METADATA:31,31:"LIVE_METADATA",HOSTNAME_CHANGE_HINT_DEPRECATED:32,32:"HOSTNAME_CHANGE_HINT_DEPRECATED",LIVE_METADATA_PROMISE:33,33:"LIVE_METADATA_PROMISE",LIVE_METADATA_PROMISE_CANCELLATION:34,34:"LIVE_METADATA_PROMISE_CANCELLATION",NEXT_REQUEST_POLICY:35,35:"NEXT_REQUEST_POLICY",USTREAMER_VIDEO_AND_FORMAT_METADATA:36,36:"USTREAMER_VIDEO_AND_FORMAT_METADATA",FORMAT_SELECTION_CONFIG:37,37:"FORMAT_SELECTION_CONFIG",USTREAMER_SELECTED_MEDIA_STREAM:38,38:"USTREAMER_SELECTED_MEDIA_STREAM",FORMAT_INITIALIZATION_METADATA:42,42:"FORMAT_INITIALIZATION_METADATA",SABR_REDIRECT:43,43:"SABR_REDIRECT",SABR_ERROR:44,44:"SABR_ERROR",SABR_SEEK:45,45:"SABR_SEEK",RELOAD_PLAYER_RESPONSE:46,46:"RELOAD_PLAYER_RESPONSE",PLAYBACK_START_POLICY:47,47:"PLAYBACK_START_POLICY",ALLOWED_CACHED_FORMATS:48,48:"ALLOWED_CACHED_FORMATS",START_BW_SAMPLING_HINT:49,49:"START_BW_SAMPLING_HINT",PAUSE_BW_SAMPLING_HINT:50,50:"PAUSE_BW_SAMPLING_HINT",SELECTABLE_FORMATS:51,51:"SELECTABLE_FORMATS",REQUEST_IDENTIFIER:52,52:"REQUEST_IDENTIFIER",REQUEST_CANCELLATION_POLICY:53,53:"REQUEST_CANCELLATION_POLICY",ONESIE_PREFETCH_REJECTION:54,54:"ONESIE_PREFETCH_REJECTION",TIMELINE_CONTEXT:55,55:"TIMELINE_CONTEXT",REQUEST_PIPELINING:56,56:"REQUEST_PIPELINING",SABR_CONTEXT_UPDATE:57,57:"SABR_CONTEXT_UPDATE",STREAM_PROTECTION_STATUS:58,58:"STREAM_PROTECTION_STATUS",SABR_CONTEXT_SENDING_POLICY:59,59:"SABR_CONTEXT_SENDING_POLICY",LAWNMOWER_POLICY:60,60:"LAWNMOWER_POLICY",SABR_ACK:61,61:"SABR_ACK",END_OF_TRACK:62,62:"END_OF_TRACK",CACHE_LOAD_POLICY:63,63:"CACHE_LOAD_POLICY",LAWNMOWER_MESSAGING_POLICY:64,64:"LAWNMOWER_MESSAGING_POLICY",PREWARM_CONNECTION:65,65:"PREWARM_CONNECTION",PLAYBACK_DEBUG_INFO:66,66:"PLAYBACK_DEBUG_INFO",SNACKBAR_MESSAGE:67,67:"SNACKBAR_MESSAGE",UNRECOGNIZED:-1,"-1":"UNRECOGNIZED"};var U={NONE:0,0:"NONE",ERROR:1,1:"ERROR",WARN:2,2:"WARN",INFO:3,3:"INFO",DEBUG:4,4:"DEBUG",ALL:99,99:"ALL"},fe=class e{constructor(){this.currentLogLevels=new Set([U.INFO,U.ERROR])}static getInstance(){return e.instance||(e.instance=new e),e.instance}setLogLevels(...n){n.length===0||n.includes(U.NONE)?this.currentLogLevels=new Set:n.includes(U.ALL)?this.currentLogLevels=new Set([U.ERROR,U.WARN,U.INFO,U.DEBUG]):this.currentLogLevels=new Set(n.filter(t=>t!==U.NONE&&t!==U.ALL))}getLogLevels(){return new Set(this.currentLogLevels)}log(n,t,...o){if(n!==U.NONE&&this.currentLogLevels.has(n)){let r=`[${U[n]}] [${t}]`;switch(n){case U.ERROR:console.error(r,...o);break;case U.WARN:console.warn(r,...o);break;case U.INFO:console.info(r,...o);break;case U.DEBUG:console.debug(r,...o);break}}}error(n,...t){this.log(U.ERROR,n,...t)}warn(n,...t){this.log(U.WARN,n,...t)}info(n,...t){this.log(U.INFO,n,...t)}debug(n,...t){this.log(U.DEBUG,n,...t)}};var le="2147483647",Kt={VIDEO_AND_AUDIO:0,0:"VIDEO_AND_AUDIO",AUDIO_ONLY:1,1:"AUDIO_ONLY",VIDEO_ONLY:2,2:"VIDEO_ONLY"};function tt(e){let n=e.replace(/-/g,"+").replace(/_/g,"/"),t=n.padEnd(n.length+(4-n.length%4)%4,"=");return new Uint8Array(atob(t).split("").map(o=>o.charCodeAt(0)))}function Gt(e){let n=e.reduce((r,i)=>r+i.length,0),t=new Uint8Array(n),o=0;for(let r of e)t.set(r,o),o+=r.length;return t}function nt(e){return new Promise(n=>setTimeout(n,e))}var Ri=function(e,n,t,o,r){if(o==="m")throw new TypeError("Private method is not writable");if(o==="a"&&!r)throw new TypeError("Private accessor was defined without a setter");if(typeof n=="function"?e!==n||!r:!n.has(e))throw new TypeError("Cannot write private member to an object whose class did not declare it");return o==="a"?r.call(e,t):r?r.value=t:n.set(e,t),t},q=function(e,n,t,o){if(t==="a"&&!o)throw new TypeError("Private accessor was defined without a getter");if(typeof n=="function"?e!==n||!o:!n.has(e))throw new TypeError("Cannot read private member from an object whose class did not declare it");return t==="m"?o:t==="a"?o.call(e):o?o.value:n.get(e)},Ae,W,he=class extends Event{constructor(n,t){super(n,t),Ae.set(this,void 0),Ri(this,Ae,t?.detail??null,"f")}get detail(){return q(this,Ae,"f")}};Ae=new WeakMap;var ye=class extends EventTarget{constructor(){super(),W.set(this,new Map)}emit(n,...t){let o=new he(n,{detail:t});this.dispatchEvent(o)}on(n,t){let o=r=>{r instanceof he?t(...r.detail):t(r)};q(this,W,"f").set(t,{type:n,wrapper:o}),this.addEventListener(n,o)}once(n,t){let o=r=>{r instanceof he?t(...r.detail):t(r),this.off(n,t)};q(this,W,"f").set(t,{type:n,wrapper:o}),this.addEventListener(n,o)}off(n,t){let o=q(this,W,"f").get(t);o&&o.type===n&&(this.removeEventListener(n,o.wrapper),q(this,W,"f").delete(t))}removeAllListeners(n){if(n)for(let[t,o]of q(this,W,"f").entries())o.type===n&&(this.removeEventListener(n,o.wrapper),q(this,W,"f").delete(t));else for(let[t,o]of q(this,W,"f").entries())this.removeEventListener(o.type,o.wrapper),q(this,W,"f").delete(t)}};W=new WeakMap;function it(e,n){return`${e||""}:${n||""}`}function K(e){if(e)return it(e.itag,e.xtags)}function Yt(e){return it(e.itag,e.xtags)}function rt(e){return e.formatId?it(e.formatId.itag,e.formatId.xtags):""}function at(e){return e.formatInitializationMetadata?.mimeType?.includes("video")?"video":"audio"}function Te(e){return Array.from(e.downloadedSegments.values()).reduce((n,t)=>n+parseInt(t.durationMs||"0"),0)}function Ii(e,n){return e.filter(t=>t.mimeType?n?t.mimeType.includes("audio"):t.mimeType.includes("video"):!1)}function st(e,n,t){if(!e.length)return;let o=Ii(e,t.isAudio);if(!o.length)return;if(typeof n=="number")return o.find(i=>i.itag===n);if(n&&typeof n!="function")return n;if(typeof n=="function")return n(o);let r=o;return t.language&&(r=r.filter(i=>i.language===t.language)),t.quality&&(r=r.filter(i=>t.isAudio?!!i.audioQuality?.toLowerCase().includes(t.quality?.toLowerCase()||""):!!i.qualityLabel?.toLowerCase().includes(t.quality?.toLowerCase()||""))),t.isAudio?t.preferOpus&&(r=ot(r,"opus")):t.preferH264&&(r=r.filter(i=>!!i.mimeType&&i.mimeType.includes("mp4")&&i.mimeType.includes("avc"))),t.preferWebM?r=ot(r,"webm"):t.preferMP4&&(r=ot(r,"mp4")),t.isAudio?r.sort((i,a)=>(a.bitrate||0)-(i.bitrate||0))[0]:r.sort((i,a)=>(a.height||0)-(i.height||0))[0]}function ot(e,n){return e.filter(t=>t.mimeType?.includes(n))}var ke=class e{constructor(n=[]){this.chunks=[],this.currentChunkOffset=this.currentChunkIndex=0,this.currentDataView=void 0,this.totalLength=0,n.forEach(t=>this.append(t))}append(n){if(n instanceof Uint8Array){if(this.canMergeWithLastChunk(n)){let t=this.chunks[this.chunks.length-1];this.chunks[this.chunks.length-1]=new Uint8Array(t.buffer,t.byteOffset,t.length+n.length),this.resetFocus()}else this.chunks.push(n);this.totalLength+=n.length}else n.chunks.forEach(t=>this.append(t))}split(n){let t=new e,o=new e,r=this.chunks[Symbol.iterator](),i=r.next();for(;!i.done;){let a=i.value;n>=a.length?(t.append(a),n-=a.length):n>0?(t.append(new Uint8Array(a.buffer,a.byteOffset,n)),o.append(new Uint8Array(a.buffer,a.byteOffset+n,a.length-n)),n=0):o.append(a),i=r.next()}return{extractedBuffer:t,remainingBuffer:o}}getLength(){return this.totalLength}canReadBytes(n,t){return n+t<=this.totalLength}getUint8(n){return this.focus(n),this.chunks[this.currentChunkIndex][n-this.currentChunkOffset]}focus(n){if(!this.isFocused(n)){for(n<this.currentChunkOffset&&this.resetFocus();this.currentChunkOffset+this.chunks[this.currentChunkIndex].length<=n&&this.currentChunkIndex<this.chunks.length-1;)this.currentChunkOffset+=this.chunks[this.currentChunkIndex].length,this.currentChunkIndex+=1;this.currentDataView=void 0}}isFocused(n){return n>=this.currentChunkOffset&&n<this.currentChunkOffset+this.chunks[this.currentChunkIndex].length}resetFocus(){this.currentDataView=void 0,this.currentChunkIndex=0,this.currentChunkOffset=0}canMergeWithLastChunk(n){if(this.chunks.length===0)return!1;let t=this.chunks[this.chunks.length-1];return t.buffer===n.buffer&&t.byteOffset+t.length===n.byteOffset}};var Oe=class{constructor(n){this.compositeBuffer=n}read(n){for(;;){let t=0,[o,r]=this.readVarInt(t);t=r;let[i,a]=this.readVarInt(t);if(t=a,o<0||i<0)break;if(!this.compositeBuffer.canReadBytes(t,i)){if(!this.compositeBuffer.canReadBytes(t,1))break;return{type:o,size:i,data:this.compositeBuffer}}let s=this.compositeBuffer.split(t).remainingBuffer.split(i);t=0,n({type:o,size:i,data:s.extractedBuffer}),this.compositeBuffer=s.remainingBuffer}}readVarInt(n){let t;if(this.compositeBuffer.canReadBytes(n,1)){let r=this.compositeBuffer.getUint8(n);t=r<128?1:r<192?2:r<224?3:r<240?4:5}else t=0;if(t<1||!this.compositeBuffer.canReadBytes(n,t))return[-1,n];let o;switch(t){case 1:o=this.compositeBuffer.getUint8(n++);break;case 2:{let r=this.compositeBuffer.getUint8(n++),i=this.compositeBuffer.getUint8(n++);o=(r&63)+64*i;break}case 3:{let r=this.compositeBuffer.getUint8(n++),i=this.compositeBuffer.getUint8(n++),a=this.compositeBuffer.getUint8(n++);o=(r&31)+32*(i+256*a);break}case 4:{let r=this.compositeBuffer.getUint8(n++),i=this.compositeBuffer.getUint8(n++),a=this.compositeBuffer.getUint8(n++),s=this.compositeBuffer.getUint8(n++);o=(r&15)+16*(i+256*(a+256*s));break}default:{let r=n+1;if(this.compositeBuffer.focus(r),this.canReadFromCurrentChunk(r,4))o=this.getCurrentDataView().getUint32(r-this.compositeBuffer.currentChunkOffset,!0);else{let i=this.compositeBuffer.getUint8(r+2)+256*this.compositeBuffer.getUint8(r+3);o=this.compositeBuffer.getUint8(r)+256*(this.compositeBuffer.getUint8(r+1)+256*i)}n+=5;break}}return[o,n]}canReadFromCurrentChunk(n,t){return n-this.compositeBuffer.currentChunkOffset+t<=this.compositeBuffer.chunks[this.compositeBuffer.currentChunkIndex].length}getCurrentDataView(){if(!this.compositeBuffer.currentDataView){let n=this.compositeBuffer.chunks[this.compositeBuffer.currentChunkIndex];this.compositeBuffer.currentDataView=new DataView(n.buffer,n.byteOffset,n.length)}return this.compositeBuffer.currentDataView}};var w="SabrStream",gi=10,Ai=8e3,yi=500,Ti=3e4,zt=5,pe=class extends ye{on(n,t){super.on(n,t)}once(n,t){super.once(n,t)}constructor(n={}){super(),this.logger=fe.getInstance(),this.formatIds=[],this.umpPartHandlers=new Map([[$.FORMAT_INITIALIZATION_METADATA,this.handleFormatInitializationMetadata.bind(this)],[$.NEXT_REQUEST_POLICY,this.handleNextRequestPolicy.bind(this)],[$.SABR_ERROR,this.handleSabrError.bind(this)],[$.SABR_REDIRECT,this.handleSabrRedirect.bind(this)],[$.SABR_CONTEXT_UPDATE,this.handleSabrContextUpdate.bind(this)],[$.SABR_CONTEXT_SENDING_POLICY,this.handleSabrContextSendingPolicy.bind(this)],[$.STREAM_PROTECTION_STATUS,this.handleStreamProtectionStatus.bind(this)],[$.RELOAD_PLAYER_RESPONSE,this.handleReloadPlayerResponse.bind(this)],[$.MEDIA_HEADER,this.handleMediaHeader.bind(this)],[$.MEDIA,this.handleMedia.bind(this)],[$.MEDIA_END,this.handleMediaEnd.bind(this)]]),this.sabrContexts=new Map,this.activeSabrContextTypes=new Set,this.initializedFormatsMap=new Map,this.partialSegmentQueue=new Map,this.requestNumber=0,this.durationMs=1/0,this.mediaHeadersProcessed=!1,this._errored=!1,this._aborted=!1,this.progressTracker={lastProgressTime:Date.now(),lastDownloadedDuration:0,stallCount:0},this.fetchFunction=n?.fetch||fetch,this.serverAbrStreamingUrl=n.serverAbrStreamingUrl,this.videoPlaybackUstreamerConfig=n.videoPlaybackUstreamerConfig,this.clientInfo=n.clientInfo,this.poToken=n.poToken,this.durationMs=n.durationMs||1/0,this.formatIds=n.formats||[],this.videoStream=new ReadableStream({start:t=>{this.videoController=t}}),this.audioStream=new ReadableStream({start:t=>{this.audioController=t}})}setPoToken(n){this.poToken=n}setServerAbrFormats(n){this.formatIds.push(...n)}setDurationMs(n){this.durationMs=n}setStreamingURL(n){this.serverAbrStreamingUrl=n}setUstreamerConfig(n){this.videoPlaybackUstreamerConfig=n}setClientInfo(n){this.clientInfo=n}abort(){this.logger.debug(w,"Aborting download process"),this._aborted=!0,this.abortController?.abort(),this.videoController?.error(new Error("Download aborted.")),this.audioController?.error(new Error("Download aborted.")),this.resetState(),this.emit("abort")}getState(){if(!this.mainFormat)throw new Error("Main format is not initialized, cannot get state.");let n=Te(this.mainFormat),t=[];for(let[o,r]of this.initializedFormatsMap.entries())t.push({formatKey:o,formatInitializationMetadata:r.formatInitializationMetadata,downloadedSegments:Array.from(r.downloadedSegments.entries()),lastMediaHeaders:r.lastMediaHeaders});return{durationMs:this.durationMs,requestNumber:this.requestNumber,activeSabrContexts:Array.from(this.activeSabrContextTypes),sabrContextUpdates:Array.from(this.sabrContexts.entries()),formatToDiscard:this.formatToDiscard,cachedBufferedRanges:this.cachedBufferedRanges||[],nextRequestPolicy:this.nextRequestPolicy,initializedFormats:t,playerTimeMs:n}}async start(n){let{videoFormat:t,audioFormat:o}=this.selectFormats(n);return this.setupStreamingProcess(t,o,n).then(),{videoStream:this.videoStream,audioStream:this.audioStream,selectedFormats:{videoFormat:t,audioFormat:o}}}async setupStreamingProcess(n,t,o){try{this._errored=!1,this._aborted=!1;let r=0;o.state&&this.restoreState(n,t,o.state)&&(r=o.state.playerTimeMs||0);let i=o.maxRetries!==void 0?o.maxRetries:gi,a=o.enabledTrackTypes??Kt.VIDEO_AND_AUDIO,s={playerTimeMs:r,audioTrackId:t.audioTrackId,playbackRate:1,stickyResolution:n.height||360,drcEnabled:t.isDrc,clientViewportIsFlexible:!1,visibility:1,enabledTrackTypesBitfield:a};(s.enabledTrackTypesBitfield===1||s.enabledTrackTypesBitfield===2)&&(this.formatToDiscard=s.enabledTrackTypesBitfield===1?K(n):K(t));let c=Date.now()-Number(r||0),d=Math.max(15e3,Number(o.maxReadaheadMs||45e3));for(;parseInt(s.playerTimeMs)<this.durationMs;){if(this._aborted){this.logger.debug(w,"Download process aborted, exiting streaming loop.");break}this.logger.debug(w,`Starting new segment fetch at playback position: ${s.playerTimeMs}ms`),this.mainFormat=s.enabledTrackTypesBitfield===1?this.initializedFormatsMap.get(K(t)||""):this.initializedFormatsMap.get(K(n)||""),this.mainFormat&&this.validateAndCorrectDuration(this.mainFormat.formatInitializationMetadata);let u=this.mainFormat?Te(this.mainFormat):0,f=Math.min(this.durationMs,Math.max(0,Date.now()-c)),l=u-f;l>d&&await new Promise(O=>setTimeout(O,Math.min(5e3,l-d))),s.playerTimeMs=Math.min(u,Math.max(0,Date.now()-c));let{shouldStop:h}=this.checkForStall({playerTimeMs:u,stallDetectionMs:o.stallDetectionMs});if(h||(s.playerTimeMs=s.playerTimeMs.toString(),!await this.executeWithRetry(()=>this.fetchAndProcessSegments(s,t,n),i)))break}}catch(r){this._aborted||this.errorHandler(r,!0)}finally{this._aborted||(this.validateDownloadedSegments(),this._errored||(this.videoController?.close(),this.audioController?.close()),this.resetState(),this.emit("finish"))}}restoreState(n,t,o){if(this.resetState(),!o||typeof o!="object"||!o.initializedFormats||!Array.isArray(o.initializedFormats)||!o.durationMs||!o.playerTimeMs)return this.logger.warn(w,"Invalid or corrupt state object provided. Starting fresh."),!1;let r=K(n)||"",i=K(t)||"";for(let a of o.initializedFormats){let{formatKey:s,formatInitializationMetadata:c,downloadedSegments:d,lastMediaHeaders:u}=a;if(s!==r&&s!==i){this.logger.warn(w,`State contains an unexpected format key "${s}". It will be ignored.`);continue}this.initializedFormatsMap.set(s,{formatInitializationMetadata:c,downloadedSegments:new Map(d),lastMediaHeaders:u||[]})}return!this.initializedFormatsMap.has(r)||!this.initializedFormatsMap.has(i)?(this.logger.warn(w,"State is missing required format data for the selected video/audio formats. Starting fresh."),this.resetState(),!1):(this.durationMs=o.durationMs,this.requestNumber=o.requestNumber||0,this.activeSabrContextTypes=new Set(o.activeSabrContexts||[]),this.sabrContexts=new Map(o.sabrContextUpdates||[]),this.formatToDiscard=o.formatToDiscard,this.cachedBufferedRanges=o.cachedBufferedRanges||[],this.nextRequestPolicy=o.nextRequestPolicy,!0)}checkForStall(n){let t=Date.now(),o=n.playerTimeMs,r=n.stallDetectionMs||Ti;if(o>this.progressTracker.lastDownloadedDuration)return this.progressTracker.lastProgressTime=t,this.progressTracker.lastDownloadedDuration=o,this.progressTracker.stallCount=0,{shouldStop:!1,stalled:!1};if(t-this.progressTracker.lastProgressTime>r){if(this.progressTracker.stallCount++,this.logger.warn(w,`Stream stalled for ${r}ms (stall #${this.progressTracker.stallCount})`),this.progressTracker.stallCount>=zt)throw new Error(`Stream stalled ${zt} times, aborting`);if(this.progressTracker.lastProgressTime=t,Math.abs(this.durationMs-o)<5e3){this.logger.warn(w,"Stream is close to completion, but stalled. Checking if we have the last segment.");let a=parseInt(this.mainFormat?.formatInitializationMetadata.endSegmentNumber||"0")||-1,s=this.mainFormat?.downloadedSegments.get(a);if(s&&s.segmentNumber===a)return this.logger.warn(w,"Last segment is already downloaded. Stopping further processing."),{shouldStop:!0,stalled:!0}}return{shouldStop:!1,stalled:!0}}return{shouldStop:!1,stalled:!1}}selectFormats(n){let t=st(this.formatIds,n.videoFormat,{quality:n.videoQuality,preferWebM:n.preferWebM,preferH264:n.preferH264,preferMP4:n.preferMP4,isAudio:!1}),o=st(this.formatIds,n.audioFormat,{quality:n.audioQuality,language:n.audioLanguage,preferOpus:n.preferOpus,preferMP4:n.preferMP4,preferWebM:n.preferWebM,isAudio:!0});if(this.durationMs<0)throw new Error("Invalid duration");if(!t||!o)throw new Error("No suitable formats found for download");return{videoFormat:t,audioFormat:o}}async fetchAndProcessSegments(n,t,o){let r=this.initializedFormatsMap.get(K(o)||""),i=this.initializedFormatsMap.get(K(t)||"");this.cachedBufferedRanges?.length||(this.cachedBufferedRanges=this.buildBufferedRanges(r,i));let a=this.buildRequestBody(n,t,o);this.mediaHeadersProcessed=!1;let s=await this.makeStreamingRequest(a),c=await this.processStreamingResponse(s);if(c.length){if((this.streamProtectionStatus?.status||0)>=2&&!c.includes($.MEDIA))throw new Error("No media parts or protocol updates received from server.")}else throw new Error("No valid parts received from server.");(c.includes($.MEDIA_HEADER)&&r?.lastMediaHeaders?.length&&i?.lastMediaHeaders?.length||n.enabledTrackTypesBitfield!==0&&this.mainFormat?.lastMediaHeaders?.length)&&(this.mediaHeadersProcessed=!0)}buildBufferedRanges(n,t){let o=[],r=[n,t];for(let i of r){if(!i?.lastMediaHeaders.length||rt(i.formatInitializationMetadata)===this.formatToDiscard)continue;let a=i.lastMediaHeaders,s=a.reduce((c,d)=>c+parseInt(d.durationMs||"0"),0);o.push({durationMs:s.toString(),formatId:i.formatInitializationMetadata.formatId,startTimeMs:String(a[0].startMs||"0"),startSegmentIndex:a[0].sequenceNumber||1,endSegmentIndex:a[a.length-1].sequenceNumber||1,timeRange:{durationTicks:s.toString(),startTicks:a[0].startMs,timescale:a[0].timeRange?.timescale}}),i.lastMediaHeaders=[]}return o}buildRequestBody(n,t,o){if(!this.videoPlaybackUstreamerConfig)throw new Error("Video playback ustreamer config must be set before starting.");if(!this.clientInfo)throw new Error("Client info must be set before starting.");let r=this.cachedBufferedRanges||[],{sabrContexts:i,unsentSabrContexts:a}=this.prepareSabrContexts(),{selectedFormatIds:s,updatedBufferedRanges:c}=this.prepareFormatSelections([o,t],r);return Ye.encode({clientAbrState:n,preferredAudioFormatIds:[t],preferredVideoFormatIds:[o],preferredSubtitleFormatIds:[],selectedFormatIds:s,videoPlaybackUstreamerConfig:tt(this.videoPlaybackUstreamerConfig),streamerContext:{sabrContexts:i,unsentSabrContexts:a,poToken:this.poToken?tt(this.poToken):void 0,playbackCookie:this.nextRequestPolicy?.playbackCookie?oe.encode(this.nextRequestPolicy.playbackCookie).finish():void 0,clientInfo:this.clientInfo},bufferedRanges:c,field1000:[]}).finish()}prepareSabrContexts(){let n=[],t=[];for(let o of this.sabrContexts.values())this.activeSabrContextTypes.has(o.type)?n.push(o):t.push(o.type);return{sabrContexts:n,unsentSabrContexts:t}}prepareFormatSelections(n,t){let o=[],r=[...t],i=this.initializedFormatsMap.size>0;for(let a of n){let s=K(a),c=this.formatToDiscard&&s===this.formatToDiscard;c&&r.push({formatId:a,durationMs:le,startTimeMs:String(0),startSegmentIndex:parseInt(le),endSegmentIndex:parseInt(le),timeRange:{durationTicks:le,startTicks:"0",timescale:1e3}}),(i||c)&&o.push(a)}return{selectedFormatIds:o,updatedBufferedRanges:r}}async makeStreamingRequest(n){if(!this.serverAbrStreamingUrl)throw new Error("Server ABR streaming URL not configured.");let t=new URL(this.serverAbrStreamingUrl);t.searchParams.set("rn",this.requestNumber.toString()),this.abortController=new AbortController;let o=setTimeout(()=>this.abortController?.abort(),6e4);try{return await this.fetchFunction(t,{method:"POST",headers:{"content-type":"application/x-protobuf","accept-encoding":"identity",accept:"application/vnd.yt-ump"},body:n,signal:this.abortController.signal})}finally{clearTimeout(o),this.requestNumber+=1}}async processStreamingResponse(n){if(!n.ok)throw new Error(`Server returned ${n.status} ${n.statusText}`);if(n.headers.get("content-type")!=="application/vnd.yt-ump")throw new Error(`Unexpected content type from server: ${n.headers.get("content-type")}`);let t=n.body.getReader(),o=!1,r,i=[];for(;;){if(this.abortController?.signal?.aborted&&!this._aborted)throw new Error("Stream was aborted.");let{done:a,value:s}=await t.read();if(a){if(!o)throw new Error("Received empty response from server.");break}o=!0;let c;r?(c=r.data,c.append(s)):c=new ke([s]),r=new Oe(c).read(u=>{i.push(u.type);let f=this.umpPartHandlers.get(u.type);f&&f(u)})}return i}async executeWithRetry(n,t){let o=this.nextRequestPolicy?.backoffTimeMs||0;o>0&&(this.logger.debug(w,`Respecting server backoff policy: waiting ${o}ms before request`),await nt(o));for(let r=1;r<=t+1;r++)try{return await n(),this.mediaHeadersProcessed&&(this.cachedBufferedRanges=void 0),!0}catch(i){let a=i;if(this._aborted)return this.logger.debug(w,"Download process aborted, skipping retry."),!1;if(r>t){this.logger.error(w,`Maximum retries (${t}) exceeded while fetching segment: ${a.message}`),this.errorHandler(a,!0);break}let s=Math.min(yi*Math.pow(2,r-1),Ai);this.logger.warn(w,`Segment fetch attempt ${r}/${t+1} failed - retrying in ${s}ms`,a),await nt(s)}finally{this.partialSegmentQueue.clear()}return!1}decodePart(n,t){if(n.data.chunks.length)try{return t.decode(Gt(n.data.chunks))}catch{return}}handleFormatInitializationMetadata(n){let t=this.decodePart(n,We);if(!t)return;let o=rt(t),r={formatInitializationMetadata:t,downloadedSegments:new Map,lastMediaHeaders:[]};this.initializedFormatsMap.set(o,r),this.logger.debug(w,`Initialized format: ${o}`),this.emit("formatInitialization",r)}handleNextRequestPolicy(n){this.nextRequestPolicy=this.decodePart(n,qe)}handleSabrError(n){let t=this.decodePart(n,ze);if(t)throw new Error(`SABR Error: ${t.type} - ${t.code}`)}handleSabrRedirect(n){let t=this.decodePart(n,Xe);t&&t.url&&(this.serverAbrStreamingUrl=t.url,this.logger.debug(w,`Redirecting to ${this.serverAbrStreamingUrl}`))}handleSabrContextUpdate(n){let t=this.decodePart(n,Ze);if(t&&t.type!==void 0&&t.value?.length){if(t.writePolicy===Qe.KEEP_EXISTING&&this.sabrContexts.has(t.type)){this.logger.debug(w,`Skipping SABR context update for type ${t.type}`);return}this.sabrContexts.set(t.type,t),t.sendByDefault&&this.activeSabrContextTypes.add(t.type),this.logger.debug(w,`Received SABR context update (type: ${t.type}, sendByDefault: ${t.sendByDefault})`)}}handleSabrContextSendingPolicy(n){let t=this.decodePart(n,Je);if(t){for(let o of t.startPolicy)this.activeSabrContextTypes.has(o)||(this.activeSabrContextTypes.add(o),this.logger.debug(w,`Activated SABR context for type ${o}`));for(let o of t.stopPolicy)this.activeSabrContextTypes.has(o)&&(this.activeSabrContextTypes.delete(o),this.logger.debug(w,`Deactivated SABR context for type ${o}`));for(let o of t.discardPolicy)this.sabrContexts.has(o)&&(this.sabrContexts.delete(o),this.logger.debug(w,`Discarded SABR context for type ${o}`))}}handleStreamProtectionStatus(n){if(this.streamProtectionStatus=this.decodePart(n,et),!!this.streamProtectionStatus){if(this.emit("streamProtectionStatusUpdate",this.streamProtectionStatus),this.streamProtectionStatus.status===3)throw new Error("Cannot proceed with stream: attestation required");this.streamProtectionStatus.status===2&&this.logger.warn(w,"Attestation pending.")}}handleReloadPlayerResponse(n){let t=this.decodePart(n,je);if(!t)return;let o="Player response reload requested by server";throw this.logger.debug(w,`${o} (token: ${t.reloadPlaybackParams?.token}`),this.emit("reloadPlayerResponse",t),new Error(o)}handleMediaHeader(n){let t=this.decodePart(n,Ke);if(!t)return;let o=t.headerId||0,r=Yt(t),i=t.isInitSeg?0:t.sequenceNumber||0,a=t.durationMs||Math.ceil(parseInt(t.timeRange?.durationTicks||"0")/(t.timeRange?.timescale||0)*1e3).toString(),s=this.initializedFormatsMap.get(r);if(!s){this.logger.warn(w,`No initialized format found for key: ${r} (segment ${i})`);return}let c=at(s);if(s.downloadedSegments.has(i)){this.logger.debug(w,`Segment ${r} (segment: ${i}) already downloaded. Ignoring.`);return}this.partialSegmentQueue.set(o,{formatIdKey:r,segmentNumber:i,durationMs:a,mediaHeader:t,bufferedChunks:[]}),this.logger.debug(w,`Enqueued ${c} segment ${i} (Header ID: ${o}, key: ${r}, duration: ${a}ms)`)}handleMedia(n){let t=n.data.getUint8(0),o=this.partialSegmentQueue.get(t);if(!o){this.logger.debug(w,`Received Media part for an unknown Header ID: ${t}`);return}if(!this.initializedFormatsMap.get(o.formatIdKey)){this.logger.warn(w,`No initialized format found for key ${o.formatIdKey} (segment ${o.segmentNumber})`);return}let i=n.data.split(1).remainingBuffer;for(let a of i.chunks)o.bufferedChunks.push(a)}handleMediaEnd(n){let t=n.data.getUint8(0),o=this.partialSegmentQueue.get(t);if(!o){this.logger.debug(w,`Received MediaEnd for an unknown Header ID: ${t}`);return}let r=o.bufferedChunks.reduce((a,s)=>a+s.length,0);if(r!==parseInt(o.mediaHeader.contentLength||"0")){this.logger.warn(w,`Content length mismatch for segment ${o.segmentNumber} (Header ID: ${t}, key: ${o.formatIdKey}, expected: ${o.mediaHeader.contentLength}, received: ${r})`),this.partialSegmentQueue.delete(t);return}let i=this.initializedFormatsMap.get(o.formatIdKey);if(i){let a=at(i);if(o.bufferedChunks.length)for(let s of o.bufferedChunks)a==="audio"?this.audioController?.enqueue(s):this.videoController?.enqueue(s);this.logger.debug(w,`Received MediaEnd for ${a} segment ${o.segmentNumber} (Header ID: ${t}, key: ${o.formatIdKey})`),o.bufferedChunks.length=0,o.bufferedChunks=[],i.lastMediaHeaders.push(o.mediaHeader),i.downloadedSegments.set(o.segmentNumber,o),this.partialSegmentQueue.delete(t)}}validateAndCorrectDuration(n){let t=parseInt(n.durationUnits||"0"),o=parseInt(n.durationTimescale||"0");if(o===0){this.logger.warn(w,"Invalid timescale (0) in format initialization metadata");return}let r=Math.trunc(t/(o/1e3));this.durationMs!==r&&(this.durationMs=r,this.logger.debug(w,`Corrected stream duration to ${this.durationMs}ms based on format initialization metadata`))}validateDownloadedSegments(){for(let[n,t]of this.initializedFormatsMap.entries()){if(n===this.formatToDiscard){this.logger.debug(w,`Skipping validation for discarded format: ${n}`);continue}let o=Te(t),r=parseInt(t.formatInitializationMetadata.durationUnits||"0"),i=parseInt(t.formatInitializationMetadata.durationTimescale||"0"),a=i?r/(i/1e3):0,s=Math.abs(o-a);if(a>0&&s>a*.01){let h=Math.round(o/a*100);this.logger.warn(w,`Incomplete stream for format ${n}: downloaded ${o}ms (${h}%), expected ${a}ms`)}let c=Array.from(t.downloadedSegments.entries());if(c.length===0)continue;c.sort(([h],[y])=>h-y);let d=parseInt(t.formatInitializationMetadata.endSegmentNumber||"0"),u=[];for(let h=0;h<=d;h++)t.downloadedSegments.has(h)||u.push(h);let f=new Set(c.map(([h])=>h)).size,l=f!==c.length;if(u.length>0){let h=`Format ${n}: Missing segments: [${u.join(", ")}]. Expected range: 0-${d}. `;this.logger.warn(w,h),this.errorHandler(new Error(h),!0)}else this.logger.debug(w,`Format ${n}: All ${d} segments present (100% coverage)`);if(l){let h=`Format ${n}: Found duplicate segment numbers (${c.length} segments but ${f} unique numbers)`;this.logger.warn(w,h),this.errorHandler(new Error(h),!0)}}}resetState(){this.initializedFormatsMap.clear(),this.partialSegmentQueue.clear(),this.activeSabrContextTypes.clear(),this.sabrContexts.clear(),this.nextRequestPolicy=void 0,this.mainFormat=void 0,this.requestNumber=0,this.cachedBufferedRanges=void 0,this.mediaHeadersProcessed=!1,this.streamProtectionStatus=void 0,this.formatToDiscard=void 0,this.abortController=void 0,this.progressTracker={lastProgressTime:Date.now(),lastDownloadedDuration:0,stallCount:0}}errorHandler(n,t=!0){this.resetState(),this.logger.error(w,`Stream error: ${n.message}`),t&&(this._errored=!0,this.videoController?.error(n),this.audioController?.error(n))}};var b="1.0",ki="2026.09.30-v181-hls-fallback-order",Oi="OwO MO Downloader Worker",dn=[".googlevideo.com"],pt=["facebook.com","www.facebook.com","m.facebook.com","web.facebook.com","fb.watch"],Ni=[".fbcdn.net",".facebook.com"],Ci=["instagram.com","www.instagram.com","m.instagram.com","instagr.am","www.instagr.am"],Pi=["threads.com","www.threads.com","threads.net","www.threads.net"],Mi=[".cdninstagram.com",".fbcdn.net",".instagram.com",".threads.com",".threads.net"];function X(e="*"){return{"Access-Control-Allow-Origin":e,"Access-Control-Allow-Methods":"GET,HEAD,OPTIONS","Access-Control-Allow-Headers":"Range,Content-Type,Cache-Control,X-FB-Session,X-IG-Session,X-TH-Session,X-YT-Session","Access-Control-Max-Age":"86400","Access-Control-Expose-Headers":"Content-Length,Content-Range,Accept-Ranges,Content-Type,Content-Disposition,X-OwO-Media-Total,X-OwO-Media-Mode,X-OwO-Media-Source,X-OwO-Version,X-OwO-Track-Restart,X-OwO-Selected-Itag,X-OwO-Segment-Count,X-OwO-Expected-Bytes,X-OwO-Expected-Duration-Ms,X-OwO-Sabr-Track-Mode,X-OwO-Expected-Video-Bytes,X-OwO-Expected-Audio-Bytes,X-OwO-Expected-Duration-Ms",Vary:"Origin"}}function _(e,n=200){return new Response(JSON.stringify(e,null,2),{status:n,headers:{...X(),"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"}})}function un(e,n){let t=e.indexOf(n);if(t<0)return null;let o=e.indexOf("{",t+n.length);if(o<0)return null;let r=0,i=!1,a=!1;for(let s=o;s<e.length;s++){let c=e[s];if(i){a?a=!1:c==="\\"?a=!0:c==='"'&&(i=!1);continue}if(c==='"')i=!0;else if(c==="{")r++;else if(c==="}"&&--r===0)try{return JSON.parse(e.slice(o,s+1))}catch{return null}}return null}function St(e){if(e.url)return e.url;if(!e.signatureCipher&&!e.cipher)return null;let n=new URLSearchParams(e.signatureCipher||e.cipher),t=n.get("url"),o=n.get("sig"),r=n.get("sp")||"signature";if(!t||!o)return null;let i=new URL(t);return i.searchParams.set(r,o),i.href}function bt(e,n=""){let t=n||St(e);if(!t)return null;let o="";try{o=new URL(t).searchParams.get("clen")||""}catch{}let r=e.mimeType||"",i=r.split(";")[0],a=(r.match(/codecs="([^"]+)"/)||[])[1]||"",s=i.startsWith("video/"),c=i.startsWith("audio/")||!!e.audioQuality,d=s&&e.audioQuality?"\u5F71\u97F3\u5408\u4E00":s?"\u50C5\u8996\u8A0A":c?"\u50C5\u97F3\u8A0A":"\u5A92\u9AD4";return{itag:e.itag,quality:e.qualityLabel||e.audioQuality||e.quality||"\u672A\u77E5",kind:d,container:i.split("/")[1]||"bin",mimeType:i,codec:a,bitrate:e.bitrate||0,contentLength:e.contentLength||o||"",width:Number(e.width||0),height:Number(e.height||0),fps:Number(e.fps||0),source:e._source||e.source||"",generatedAt:Date.now(),url:t}}function wi(e,n="VISIONOS"){let t=String(e.mimeType||""),o=t.split(";")[0],r=(t.match(/codecs="([^"]+)"/)||[])[1]||"",i=o.startsWith("video/"),a=o.startsWith("audio/")||!!e.audioQuality;return{itag:e.itag,quality:e.qualityLabel||e.audioQuality||e.quality||"\u672A\u77E5",kind:i?"\u50C5\u8996\u8A0A":a?"\u50C5\u97F3\u8A0A":"\u5A92\u9AD4",container:o.split("/")[1]||"bin",mimeType:o,codec:r,bitrate:Number(e.bitrate||0),contentLength:Number(e.contentLength||0),width:Number(e.width||0),height:Number(e.height||0),fps:Number(e.fps||0),source:n,protocol:"sabr",generatedAt:Date.now(),url:`sabr://${n.toLowerCase()}/${e.itag}`}}function we(e){return{streamingUrl:String(e?.streamingData?.serverAbrStreamingUrl||""),ustreamerConfig:String(e?.playerConfig?.mediaCommonConfig?.mediaUstreamerRequestConfig?.videoPlaybackUstreamerConfig||"")}}function fn(e){let n=ie(e),t=n.some(i=>String(i.mimeType||"").startsWith("video/")&&!i.audioQuality),o=n.some(i=>String(i.mimeType||"").startsWith("audio/")||!String(i.mimeType||"").startsWith("video/")&&i.audioQuality),r=we(e);return t&&o&&!!(r.streamingUrl&&r.ustreamerConfig)}function ne(e,n){let t=e.match(new RegExp('"'+n+'"\\s*:\\s*"([^"]+)"'));return t?t[1].replace(/\\u0026/g,"&").replace(/\\\//g,"/"):""}function ie(e){let n=e&&e.streamingData||{};return[...n.formats||[],...n.adaptiveFormats||[]]}function Ce(e){let n=e&&e.playabilityStatus||{};return{status:n.status||"UNKNOWN",reason:n.reason||(n.messages||[]).join("\uFF1B")||"\u672A\u63D0\u4F9B\u539F\u56E0"}}function Di(e){return!!(e&&(e.url||e.signatureCipher||e.cipher))}function H(e){return ie(e).filter(Di)}var Se=[{label:"ANDROID",clientName:"ANDROID",clientVersion:"21.35.35",osName:"Android",osVersion:"14",androidSdkVersion:34},{label:"ANDROID_VR",clientName:"ANDROID_VR",clientVersion:"1.65.10",osName:"Android",osVersion:"14",androidSdkVersion:34,deviceMake:"Oculus",deviceModel:"Quest 3"},{label:"ANDROID_CREATOR",clientName:"ANDROID_CREATOR",clientVersion:"24.35.100",osName:"Android",osVersion:"14",androidSdkVersion:34},{label:"ANDROID_MUSIC",clientName:"ANDROID_MUSIC",clientVersion:"7.18.52",osName:"Android",osVersion:"14",androidSdkVersion:34},{label:"ANDROID_TESTSUITE",clientName:"ANDROID_TESTSUITE",clientVersion:"1.9",osName:"Android",osVersion:"14",androidSdkVersion:34},{label:"IOS",clientName:"IOS",clientVersion:"21.35.3",osName:"iPhone",osVersion:"18.6.2.22G100",deviceMake:"Apple",deviceModel:"iPhone16,2"},{label:"IOS_CREATOR",clientName:"IOS_CREATOR",clientVersion:"24.35.100",osName:"iPhone",osVersion:"18.6.2.22G100",deviceMake:"Apple",deviceModel:"iPhone16,2"},{label:"IOS_MUSIC",clientName:"IOS_MUSIC",clientVersion:"7.18.0",osName:"iPhone",osVersion:"18.6.2.22G100",deviceMake:"Apple",deviceModel:"iPhone16,2"},{label:"VISIONOS",clientName:"IOS",clientVersion:"21.35.3",osName:"visionOS",osVersion:"2.6",deviceMake:"Apple",deviceModel:"RealityDevice14,1"},{label:"WEB_EMBEDDED",clientName:"WEB_EMBEDDED_PLAYER",clientVersion:"1.20260909.00.00",clientScreen:"EMBED",embed:!0},{label:"WEB",clientName:"WEB",clientVersion:"2.20260909.00.00"},{label:"WEB_SAFARI",clientName:"WEB",clientVersion:"2.20260909.00.00",browserName:"Safari",browserVersion:"18.6",userAgent:"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15"},{label:"MWEB",clientName:"MWEB",clientVersion:"2.20260909.00.00"},{label:"WEB_REMIX",clientName:"WEB_REMIX",clientVersion:"1.20260909.01.00"},{label:"WEB_CREATOR",clientName:"WEB_CREATOR",clientVersion:"1.20260909.00.00"},{label:"WEB_KIDS",clientName:"WEB_KIDS",clientVersion:"2.20260909.00.00"},{label:"TV",clientName:"TVHTML5",clientVersion:"7.20260311.12.00",platform:"TV",userAgent:"Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version"},{label:"TV_EMBEDDED",clientName:"TVHTML5_SIMPLY_EMBEDDED_PLAYER",clientVersion:"2.0",platform:"TV",clientScreen:"EMBED",embed:!0},{label:"TV_SIMPLY",clientName:"TVHTML5_SIMPLY",clientVersion:"1.0",platform:"TV"}],Li=["ANDROID","WEB_SAFARI","TV","TV_EMBEDDED","TV_SIMPLY","WEB_EMBEDDED","WEB_KIDS","WEB","MWEB","IOS","IOS_CREATOR","IOS_MUSIC","ANDROID_CREATOR","ANDROID_MUSIC","ANDROID_TESTSUITE","WEB_REMIX","WEB_CREATOR","ANDROID_VR","VISIONOS"],Xt=1e3;function ln(e){return String(e||"")}function ut(e){return new Promise(n=>setTimeout(n,e))}function xi(){let e=new Map(Se.map(n=>[n.label,n]));return Li.map(n=>e.get(n)).filter(Boolean)}function te(e,n){let t=String(e?.headers?.get("X-YT-Session")||"").trim(),o=String(n&&n.YT_COOKIE||"").trim();return t||o}function jt(e,n){let t=String(e||"").match(new RegExp(`(?:^|;\\s*)${n}=([^;]+)`,"i"));return t?t[1]:""}async function Ui(e){let n=new TextEncoder().encode(e),t=await crypto.subtle.digest("SHA-1",n);return[...new Uint8Array(t)].map(o=>o.toString(16).padStart(2,"0")).join("")}async function Bi(e){if(!e)return{};let n=jt(e,"SAPISID")||jt(e,"__Secure-3PAPISID");if(!n)return{Cookie:e};let t=Math.floor(Date.now()/1e3),o="https://www.youtube.com",r=await Ui(`${t} ${n} ${o}`);return{Cookie:e,Authorization:`SAPISIDHASH ${t}_${r}`,"X-Origin":o}}async function be(e,n,t,o,r=""){let i={hl:"zh-TW",gl:"TW",...o};delete i.label,delete i.embed,n&&(i.visitorData=n);let a={client:i};o.embed&&(a.thirdParty={embedUrl:"https://www.youtube.com/"});let s=await fetch(`https://www.youtube.com/youtubei/v1/player?key=${encodeURIComponent(e)}&prettyPrint=false`,{method:"POST",headers:{"Content-Type":"application/json",...await Bi(r),Origin:"https://www.youtube.com","X-YouTube-Client-Name":o.clientName,"X-YouTube-Client-Version":o.clientVersion,...n?{"X-Goog-Visitor-Id":n}:{},...o.userAgent?{"User-Agent":o.userAgent}:{}},body:JSON.stringify({videoId:t,context:a,contentCheckOk:!0,racyCheckOk:!0}),cache:"no-store"});if(!s.ok)throw new Error(`HTTP ${s.status}`);return s.json()}var hn=262143;async function vi(e,n,t){let o=H(e),r=!1,i=!1,a=0;for(let s of o){let c=St(s);if(!c)continue;let d;try{if(d=await fetch(c,{headers:{Range:`bytes=0-${hn}`,Accept:"*/*","Accept-Encoding":"identity",Origin:"https://www.youtube.com",Referer:"https://www.youtube.com/","User-Agent":J(n)},cache:"no-store"}),![200,206].includes(d.status))continue;a++;let u=String(s.mimeType||"");u.startsWith("video/")&&!s.audioQuality&&(r=!0),(u.startsWith("audio/")||!u.startsWith("video/")&&s.audioQuality)&&(i=!0)}catch{}finally{try{await d?.body?.cancel()}catch{}}}return t.push(`\u3010\u5BE6\u8F09\u9A57\u8B49\u3011${n} \u4EE5 256 KiB Range \u9A57\u8B49\u300C${o.length}\u300D\u500B\u7DB2\u5740\uFF0C\u901A\u904E\u300C${a}\u300D\u500B\uFF1B\u5206\u96E2\u8996\u8A0A\uFF1A${r?"\u6709":"\u7121"}\uFF1B\u5206\u96E2\u97F3\u8A0A\uFF1A${i?"\u6709":"\u7121"}\u3002`),{videoOnly:r,audioOnly:i}}async function Fi(e,n,t,o,r="quick",i=""){let a=[{label:"WATCH_PAGE",player:n}],s=Ce(n),c=ie(n).length,d=H(n).length;o.push(`\u3010WATCH_PAGE\u3011\u72C0\u614B\uFF1A${s.status}\uFF1B\u539F\u59CB\u683C\u5F0F\uFF1A\u300C${c}\u300D\u500B\uFF1B\u542B\u7DB2\u5740\u6216\u5BC6\u6587\uFF1A\u300C${d}\u300D\u500B\uFF1B\u539F\u56E0\uFF1A${s.reason}\u3002`),c&&!d&&o.push("\u3010SABR\u3011WATCH_PAGE \u50C5\u63D0\u4F9B\u683C\u5F0F\u63CF\u8FF0\uFF0C\u672A\u542B url\u3001signatureCipher \u6216 cipher\uFF0C\u7E7C\u7E8C\u5617\u8A66\u5176\u4ED6 Client\u3002");let u=ne(e,"INNERTUBE_API_KEY"),f=ln(ne(e,"VISITOR_DATA")),l=ne(e,"DATASYNC_ID"),h=n?.streamingData?.serverAbrStreamingUrl||"";if(o.push(`\u3010YOUTUBE CONTEXT\u3011Visitor Data\uFF1A${f?"\u5B58\u5728":"\u4E0D\u5B58\u5728"}\uFF1BData Sync ID\uFF1A${l?"\u5B58\u5728":"\u4E0D\u5B58\u5728"}\u3002`),o.push("\u3010PO TOKEN\u3011PLAYER\uFF1A\u672A\u63D0\u4F9B\uFF1BGVS\uFF1A\u672A\u63D0\u4F9B\uFF1BSUBS\uFF1A\u672A\u63D0\u4F9B\u3002\u672C\u7248\u53EA\u8A18\u9304\u9700\u6C42\uFF0C\u4E0D\u4F7F\u7528\u56FA\u5B9A Token\u3002"),h&&o.push("\u3010SABR\u3011\u64AD\u653E\u5668\u5DF2\u63D0\u4F9B serverAbrStreamingUrl\uFF1B\u82E5\u50B3\u7D71\u683C\u5F0F\u6C92\u6709\u5A92\u9AD4\u4F4D\u5740\uFF0C\u5224\u5B9A\u70BA SABR-only \u5019\u9078\u3002"),!u)return o.push("\u3010FALLBACK\u3011\u627E\u4E0D\u5230 INNERTUBE_API_KEY\uFF0C\u7121\u6CD5\u57F7\u884C\u591A Client \u8F2A\u8A62\u3002"),a;let y=H(n),O=y.some(m=>String(m.mimeType||"").startsWith("video/")&&!m.audioQuality),T=y.some(m=>String(m.mimeType||"").startsWith("audio/")||!String(m.mimeType||"").startsWith("video/")&&m.audioQuality);if(d&&O&&T)return o.push("\u3010\u4F86\u6E90\u3011WATCH_PAGE \u5DF2\u540C\u6642\u63D0\u4F9B\u5206\u96E2\u8996\u8A0A\u8207\u97F3\u8A0A\uFF0C\u7565\u904E\u5176\u4ED6 Client\u3002"),a;o.push(r==="quick"?"\u3010\u5FEB\u901F\u89E3\u6790\u3011\u5148\u4F7F\u7528 ANDROID \u5C0B\u627E\u53EF\u76F4\u63A5\u4E0B\u8F09\u7684\u5F71\u97F3\u5408\u4E00\u683C\u5F0F\u3002":r==="all"?"\u3010\u55AE\u4E00\u5DE5\u4F5C\u968E\u6BB5\u3011\u5148\u4F7F\u7528 ANDROID \u4FDD\u7559\u57FA\u672C\u683C\u5F0F\uFF0C\u518D\u641C\u5C0B WEB_SAFARI HLS \u8207\u5168\u90E8\u4E00\u822C Client\uFF1BANDROID_VR \u70BA\u5099\u63F4 1\uFF0CVISIONOS \u70BA\u6700\u5F8C\u5099\u63F4\u3002":"\u3010\u9AD8\u756B\u8CEA\u641C\u5C0B\u3011\u4FDD\u7559\u65E2\u6709\u7D50\u679C\uFF0C\u7E7C\u7E8C\u8490\u96C6\u5206\u96E2\u8996\u8A0A\u8207\u5206\u96E2\u97F3\u8A0A\u683C\u5F0F\u3002");let E=s.status==="LOGIN_REQUIRED"?1:0,I=new Set,k=r==="quick"?Se.filter(m=>m.label==="ANDROID"):r==="all"?xi():Se.filter(m=>m.label!=="ANDROID");for(let m=0;m<k.length;m++){let N=k[m];try{m>0&&(o.push(`\u3010\u8ACB\u6C42\u7BC0\u6D41\u3011\u7B49\u5F85 ${Xt} \u6BEB\u79D2\u5F8C\u518D\u547C\u53EB ${N.label}\u3002`),await ut(Xt));let P=await be(u,f,t,N,i);s=Ce(P),c=ie(P).length,d=H(P).length,s.status==="LOGIN_REQUIRED"&&(E++,["ANDROID_VR","WEB_SAFARI","IOS"].includes(N.label)&&I.add(N.label));let g=!!P?.streamingData?.serverAbrStreamingUrl,S=!!P?.streamingData?.hlsManifestUrl,M=!!P?.streamingData?.dashManifestUrl;if(o.push(`\u3010${N.label}\u3011\u72C0\u614B\uFF1A${s.status}\uFF1B\u539F\u59CB\u683C\u5F0F\uFF1A\u300C${c}\u300D\u500B\uFF1B\u542B\u7DB2\u5740\u6216\u5BC6\u6587\uFF1A\u300C${d}\u300D\u500B\uFF1BHLS\uFF1A${S?"\u5B58\u5728":"\u7121"}\uFF1BDASH\uFF1A${M?"\u5B58\u5728":"\u7121"}\uFF1BSABR\uFF1A${g?"\u5B58\u5728":"\u7121"}\uFF1B\u539F\u56E0\uFF1A${s.reason}\u3002`),a.push({label:N.label,player:P}),r==="all"&&N.label==="WEB_SAFARI"&&S){o.push("\u3010WEB_SAFARI HLS\u3011\u5DF2\u53D6\u5F97 HLS Manifest\uFF0C\u512A\u5148\u63A1\u7528\u4E0D\u4F9D\u8CF4 ANDROID_VR \u6216 VISIONOS SABR \u7684\u9AD8\u756B\u8CEA\u8DEF\u5F91\u3002");break}if(r==="quick"&&d){o.push(`\u3010\u5FEB\u901F\u89E3\u6790\u3011${N.label} \u5DF2\u53D6\u5F97\u300C${d}\u300D\u500B\u53EF\u89E3\u6790\u683C\u5F0F\uFF0C\u5148\u56DE\u50B3\u57FA\u672C\u7D50\u679C\u3002`);break}r==="all"&&N.label==="ANDROID"&&d&&o.push(`\u3010\u57FA\u672C\u683C\u5F0F\u4FDD\u7559\u3011ANDROID \u5DF2\u53D6\u5F97\u300C${d}\u300D\u500B\u53EF\u89E3\u6790\u683C\u5F0F\uFF1B\u7E7C\u7E8C\u540C\u4E00\u5DE5\u4F5C\u968E\u6BB5\u7684\u9AD8\u756B\u8CEA\u641C\u5C0B\u3002`);let C=a.flatMap(D=>H(D.player)),R=C.some(D=>String(D.mimeType||"").startsWith("video/")&&!D.audioQuality),B=C.some(D=>String(D.mimeType||"").startsWith("audio/")||!String(D.mimeType||"").startsWith("video/")&&D.audioQuality),v=C.some(D=>String(D.mimeType||"").startsWith("video/")&&!!D.audioQuality);if(N.label==="VISIONOS"&&fn(P)){o.push("\u3010\u5099\u63F4 2\uFF0FVISIONOS SABR\u3011\u4E00\u822C\u4F86\u6E90\u8207 ANDROID_VR \u5747\u672A\u6210\u529F\uFF1B\u5DF2\u53D6\u5F97\u5B8C\u6574 SABR \u63CF\u8FF0\uFF0C\u63A1\u7528\u6700\u5F8C\u5099\u63F4\u4E26\u7D50\u675F\u641C\u5C0B\u3002");break}if(R&&B){let D=await vi(P,N.label,o);if(D.videoOnly&&D.audioOnly){let F=N.label==="ANDROID_VR"?"\u3010\u5099\u63F4 1\uFF0FANDROID_VR\u3011":"\u3010\u9AD8\u756B\u8CEA\u3011";o.push(`${F}${N.label} \u7684\u5206\u96E2\u8996\u8A0A\u8207\u97F3\u8A0A\u5DF2\u901A\u904E\u5BE6\u8F09\u9A57\u8B49\uFF0C\u505C\u6B62\u5176\u9918 Client \u8F2A\u8A62\u3002`);break}o.push(`\u3010\u9AD8\u756B\u8CEA\u7E8C\u641C\u3011${N.label} \u672A\u901A\u904E\u5BE6\u8F09\u9A57\u8B49\uFF0C\u7E7C\u7E8C\u4E0B\u4E00\u500B Client\u3002`)}if(r!=="all"&&v&&E>=4){o.push("\u3010\u5FEB\u901F\u505C\u6B62\u3011\u5DF2\u6709\u5F71\u97F3\u5408\u4E00\u683C\u5F0F\uFF0C\u4E14\u591A\u500B\u4F86\u6E90\u8981\u6C42\u767B\u5165\uFF0C\u505C\u6B62\u5176\u9918 Client \u8F2A\u8A62\u3002");break}if(r!=="all"&&E>=4&&!C.length){o.push(`\u3010\u5FEB\u901F\u505C\u6B62\u3011\u5DF2\u6709\u300C${E}\u300D\u500B\u4F86\u6E90\u8981\u6C42\u767B\u5165\uFF0C\u5224\u5B9A\u70BA AUTH_REQUIRED\u3002`);break}r==="all"&&s.status==="LOGIN_REQUIRED"&&o.push(`\u3010\u767B\u5165\u9650\u5236\u3011${N.label} \u8981\u6C42\u767B\u5165\uFF1Bmode=all \u7E7C\u7E8C\u4E0B\u4E00\u500B\u533F\u540D Client\u3002`),r==="all"&&N.label==="ANDROID_VR"&&s.status==="LOGIN_REQUIRED"&&!d&&o.push("\u3010\u767B\u5165\u9650\u5236\u7E8C\u8DD1\u3011ANDROID_VR \u672A\u53D6\u5F97\u683C\u5F0F\uFF0C\u7E7C\u7E8C WEB_EMBEDDED\u3001IOS \u8207 TV \u7B49\u5099\u63F4 Client\uFF0C\u4E0D\u5728\u6B64\u63D0\u524D\u7194\u65B7\u3002")}catch(P){if(o.push(`\u3010${N.label}\u3011\u8ACB\u6C42\u5931\u6557\uFF1A${P.message}\u3002`),String(P.message).includes("HTTP 429")){o.push("\u3010\u5FEB\u901F\u505C\u6B62\u3011YouTube \u5DF2\u56DE\u50B3 HTTP 429\uFF0C\u505C\u6B62\u5176\u9918 Client \u8F2A\u8A62\u3002");break}}}if(r==="all"){let m=a.flatMap(S=>H(S.player)),N=m.filter(S=>String(S.mimeType||"").startsWith("video/")&&!S.audioQuality).length,P=m.filter(S=>String(S.mimeType||"").startsWith("audio/")||!String(S.mimeType||"").startsWith("video/")&&S.audioQuality).length,g=m.filter(S=>String(S.mimeType||"").startsWith("video/")&&!!S.audioQuality).length;o.push(`\u3010\u5B8C\u6574\u7BC0\u6D41\u77E9\u9663\u6458\u8981\u3011\u5DF2\u6E2C\u8A66\u300C${a.length}\u300D\u500B\u4F86\u6E90\uFF1B\u5F71\u97F3\u5408\u4E00\uFF1A\u300C${g}\u300D\uFF1B\u50C5\u8996\u8A0A\uFF1A\u300C${N}\u300D\uFF1B\u50C5\u97F3\u8A0A\uFF1A\u300C${P}\u300D\uFF1B\u767B\u5165\u9650\u5236\uFF1A\u300C${E}\u300D\u3002`)}return a}function $i(e){let n=ne(e,"PLAYER_JS_URL")||ne(e,"jsUrl");return n?n.startsWith("//")?`https:${n}`:/^https?:\/\//.test(n)?n:`https://www.youtube.com${n.startsWith("/")?"":"/"}${n}`:""}function Et(e,n){let t=0,o="",r=!1;for(let i=n;i<e.length;i++){let a=e[i];if(o){r?r=!1:a==="\\"?r=!0:a===o&&(o="");continue}if(a==='"'||a==="'"||a==="`"){o=a;continue}if(a==="{")t++;else if(a==="}"&&--t===0)return e.slice(n,i+1)}return""}function mt(e){return e.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}function Hi(e,n){if(!n)return"";let t=mt(n),o=[new RegExp(`function\\s+${t}\\s*\\([^)]*\\)\\s*\\{`),new RegExp(`${t}\\s*=\\s*function\\s*\\([^)]*\\)\\s*\\{`),new RegExp(`${t}\\s*:\\s*function\\s*\\([^)]*\\)\\s*\\{`)];for(let r of o){let i=r.exec(e);if(!i)continue;let a=Et(e,e.indexOf("{",i.index));if(a)return a}return""}function Vi(e){let n=[/\.sig\|\|([\w$]+)\(/,/["']signature["']\s*,\s*([\w$]+)\(/,/\.set\([^,]+,\s*encodeURIComponent\(([\w$]+)\(/,/\bc&&\(c=([\w$]+)\(decodeURIComponent\(c\)\)\)/];for(let t of n){let o=e.match(t);if(o)return o[1]}return""}function Wi(e){let n=[/\.get\(["']n["']\)\)&&\([\w$]+=([\w$]+)\([\w$]+\)/,/\bn=([\w$]+)\(n\)/,/\.set\(["']n["'],\s*([\w$]+)\(/];for(let t of n){let o=e.match(t);if(o)return o[1]}return""}function Ki(e,n){let t=n.match(/;([\w$]+)\.([\w$]+)\([\w$]+(?:,\d+)?\)/);if(!t)return null;let o=t[1],r=new RegExp(`(?:var\\s+)?${mt(o)}\\s*=\\s*\\{`).exec(e);if(!r)return null;let i=Et(e,e.indexOf("{",r.index));return i?{name:o,source:i}:null}function Gi(e){let n={};if(!e)return n;let t=/([\w$]+)\s*:\s*function\s*\([^)]*\)\s*\{/g,o;for(;o=t.exec(e.source);){let r=Et(e.source,e.source.indexOf("{",o.index));/\.reverse\(/.test(r)?n[o[1]]="reverse":/\.splice\(0,/.test(r)?n[o[1]]="splice":/\.slice\(/.test(r)?n[o[1]]="slice":/\[0\].*%.*\.length|var\s+\w+\s*=\s*\w+\[0\]/.test(r)&&(n[o[1]]="swap")}return n}function Qt(e,n){let t=Hi(e,n);if(!t||!/\.split\(["']["']\)/.test(t))return null;let o=Ki(e,t);if(!o)return null;let r=Gi(o),i=[],a=new RegExp(`${mt(o.name)}\\.([\\w$]+)\\([\\w$]+(?:,(\\d+))?\\)`,"g"),s;for(;s=a.exec(t);){let c=r[s[1]];c&&i.push({kind:c,value:Number(s[2]||0)})}return i.length?c=>{let d=String(c).split("");for(let u of i)if(u.kind==="reverse")d.reverse();else if(u.kind==="splice")d.splice(0,u.value);else if(u.kind==="slice")d=d.slice(u.value);else if(u.kind==="swap"&&d.length){let f=u.value%d.length;[d[0],d[f]]=[d[f],d[0]]}return d.join("")}:null}async function Yi(e,n){let t=$i(e);if(!t)return n.push("\u3010PLAYER_JS\u3011\u627E\u4E0D\u5230\u64AD\u653E\u5668 JavaScript \u7DB2\u5740\u3002"),{signature:null,n:null};let o=await fetch(t,{cache:"no-store"});if(!o.ok)return n.push(`\u3010PLAYER_JS\u3011\u4E0B\u8F09\u5931\u6557\uFF1AHTTP ${o.status}\u3002`),{signature:null,n:null};let r=await o.text(),i=Qt(r,Vi(r)),a=Qt(r,Wi(r));return n.push(`\u3010PLAYER_JS\u3011\u5DF2\u53D6\u5F97\u64AD\u653E\u5668\u7A0B\u5F0F\uFF1BSignature\uFF1A${i?"\u53EF\u7528":"\u672A\u5B9A\u4F4D"}\uFF1BN\uFF1A${a?"\u53EF\u7528":"\u672A\u5B9A\u4F4D"}\u3002`),{signature:i,n:a}}function pn(e,n,t){let o=e.url||"";if(!o&&(e.signatureCipher||e.cipher)){let a=new URLSearchParams(e.signatureCipher||e.cipher);if(o=a.get("url")||"",!o)return null;let s=a.get("sp")||"signature",c=a.get("sig")||a.get("signature"),d=a.get("s"),u=new URL(o);if(c)u.searchParams.set(s,c),t.signature++;else if(d&&n.signature)u.searchParams.set(s,n.signature(d)),t.signature++;else if(d)return t.signatureFailed++,null;o=u.href}if(!o)return null;let r=new URL(o),i=r.searchParams.get("n");return i&&n.n?(r.searchParams.set("n",n.n(i)),t.n++):i&&t.nFailed++,r.href}async function qi(e,n,t=""){let r=s=>s<=2?1e3:s<=4?2e3:3e3,i=0,a="";for(let s=1;s<=5;s++){let c=`${Date.now()}-${s}`,d=[`https://www.youtube.com/watch?v=${encodeURIComponent(e)}&hl=zh-TW&gl=TW&owo_retry=${c}`,`https://m.youtube.com/watch?v=${encodeURIComponent(e)}&hl=zh-TW&gl=TW&owo_retry=${c}`,`https://www.youtube.com/embed/${encodeURIComponent(e)}?hl=zh-TW&gl=TW&owo_retry=${c}`];for(let u=0;u<d.length;u++){let f=await fetch(d[u],{headers:{"User-Agent":u===1?"Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36","Accept-Language":"zh-TW,zh;q=0.9,en;q=0.6","Cache-Control":"no-cache, no-store, max-age=0",Pragma:"no-cache",...t?{Cookie:t}:{}},redirect:"follow",cache:"no-store"});if(i=f.status,n.push(`\u3010WATCH CYCLE ${s}/5 \xB7 FALLBACK ${u+1}/3\u3011HTTP ${f.status}\u3002`),f.ok){let l=await f.text();a=l;let h=un(l,"ytInitialPlayerResponse");if(h)return n.push(`\u3010WATCH \u91CD\u8A66\u3011\u7B2C ${s} \u8F2A\u7B2C ${u+1} \u500B\u5165\u53E3\u53D6\u5F97\u5B8C\u6574 ytInitialPlayerResponse\u3002`),{response:f,html:l,player:h};n.push("\u3010WATCH \u91CD\u8A66\u3011\u9801\u9762 HTTP 200\uFF0C\u4F46\u7F3A\u5C11\u53EF\u89E3\u6790\u7684 ytInitialPlayerResponse\uFF0C\u7E7C\u7E8C\u4E0B\u4E00\u500B\u5165\u53E3\u3002")}u<d.length-1&&await ut(350)}if(s<5){let u=r(s);n.push(`\u3010WATCH \u91CD\u8A66\u3011\u672C\u8F2A\u672A\u53D6\u5F97\u5B8C\u6574 Player Response\uFF0C\u7B49\u5F85 ${u} \u6BEB\u79D2\u5F8C\u91CD\u65B0\u8F2A\u8A62\u4E09\u500B\u5165\u53E3\u3002`),await ut(u)}}return{response:new Response(null,{status:i||502}),html:a,player:null}}function Sn(e){let n=e.slice(e.indexOf(":")+1),t={},o=/([A-Z0-9-]+)=("[^"]*"|[^,]*)/g,r;for(;r=o.exec(n);)t[r[1]]=r[2].replace(/^"|"$/g,"");return t}async function zi(e,n){if(!e)return[];let t;try{t=await fetch(e,{headers:{"User-Agent":J("WEB_SAFARI"),Accept:"application/vnd.apple.mpegurl,*/*"},cache:"no-store"})}catch(a){return n.push(`\u3010WEB_SAFARI HLS\u3011Master Manifest \u9023\u7DDA\u5931\u6557\uFF1A${a.message}\u3002`),[]}if(!t.ok)return n.push(`\u3010WEB_SAFARI HLS\u3011Master Manifest \u56DE\u50B3 HTTP ${t.status}\u3002`),[];let r=(await t.text()).split(/\r?\n/).map(a=>a.trim()).filter(Boolean),i=[];for(let a=0;a<r.length;a++){if(!r[a].startsWith("#EXT-X-STREAM-INF:"))continue;let s=Sn(r[a]),c=r.slice(a+1).find(O=>!O.startsWith("#"));if(!c)continue;let d=String(s.RESOLUTION||"").match(/(\d+)x(\d+)/),u=String(s.CODECS||""),f=Number(d?.[2]||0),l=Number(d?.[1]||0),h=Number(s["FRAME-RATE"]||0),y=Number(s["AVERAGE-BANDWIDTH"]||s.BANDWIDTH||0);i.push({itag:`hls-${f||i.length+1}-${y}`,quality:f?`${f}p`:"HLS",kind:"\u5F71\u97F3\u5408\u4E00",container:"ts",mimeType:"video/mp2t",codec:u,bitrate:y,contentLength:"",width:l,height:f,fps:h,source:"WEB_SAFARI",protocol:"hls",generatedAt:Date.now(),url:new URL(c,e).href})}return n.push(`\u3010WEB_SAFARI HLS\u3011Master Manifest \u53D6\u5F97\u300C${i.length}\u300D\u500B HLS Variant\u3002`),i.sort((a,s)=>s.height-a.height||s.bitrate-a.bitrate)}function bn(e){try{let n=new URL(e);return n.protocol==="https:"&&(n.hostname.endsWith(".googlevideo.com")||n.hostname.endsWith(".youtube.com")||n.hostname==="youtube.com")}catch{return!1}}async function Xi(e){if(!bn(e))return _({error:"HLS \u7DB2\u5740\u672A\u5217\u5165\u5141\u8A31\u6E05\u55AE\u3002",code:"HLS_DOMAIN_DENIED",version:b},403);let n=await fetch(e,{headers:{"User-Agent":J("WEB_SAFARI"),Accept:"application/vnd.apple.mpegurl,*/*"},cache:"no-store",redirect:"follow"});if(!n.ok)return _({error:`HLS Media Playlist \u56DE\u50B3 HTTP ${n.status}\u3002`,code:"HLS_PLAYLIST_FAILED",version:b},422);let o=(await n.text()).split(/\r?\n/).map(c=>c.trim()).filter(Boolean),r=[],i="",a=!1,s=0;for(let c=0;c<o.length;c++){let d=o[c];if(d.startsWith("#EXT-X-KEY:")&&!/METHOD=NONE/.test(d)&&(a=!0),d.startsWith("#EXT-X-MAP:")){let u=Sn(d);u.URI&&(i=new URL(u.URI,e).href)}if(d.startsWith("#EXTINF:")){s+=Number(d.slice(8).split(",")[0]||0);let u=o.slice(c+1).find(f=>!f.startsWith("#"));u&&r.push(new URL(u,e).href)}}return a?_({error:"\u6B64 HLS Playlist \u4F7F\u7528\u52A0\u5BC6 Segment\uFF0C\u76EE\u524D\u4E0D\u52A0\u5165\u4E0B\u8F09\u3002",code:"HLS_ENCRYPTED",version:b},422):r.length?_({initUrl:i,segments:r,duration:s,version:b}):_({error:"HLS Playlist \u6C92\u6709\u5A92\u9AD4 Segment\u3002",code:"HLS_SEGMENTS_MISSING",version:b},422)}async function ji(e){if(!bn(e))return _({error:"HLS Segment \u7DB2\u5740\u672A\u5217\u5165\u5141\u8A31\u6E05\u55AE\u3002",code:"HLS_DOMAIN_DENIED",version:b},403);let n=await fetch(e,{headers:{"User-Agent":J("WEB_SAFARI"),Accept:"*/*","Accept-Encoding":"identity"},cache:"no-store",redirect:"follow"});if(!n.ok)return _({error:`HLS Segment \u56DE\u50B3 HTTP ${n.status}\u3002`,code:"HLS_SEGMENT_FAILED",version:b},n.status===403?403:422);let t=new Headers(n.headers);return Object.entries(X()).forEach(([o,r])=>t.set(o,r)),t.set("Cache-Control","no-store"),t.set("X-OwO-Media-Mode","web-safari-hls"),new Response(n.body,{status:200,headers:t})}async function Qi(e,n="quick",t=""){if(!/^[A-Za-z0-9_-]{11}$/.test(e||""))return _({error:"\u5F71\u7247 ID \u683C\u5F0F\u932F\u8AA4"},400);let o=[],r=await qi(e,o,t),i=r.response;if(!i.ok||!r.html)return _({error:`YouTube \u9801\u9762\u5165\u53E3\u5168\u90E8\u53D7\u9650\uFF0C\u6700\u5F8C\u56DE\u50B3 HTTP ${i.status}`,code:i.status===429?"YOUTUBE_RATE_LIMITED":"YOUTUBE_PAGE_UNAVAILABLE",retryable:i.status===429,version:b,steps:o},i.status===429?429:502);let a=r.html;o.push("\u3010\u89E3\u6790\u3011\u5DF2\u53D6\u5F97\u53EF\u7528\u7684 YouTube \u9801\u9762 HTML\u3002");let s=r.player||un(a,"ytInitialPlayerResponse");if(!s){let S="WATCH \u91CD\u8A66\u5DF2\u9054\u4E0A\u9650\uFF1A\u5171 5 \u8F2A\u3001\u6BCF\u8F2A 3 \u500B\u5165\u53E3\uFF0C\u4ECD\u672A\u53D6\u5F97\u5B8C\u6574\u7684 ytInitialPlayerResponse\u3002";return o.push(`\u3010WATCH \u91CD\u8A66\u5931\u6557\u3011${S}`),_({error:S,code:"YOUTUBE_PLAYER_RESPONSE_MISSING",retryable:!0,version:b,steps:o},422)}o.push("\u3010\u89E3\u6790\u3011\u5DF2\u53D6\u5F97 ytInitialPlayerResponse\u3002"),t&&o.push("\u3010YOUTUBE SESSION\u3011\u5DF2\u5957\u7528\u76EE\u524D\u8ACB\u6C42\u7684\u767B\u5165\u5DE5\u4F5C\u968E\u6BB5\uFF08\u5167\u5BB9\u5DF2\u96B1\u85CF\uFF09\u3002");let c=await Fi(a,s,e,o,n,t),d=c.find(S=>H(S.player).length)||c[0],u=d.player.videoDetails||s.videoDetails||{},f=new Map;for(let S of c)for(let M of H(S.player)){let C=`${M.itag||""}|${M.mimeType||""}|${M.qualityLabel||M.audioQuality||""}`;f.has(C)||f.set(C,{...M,_source:S.label})}let l=[...f.values()];if(!l.length){let S={LOGIN_REQUIRED:0,ERROR:0,UNPLAYABLE:0,OTHER:0},M=new Set;for(let F of c){M.add(F.label);let G=Ce(F.player).status;Object.prototype.hasOwnProperty.call(S,G)?S[G]++:S.OTHER++}for(let F of o){let G=String(F).match(/^【([^】]+)】請求失敗：/);!G||M.has(G[1])||(M.add(G[1]),S.ERROR++)}let C=M.size,R=S.LOGIN_REQUIRED>0,B=R?"AUTH_REQUIRED":"NO_MEDIA_ADDRESS",v=R?"\u6240\u6709 YouTube \u89E3\u6790\u4F86\u6E90\u5747\u672A\u53D6\u5F97\u53EF\u7528\u7684\u5A92\u9AD4\u4F4D\u5740\uFF0C\u90E8\u5206\u4F86\u6E90\u8981\u6C42\u767B\u5165\u3002":"\u6240\u6709 YouTube \u89E3\u6790\u4F86\u6E90\u5747\u672A\u53D6\u5F97\u53EF\u7528\u7684\u5A92\u9AD4\u4F4D\u5740\u3002";o.push(`\u3010\u89E3\u6790\u5931\u6557\u3011\u5DF2\u6E2C\u8A66 ${C} \u500B\u4F86\u6E90\uFF0C\u5747\u672A\u53D6\u5F97\u53EF\u7528\u7684\u5A92\u9AD4\u4F4D\u5740\u3002`);let D=[`\u8981\u6C42\u767B\u5165\uFF1A${S.LOGIN_REQUIRED}`,`\u8ACB\u6C42\u932F\u8AA4\uFF1A${S.ERROR}`,`\u7121\u6CD5\u64AD\u653E\uFF1A${S.UNPLAYABLE}`,...S.OTHER?[`\u5176\u4ED6\uFF1A${S.OTHER}`]:[]].join("\uFF1B");return o.push(`\u3010\u72C0\u614B\u6458\u8981\u3011${D}\u3002`),_({id:e,phase:n,title:u.title||"",thumbnail:u.thumbnail?.thumbnails?.at(-1)?.url||"",formats:[],steps:o,code:B,retryable:!1,version:b,note:v})}o.push(`\u3010\u4F86\u6E90\u3011\u5F59\u6574 ${c.map(S=>S.label).join("\u3001")}\uFF0C\u53D6\u5F97\u300C${l.length}\u300D\u500B\u4E0D\u91CD\u8907\u7684\u542B\u7DB2\u5740\u6216\u5BC6\u6587\u683C\u5F0F\u3002`);let y=l.some(S=>S.signatureCipher||S.cipher||(()=>{try{return new URL(S.url||"").searchParams.has("n")}catch{return!1}})())?await Yi(a,o):{signature:null,n:null},O={signature:0,signatureFailed:0,n:0,nFailed:0},T=l.map(S=>bt(S,pn(S,y,O))).filter(Boolean).sort((S,M)=>M.bitrate-S.bitrate),E=await Zi(T,o),I=c.find(S=>S.label==="WEB_SAFARI"&&S.player?.streamingData?.hlsManifestUrl);if(I){let S=await zi(I.player.streamingData.hlsManifestUrl,o);E=[...E,...S]}let k=I?null:c.find(S=>S.label==="VISIONOS"&&fn(S.player));if(k){let S=ie(k.player).map(C=>wi(C,"VISIONOS")).filter(C=>C.kind==="\u50C5\u8996\u8A0A"||C.kind==="\u50C5\u97F3\u8A0A"),M=new Map(E.map(C=>[`${C.itag}|${C.kind}|${C.codec}`,C]));for(let C of S)M.set(`${C.itag}|${C.kind}|${C.codec}`,C);E=[...M.values()].sort((C,R)=>R.bitrate-C.bitrate),o.push(`\u3010VISIONOS SABR\u3011\u52A0\u5165\u300C${S.length}\u300D\u500B SABR \u9AD8\u756B\u8CEA\u683C\u5F0F\uFF1B\u6B63\u5F0F\u4E0B\u8F09\u5C07\u4F7F\u7528 UMP/SABR\uFF0C\u4E0D\u4F7F\u7528\u50B3\u7D71 Range\u3002`)}o.push(`\u3010\u7DB2\u5740\u3011Signature \u6210\u529F\uFF1A\u300C${O.signature}\u300D\u500B\uFF1B\u5931\u6557\uFF1A\u300C${O.signatureFailed}\u300D\u500B\u3002`),o.push(`\u3010\u7DB2\u5740\u3011N \u53C3\u6578\u6210\u529F\uFF1A\u300C${O.n}\u300D\u500B\uFF1B\u672A\u8655\u7406\uFF1A\u300C${O.nFailed}\u300D\u500B\u3002`),o.push(`\u3010\u7DB2\u5740\u3011\u53D6\u5F97\u300C${T.length}\u300D\u500B\u53EF\u76F4\u63A5\u4F7F\u7528\u7684\u5019\u9078\u7DB2\u5740\uFF0C\u958B\u59CB\u5BE6\u969B\u5A92\u9AD4\u9A57\u8B49\u3002`);let m=crypto.randomUUID(),N=ne(a,"INNERTUBE_API_KEY"),P=ln(ne(a,"VISITOR_DATA")),g=E.map(S=>({...S,sessionId:m,refreshApiKey:N,refreshVisitorData:P}));return k&&await Rt(e,m,k.player,o),await Cr(e,g,o,m),_({id:e,phase:n,mediaSessionId:m,source:c.filter(S=>H(S.player).length).map(S=>S.label).join("+")||d.label,version:b,code:E.length?"OK":"SIGNATURE_REQUIRED",title:u.title||"",thumbnail:u.thumbnail?.thumbnails?.at(-1)?.url||"",lengthSeconds:u.lengthSeconds||"",formats:g,steps:o,note:E.length?"":T.length?"\u64AD\u653E\u5668\u6709\u56DE\u50B3\u5A92\u9AD4\u7DB2\u5740\uFF0C\u4F46\u6240\u6709\u5019\u9078\u5747\u672A\u901A\u904E\u5BE6\u969B\u5A92\u9AD4\u9A57\u8B49\u3002":"\u64AD\u653E\u5668\u5DF2\u56DE\u50B3\u683C\u5F0F\uFF0C\u4F46\u683C\u5F0F\u90FD\u53EA\u6709\u52A0\u5BC6 signatureCipher\u3002\u6B64\u57F7\u884C\u74B0\u5883\u9700\u8981\u66F4\u65B0\u64AD\u653E\u5668\u898F\u5247\u89E3\u6790\u5668\u3002"})}async function Zi(e,n){if(!e.length)return[];let t=[],o=0,r=0,i=[...e];async function a(){for(;i.length;){let s=i.shift(),c;try{let d=new Headers({Range:`bytes=0-${hn}`,Accept:"*/*","Accept-Encoding":"identity",Origin:"https://www.youtube.com",Referer:"https://www.youtube.com/","User-Agent":J(s.source)});if(c=await fetch(s.url,{method:"GET",headers:d,redirect:"follow",cache:"no-store"}),c.status===200||c.status===206){let f=String(c.headers.get("Content-Range")||""),l=Number((f.match(/\/(\d+)$/)||[])[1]||0),h=(()=>{try{return Number(new URL(s.url).searchParams.get("clen")||0)}catch{return 0}})(),y=Number(s.contentLength||0)||l||h||0;t.push({...s,contentLength:y||"",verified:!0,verifiedAt:Date.now(),verificationStatus:c.status})}else c.status===403?o++:r++}catch{r++}finally{try{await c?.body?.cancel()}catch{}}}}return await Promise.all(Array.from({length:Math.min(3,e.length)},()=>a())),t.sort((s,c)=>Number(c.bitrate||0)-Number(s.bitrate||0)),n.push(`\u3010\u5A92\u9AD4\u5BE6\u8F09\u9A57\u8B49 256 KiB\u3011\u5019\u9078\u300C${e.length}\u300D\u500B\uFF1BHTTP 200/206 \u901A\u904E\u300C${t.length}\u300D\u500B\uFF1BHTTP 403 \u6DD8\u6C70\u300C${o}\u300D\u500B\uFF1B\u5176\u4ED6\u5931\u6557\u300C${r}\u300D\u500B\u3002`),!t.length&&e.length&&n.push("\u3010\u5A92\u9AD4\u9810\u5148\u9A57\u8B49\u3011Player API \u96D6\u63D0\u4F9B\u7DB2\u5740\uFF0C\u4F46\u6C92\u6709\u4EFB\u4F55\u5019\u9078\u901A\u904E Google Video Server \u5BE6\u969B\u5B58\u53D6\u9A57\u8B49\uFF0C\u56E0\u6B64\u4E0D\u986F\u793A\u7121\u6548\u4E0B\u8F09\u9078\u9805\u3002"),t}function Z(e){return String(e||"").replace(/&#x([0-9a-f]+);/gi,(n,t)=>{try{return String.fromCodePoint(parseInt(t,16))}catch{return n}}).replace(/&#([0-9]+);/g,(n,t)=>{try{return String.fromCodePoint(parseInt(t,10))}catch{return n}}).replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&quot;/gi,'"').replace(/&apos;|&#039;|&#39;/gi,"'").replace(/&lt;/gi,"<").replace(/&gt;/gi,">")}function se(e){let n=Z(e);try{n=JSON.parse(`"${n.replace(/\\/g,"\\\\").replace(/"/g,'\\"')}"`)}catch{}return Z(n).replace(/\\u0025/g,"%").replace(/\\u0026/g,"&").replace(/\\u003D/g,"=").replace(/\\u003F/g,"?").replace(/\\u003C/g,"<").replace(/\\u003E/g,">").replace(/\\\//g,"/")}function x(e,n){let t=n.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),o=[new RegExp(`<meta[^>]+(?:property|name)=["']${t}["'][^>]+content=["']([^"']+)["']`,"i"),new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${t}["']`,"i")];for(let r of o){let i=e.match(r);if(i)return Z(i[1])}return""}function En(e){let n=Z(se(e)).replace(/\s*\|\s*Facebook\s*$/i,"").replace(/\s+/g," ").trim();if(!n)return"Facebook \u5F71\u7247";let t=n.match(/^(.{1,100}?[。！？!?])(?:\s|$)/);return t?n=t[1]:n.length>100&&(n=`${n.slice(0,100).trim()}\u2026`),n}function mn(e){let n=decodeURIComponent(e),t=n.match(/(?:height|_nc_ohc|dimensions?)[=_-](\d{3,4})/i)||n.match(/(2160|1440|1080|720|540|480|360)p/i);return t?Number(t[1]):0}function Ji(e){let n=se(e).replace(/\\n/g,"").replace(/\\t/g,"").replace(/\\"/g,'"'),t=[],o=/<Representation\b([^>]*)>([\s\S]*?)<\/Representation>/gi,r;for(;r=o.exec(n);){let i=r[1],s=r[2].match(/<BaseURL>([\s\S]*?)<\/BaseURL>/i);if(!s)continue;let c=Z(s[1].trim());if(!/^https:\/\//i.test(c))continue;let d=(i.match(/mimeType="([^"]+)"/i)||[])[1]||"",u=Number((i.match(/height="(\d+)"/i)||[])[1]||0),f=Number((i.match(/bandwidth="(\d+)"/i)||[])[1]||0),l=(i.match(/codecs="([^"]+)"/i)||[])[1]||"";t.push({quality:u?`${u}p`:d.startsWith("audio/")?"\u97F3\u8A0A":"HD",height:u,bitrate:f,kind:d.startsWith("audio/")?"\u50C5\u97F3\u8A0A":"\u50C5\u8996\u8A0A",mimeType:d||(u?"video/mp4":"audio/mp4"),codec:l,url:c})}return t}var er={browser_native_hd_url:"HD",playable_url_quality_hd:"HD",hd_src:"HD",hdSrc:"HD",hd_src_no_ratelimit:"HD",video_hd_url:"HD",hdUrl:"HD",browser_native_sd_url:"SD",sd_src:"SD",sdSrc:"SD",sd_src_no_ratelimit:"SD",sdUrl:"SD",playable_url:"\u539F\u59CB\u756B\u8CEA",progressive_url:"\u539F\u59CB\u756B\u8CEA",video_url:"\u539F\u59CB\u756B\u8CEA",videoUrl:"\u539F\u59CB\u756B\u8CEA"};function tr(e){let n=[];for(let[t,o]of Object.entries(er)){let r=t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),i=[new RegExp(`["']${r}["']\\s*:\\s*["']((?:\\\\.|[^"'])+)["']`,"g"),new RegExp(`["']${r}["']\\s*:\\s*\\{[^{}]{0,1200}?["']url["']\\s*:\\s*["']((?:\\\\.|[^"'])+)["']`,"g")];for(let a of i){let s;for(;s=a.exec(e);){let c=se(s[1]);!/^https:\/\//i.test(c)||!/(?:fbcdn\.net|facebook\.com)/i.test(c)||n.push({quality:o,height:mn(c),bitrate:o==="HD"?2e6:o==="SD"?7e5:0,kind:"\u5F71\u97F3\u5408\u4E00",mimeType:"video/mp4",codec:"",url:c,field:t})}}}return n}function Zt(e,n){let t="";try{t=(new URL(n).pathname.match(/^\/stories\/[^/]+\/([^/?#]+)/i)||[])[1]||""}catch{}if(!t)return{html:e,anchored:!1,id:""};let o=[],r=e.indexOf(t);for(;r>=0&&o.length<12;)o.push(r),r=e.indexOf(t,r+t.length);return o.length?{html:o.map(a=>e.slice(Math.max(0,a-18e4),Math.min(e.length,a+42e4))).join(`
-`),anchored:!0,id:t}:{html:e,anchored:!1,id:t}}function Jt(e){let n=[...tr(e)],t=[{quality:"HD",patterns:[/"browser_native_hd_url"\s*:\s*"([^"]+)"/g,/"browser_native_hd_url"\s*:\s*\{[^}]*"url"\s*:\s*"([^"]+)"/g,/"hd_src"\s*:\s*"([^"]+)"/g,/"hd_src_no_ratelimit"\s*:\s*"([^"]+)"/g,/"playable_url_quality_hd"\s*:\s*"([^"]+)"/g,/"playable_url_quality_hd"\s*:\s*\{[^}]*"url"\s*:\s*"([^"]+)"/g,/"video_hd_url"\s*:\s*"([^"]+)"/g,/"hdUrl"\s*:\s*"([^"]+)"/g]},{quality:"SD",patterns:[/"browser_native_sd_url"\s*:\s*"([^"]+)"/g,/"browser_native_sd_url"\s*:\s*\{[^}]*"url"\s*:\s*"([^"]+)"/g,/"sd_src"\s*:\s*"([^"]+)"/g,/"sd_src_no_ratelimit"\s*:\s*"([^"]+)"/g,/"playable_url"\s*:\s*"([^"]+)"/g,/"playable_url"\s*:\s*\{[^}]*"url"\s*:\s*"([^"]+)"/g,/"video_url"\s*:\s*"([^"]+)"/g,/"sdUrl"\s*:\s*"([^"]+)"/g]}];for(let a of t)for(let s of a.patterns){let c;for(;c=s.exec(e);){let d=se(c[1]);if(/^https:\/\//i.test(d)){let f=/"(?:playable_url|progressive_url|video_url|videoUrl)"/.test(c[0])?"\u539F\u59CB\u756B\u8CEA":a.quality;n.push({quality:f,height:mn(d),bitrate:f==="HD"?2e6:f==="SD"?7e5:0,kind:"\u5F71\u97F3\u5408\u4E00",mimeType:"video/mp4",codec:"",url:d})}}}let o=[/"dash_manifest"\s*:\s*"((?:\\.|[^"])*)"/g,/"dashManifest"\s*:\s*"((?:\\.|[^"])*)"/g];for(let a of o){let s;for(;s=a.exec(e);)n.push(...Ji(s[1]))}let r=x(e,"og:video")||x(e,"og:video:url")||x(e,"og:video:secure_url");/^https:\/\//i.test(r)&&n.push({quality:"\u539F\u59CB\u756B\u8CEA",height:0,bitrate:0,kind:"\u5F71\u97F3\u5408\u4E00",mimeType:"video/mp4",codec:"",url:r});let i=new Map;for(let a of n){let s=`${a.kind}|${a.height||a.quality}|${a.url}`;i.has(s)||i.set(s,a)}return[...i.values()]}function nr(e){let n=new URL(e);if(n.protocol!=="https:"||!pt.includes(n.hostname.toLowerCase()))throw new Error("\u50C5\u63A5\u53D7 Facebook \u6216 fb.watch \u7684 HTTPS \u7DB2\u5740\u3002");return n}function Pe(e){return e.hostname.toLowerCase()==="fb.watch"?!0:/^\/share\/(?:r\/|v\/|reel\/)?[^/?#]+\/?$/i.test(e.pathname)}function Q(e){return/^\/(?:login|checkpoint|recover|reg|privacy\/consent)(?:\/|$)/i.test(e.pathname)}function ir(e){return/^\/stories\/[^/]+\/[^/?#]+/i.test(e.pathname)}function rr(e){let n=new URL(e.href);return["mibextid","source","refsrc","ref","sfnsn"].forEach(t=>n.searchParams.delete(t)),n.searchParams.set("view_single","1"),n.hash="",n}function en(e){let n=new URL(e.href);return["mibextid","sfnsn","d","rdid","share_url","refsrc","ref"].forEach(t=>n.searchParams.delete(t)),n.hash="",n}function _n(e,n){if(!e)return"";let t=se(e);try{let o=new URL(t,n);return pt.includes(o.hostname.toLowerCase())?o.href:""}catch{return""}}function or(e,n){let t=[x(e,"og:url"),x(e,"al:android:url"),x(e,"al:ios:url"),x(e,"twitter:url"),(e.match(/<meta[^>]+http-equiv=["']refresh["'][^>]+content=["'][^"']*url=([^"']+)["']/i)||[])[1]||"",(e.match(/(?:window\.location(?:\.href)?|location\.replace)\s*(?:=|\()\s*["']([^"']+)["']/i)||[])[1]||"",(e.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)||[])[1]||"",(e.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["']/i)||[])[1]||"",(e.match(/"url"\s*:\s*"(https?:\\?\/\\?\/(?:www\.)?facebook\.com\\?\/(?:reel|watch|[^"\\]+\/videos)\\?\/[^"\\]+)"/i)||[])[1]||""],o=new URL(n);for(let r of t){let i=_n(r,n);if(!i)continue;let a=new URL(i);if(!(a.href===o.href||Pe(a)||Q(a)))return a.href}return""}async function Ne(e,n={}){let t=!!n.mobile,o=new URL(e.href);t&&o.hostname!=="fb.watch"&&(o.hostname="m.facebook.com");let r=new Headers({"User-Agent":t?"Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36","Accept-Language":"zh-TW,zh;q=0.9,en;q=0.7",Accept:"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Cache-Control":"no-cache",Pragma:"no-cache","Sec-Fetch-Dest":"document","Sec-Fetch-Mode":"navigate","Sec-Fetch-Site":"none","Upgrade-Insecure-Requests":"1"});return n.cookie&&r.set("Cookie",n.cookie),fetch(o,{method:"GET",headers:r,redirect:n.redirect||"manual",cache:"no-store"})}async function ar(e,n,t=""){let o=en(e),r=/^\/share\/[^/]+\/?$/i.test(o.pathname);n.push(`\u3010FACEBOOK\u3011\u5DF2\u8FA8\u8B58${r?"\u901A\u7528":"\u5206\u985E"}\u5206\u4EAB\u7DB2\u5740\uFF1A${o.pathname}`),n.push("\u3010FACEBOOK\u3011\u5DF2\u79FB\u9664\u5206\u4EAB\u8FFD\u8E64\u53C3\u6578\u3002");function i(u){if(!u)return null;try{let f=en(new URL(u,o.href));return!pt.includes(f.hostname.toLowerCase())||Q(f)||Pe(f)?null:f}catch{return null}}async function a(u,f,l){n.push(`\u3010FACEBOOK\u3011${f}\u56DE\u50B3 HTTP ${u.status}\u3002`);let h=u.headers.get("Location");if(h){let E=_n(h,l.href),I=i(E);if(I)return n.push(`\u3010FACEBOOK\u3011${f}\u5DF2\u53D6\u5F97\u56FA\u5B9A\u7DB2\u5740\uFF1A${I.pathname}`),I;if(E){let k=new URL(E);Q(k)?n.push(`\u3010FACEBOOK\u3011${f}\u6307\u5411\u767B\u5165\u9801\uFF0C\u5FFD\u7565\u8A72\u4F4D\u7F6E\u4E26\u7E7C\u7E8C\u533F\u540D\u5099\u63F4\u3002`):Pe(k)&&n.push(`\u3010FACEBOOK\u3011${f}\u4ECD\u6307\u5411\u5206\u4EAB\u4E2D\u4ECB\u9801\uFF0C\u7E7C\u7E8C\u533F\u540D\u5099\u63F4\u3002`)}}let y=await u.text().catch(()=>"");if(!y)return null;let O=or(y,l.href),T=i(O);return T?(n.push(`\u3010FACEBOOK\u3011${f}\u5DF2\u5F9E\u9801\u9762\u8CC7\u6599\u53D6\u5F97\u56FA\u5B9A\u7DB2\u5740\uFF1A${T.pathname}`),T):null}let s=[],c=new Set;function d(u,f,l,h){let y=new URL(o.href);y.hostname=u;let O=`${y.href}|${f}|${l}`;c.has(O)||(c.add(O),s.push({url:y,mobile:f,redirect:l,label:h}))}d(o.hostname,o.hostname==="m.facebook.com","manual","\u539F\u59CB\u5206\u4EAB\u7DB2\u5740"),d("m.facebook.com",!0,"manual","\u884C\u52D5\u7248\u624B\u52D5\u8F49\u5740"),d("www.facebook.com",!1,"manual","\u684C\u9762\u7248\u624B\u52D5\u8F49\u5740"),d("m.facebook.com",!0,"follow","\u884C\u52D5\u7248\u81EA\u52D5\u8F49\u5740"),d("www.facebook.com",!1,"follow","\u684C\u9762\u7248\u81EA\u52D5\u8F49\u5740");for(let u of s)try{let f=await Ne(u.url,{mobile:u.mobile,redirect:u.redirect,cookie:t});if(u.redirect==="follow"){let h=i(f.url);if(h)return n.push(`\u3010FACEBOOK\u3011${u.label}\u56DE\u50B3 HTTP ${f.status}\u3002`),n.push(`\u3010FACEBOOK\u3011${u.label}\u5DF2\u53D6\u5F97\u56FA\u5B9A\u7DB2\u5740\uFF1A${h.pathname}`),h;Q(new URL(f.url))&&n.push(`\u3010FACEBOOK\u3011${u.label}\u56DE\u50B3 HTTP ${f.status}\uFF0C\u6700\u7D42\u4ECD\u9032\u5165\u767B\u5165\u9801\u3002`)}let l=await a(f,u.label,u.url);if(l)return l}catch(f){n.push(`\u3010FACEBOOK\u3011${u.label}\u5931\u6557\uFF1A${f.message}\u3002`)}return n.push("\u3010FACEBOOK\u3011\u533F\u540D\u5206\u4EAB\u5165\u53E3\u5747\u672A\u53D6\u5F97\u56FA\u5B9A\u7DB2\u5740\uFF0C\u4FDD\u7559\u539F\u5206\u4EAB\u7DB2\u5740\u4EA4\u7531\u5F8C\u7E8C\u9801\u9762\u89E3\u6790\u6216\u767B\u5165\u5DE5\u4F5C\u968E\u6BB5\u5099\u63F4\u3002"),o}function Rn(e,n){let t=String(e.headers.get("X-FB-Session")||"").trim(),o=String(n&&n.FB_COOKIE||"").trim();return t||o}async function sr(e,n,t){let o;try{o=nr(e)}catch(R){return _({error:R.message,code:"INVALID_FACEBOOK_URL",version:b},400)}let r=[],i=Rn(t,n),a=ir(o);a&&(o=rr(o),r.push("\u3010FACEBOOK STORY\u3011\u5DF2\u8FA8\u8B58\u9650\u6642\u52D5\u614B\u7DB2\u5740\uFF0C\u6539\u7528\u767B\u5165\u5DE5\u4F5C\u968E\u6BB5\u5C08\u7528\u6D41\u7A0B\u3002"));let s=new URL(o.href);async function c(R,B){let v=new URL(s.href);Pe(v)&&(v=await ar(v,r,R));let D=await Ne(v,{mobile:!0,redirect:"follow",cookie:R});r.push(`\u3010FACEBOOK\u3011${B}\u5F71\u7247\u9801\u9762\u56DE\u50B3 HTTP ${D.status}\u3002`);let F=new URL(D.url);if((!D.ok||Q(F))&&v.hostname!=="www.facebook.com"){let G=new URL(v.href);G.hostname="www.facebook.com",D=await Ne(G,{redirect:"follow",cookie:R}),F=new URL(D.url),r.push(`\u3010FACEBOOK\u3011${B}\u684C\u9762\u7248\u5099\u63F4\u56DE\u50B3 HTTP ${D.status}\u3002`)}return{response:D,finalUrl:F}}if(a&&!i)return _({error:"Facebook \u9650\u6642\u52D5\u614B\u9700\u8981\u767B\u5165\u5DE5\u4F5C\u968E\u6BB5\uFF1B\u76EE\u524D Worker \u5C1A\u672A\u8A2D\u5B9A FB_COOKIE Secret\u3002",code:"FB_STORY_SESSION_REQUIRED",retryable:!1,version:b,steps:r},401);let d=a?await c(i,"\u9650\u6642\u52D5\u614B\u767B\u5165\u5DE5\u4F5C\u968E\u6BB5"):await c("","\u8A2A\u5BA2"),u=d.response,f=d.finalUrl;if(!a&&(!u.ok||Q(f))&&i&&(r.push("\u3010FACEBOOK\u3011\u8A2A\u5BA2\u6A21\u5F0F\u672A\u53D6\u5F97\u5F71\u7247\u9801\u9762\uFF0C\u958B\u59CB\u4F7F\u7528 FB_COOKIE Secret \u91CD\u8A66\u3002"),d=await c(i,"\u767B\u5165\u5DE5\u4F5C\u968E\u6BB5"),u=d.response,f=d.finalUrl),Q(f))return _({error:i?"FB_COOKIE \u5DE5\u4F5C\u968E\u6BB5\u5DF2\u5931\u6548\u6216\u6C92\u6709\u5F71\u7247\u89C0\u770B\u6B0A\u9650\u3002":"Facebook \u5C07\u7DB2\u5740\u5C0E\u5411\u767B\u5165\u9801\uFF1B\u5C1A\u672A\u8A2D\u5B9A FB_COOKIE Secret\u3002",code:i?"FB_SESSION_EXPIRED":"FB_SESSION_REQUIRED",retryable:!1,version:b,steps:r},401);if(!u.ok)return _({error:`Facebook \u5F71\u7247\u9801\u9762\u56DE\u50B3 HTTP ${u.status}\u3002`,code:"FACEBOOK_PAGE_ERROR",version:b,steps:r},502);let l=f.href,h=await u.text();r.push(`\u3010FACEBOOK\u3011\u5DF2\u53D6\u5F97\u5F71\u7247\u9801\u9762 HTML\uFF0C\u5171\u300C${h.length}\u300D\u500B\u5B57\u5143\u3002`);let y=a?Zt(h,l):{html:h,anchored:!1,id:""};a&&r.push(`\u3010FACEBOOK STORY\u3011Story ID\uFF1A${y.id||"\u672A\u53D6\u5F97"}\uFF1B\u8CC7\u6599\u9328\u9EDE\uFF1A${y.anchored?"\u627E\u5230":"\u672A\u627E\u5230\uFF0C\u4F7F\u7528\u5B8C\u6574\u9801\u9762"}\u3002`);let O=Jt(y.html);if(!O.some(R=>R.kind==="\u50C5\u8996\u8A0A"||Number(R.height||0)>=720||R.quality==="HD")&&i){r.push("\u3010FACEBOOK\u3011\u8A2A\u5BA2\u9801\u9762\u5C1A\u672A\u53D6\u5F97\u660E\u78BA\u9AD8\u756B\u8CEA\uFF0C\u4F7F\u7528 FB_COOKIE \u518D\u641C\u5C0B HD \u8207 DASH \u683C\u5F0F\u3002");let R=await Ne(new URL(l),{mobile:!1,redirect:"follow",cookie:i});if(r.push(`\u3010FACEBOOK\u3011\u767B\u5165\u5DE5\u4F5C\u968E\u6BB5\u9AD8\u756B\u8CEA\u9801\u9762\u56DE\u50B3 HTTP ${R.status}\u3002`),R.ok&&!Q(new URL(R.url))){let B=await R.text();r.push(`\u3010FACEBOOK\u3011\u5DF2\u53D6\u5F97\u767B\u5165\u5DE5\u4F5C\u968E\u6BB5 HTML\uFF0C\u5171\u300C${B.length}\u300D\u500B\u5B57\u5143\u3002`);let v=a?Zt(B,R.url):{html:B},D=new Map;for(let F of[...O,...Jt(v.html)])D.set(`${F.kind}|${F.height||F.quality}|${F.url}`,F);O=[...D.values()],h=`${h}
-${B}`}}let E=O.filter(R=>R.field).length;a&&r.push(`\u3010FACEBOOK STORY\u3011\u6DF1\u5C64\u6B04\u4F4D\u89E3\u6790\u53D6\u5F97\u300C${E}\u300D\u500B\u5019\u9078\u4F86\u6E90\u3002`);let I=O.filter(R=>R.kind==="\u5F71\u97F3\u5408\u4E00").length,k=O.filter(R=>R.kind==="\u50C5\u8996\u8A0A").length,m=O.filter(R=>R.kind==="\u50C5\u97F3\u8A0A").length;r.push(`${a?"\u3010FACEBOOK STORY\u3011":"\u3010FACEBOOK\u3011"}\u627E\u5230\u300C${O.length}\u300D\u500B\u5A92\u9AD4\u683C\u5F0F\uFF1A\u5F71\u97F3\u5408\u4E00\u300C${I}\u300D\u500B\u3001\u50C5\u8996\u8A0A\u300C${k}\u300D\u500B\u3001\u50C5\u97F3\u8A0A\u300C${m}\u300D\u500B\u3002`);let N=O.map((R,B)=>({itag:`fb-${String(R.kind||"media").replace(/[^a-z0-9]/gi,"").toLowerCase()}-${R.height||String(R.quality).toLowerCase()}-${B+1}`,quality:R.height?`${R.height}p`:R.quality||"\u672A\u77E5\u756B\u8CEA",kind:R.kind||"\u5F71\u97F3\u5408\u4E00",container:String(R.mimeType||"video/mp4").includes("webm")?"webm":"mp4",mimeType:R.mimeType||"video/mp4",codec:R.codec||"",bitrate:R.bitrate||0,contentLength:"",source:"FACEBOOK",url:R.url})).sort((R,B)=>{let v=Number((String(R.quality).match(/\d+/)||[0])[0]);return Number((String(B.quality).match(/\d+/)||[0])[0])-v||B.bitrate-R.bitrate}),P=x(h,"og:title")||x(h,"twitter:title")||"Facebook \u5F71\u7247",g=En(P),S=x(h,"og:image")||x(h,"twitter:image"),M=l.match(/(?:videos|reel)\/(\d+)/)||l.match(/[?&]v=(\d+)/),C=M?M[1]:`fb-${Date.now()}`;return N.length?_({platform:"facebook",contentType:a?"story":"video",id:C,canonicalUrl:l,source:"FACEBOOK",version:b,code:"OK",title:g,thumbnail:S,lengthSeconds:"",formats:N,steps:r,note:""}):_({platform:"facebook",id:C,canonicalUrl:l,title:g,thumbnail:S,formats:[],steps:r,code:"FACEBOOK_MEDIA_NOT_FOUND",retryable:!1,version:b,note:a?"\u9650\u6642\u52D5\u614B\u9801\u9762\u5DF2\u8F09\u5165\uFF0C\u4F46\u6C92\u6709\u627E\u5230\u53EF\u4E0B\u8F09\u7684\u5F71\u7247\u5A92\u9AD4\u3002\u5167\u5BB9\u53EF\u80FD\u662F\u5716\u7247\u3001\u5DF2\u904E\u671F\uFF0C\u6216\u76EE\u524D\u767B\u5165\u5E33\u6236\u6C92\u6709\u89C0\u770B\u6B0A\u9650\u3002":"\u9801\u9762\u4E2D\u6C92\u6709\u627E\u5230\u516C\u958B HD\uFF0FSD \u5A92\u9AD4\u7DB2\u5740\u3002\u5F71\u7247\u53EF\u80FD\u9700\u8981\u767B\u5165\u3001\u4E0D\u662F\u516C\u958B\u5167\u5BB9\uFF0C\u6216 Facebook \u5DF2\u8ABF\u6574\u9801\u9762\u8CC7\u6599\u683C\u5F0F\u3002"})}async function cr(e,n,t){let o;try{o=new URL(n)}catch{return _({error:"Facebook \u5A92\u9AD4\u7DB2\u5740\u7121\u6548\u3002",code:"INVALID_FACEBOOK_MEDIA_URL",version:b},400)}if(o.protocol!=="https:"||!Ni.some(d=>o.hostname===d.slice(1)||o.hostname.endsWith(d)))return _({error:"\u6B64 Facebook \u5A92\u9AD4\u7DB2\u57DF\u672A\u5217\u5165\u5141\u8A31\u6E05\u55AE\u3002",code:"FACEBOOK_MEDIA_DOMAIN_DENIED",version:b},403);let r=new Headers({"User-Agent":"Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36",Referer:"https://www.facebook.com/",Accept:"*/*","Accept-Encoding":"identity"}),i=Rn(e,t);i&&r.set("Cookie",i);let a=e.headers.get("Range");a&&r.set("Range",a);let s=await fetch(o,{method:e.method,headers:r,redirect:"follow",cache:"no-store"}),c=new Headers(s.headers);return Object.entries(X()).forEach(([d,u])=>c.set(d,u)),c.set("Cache-Control","no-store"),c.set("X-OwO-Version",b),c.set("Content-Disposition",'attachment; filename="facebook-video.mp4"'),new Response(s.body,{status:s.status,headers:c})}function In(e,n,t){let o=t==="instagram"?"X-IG-Session":"X-TH-Session",r=t==="instagram"?"IG_COOKIE":"TH_COOKIE",i=String(e.headers.get(o)||"").trim(),a=String(n&&n[r]||"").trim(),s=t==="threads"?String(e.headers.get("X-IG-Session")||n&&n.IG_COOKIE||"").trim():"";return i||a||s}function dr(e,n){let t=new URL(e),o=n==="instagram"?Ci:Pi;if(t.protocol!=="https:"||!o.includes(t.hostname.toLowerCase()))throw new Error(`\u50C5\u63A5\u53D7 ${n==="instagram"?"Instagram":"Threads"} \u7684 HTTPS \u7DB2\u5740\u3002`);if(t.hash="",["igsh","igshid","utm_source","utm_medium","utm_campaign","xmt","share_id","fbclid"].forEach(r=>t.searchParams.delete(r)),n==="instagram"){t.hostname="www.instagram.com";let r=t.pathname.match(/^\/(?:reels?|reel)\/([^/?#]+)/i),i=t.pathname.match(/^\/(?:p|tv)\/([^/?#]+)/i),a=t.pathname.match(/^\/stories\/([^/?#]+)\/([^/?#]+)/i),s=t.pathname.match(/^\/stories\/highlights\/([^/?#]+)/i);r?t.pathname=`/reel/${r[1]}/`:i?t.pathname=`/p/${i[1]}/`:a?t.pathname=`/stories/${a[1]}/${a[2]}/`:s&&(t.pathname=`/stories/highlights/${s[1]}/`)}else{t.hostname="www.threads.com";let r=t.pathname.match(/^\/@([^/]+)\/post\/([^/?#]+)/i),i=t.pathname.match(/^\/t\/([^/?#]+)/i),a=t.pathname.match(/^\/share\/([^/?#]+)/i);r?t.pathname=`/@${r[1]}/post/${r[2]}/`:i?t.pathname=`/t/${i[1]}/`:a&&(t.pathname=`/share/${a[1]}/`)}return t}function ur(e,n){return n==="instagram"?/^\/stories\/highlights\//i.test(e.pathname)?"highlight":/^\/stories\//i.test(e.pathname)?"story":/^\/reel\//i.test(e.pathname)?"reel":/^\/p\//i.test(e.pathname)?"post":"unknown":/^\/share\/[^/?#]+\/?$/i.test(e.pathname)?"share":/^\/(?:@[^/]+\/post|t)\//i.test(e.pathname)?"post":"unknown"}function z(e){let n=String(e||"");for(let t=0;t<4;t++){let o=n;if(n=se(n).replace(/\\u0026/gi,"&").replace(/\\u003d/gi,"=").replace(/\\u002f/gi,"/").replace(/&amp;/gi,"&"),n===o)break}return n}function Ee(e){try{let n=new URL(e);return`${n.hostname.toLowerCase()}${n.pathname}`}catch{return e}}function fr(e){let n=[],t,o=new RegExp(`<script[^>]+type=["']application/ld\\+json["'][^>]*>([\\s\\S]*?)<\/script>`,"gi");for(;t=o.exec(e);)try{let r=[JSON.parse(Z(t[1]))];for(;r.length;){let i=r.shift();if(!(!i||typeof i!="object"))for(let[a,s]of Object.entries(i))typeof s=="string"&&/^(?:https:).*?(?:\\.mp4|cdninstagram|fbcdn)/i.test(s)?n.push(s):s&&typeof s=="object"&&r.push(...Array.isArray(s)?s:[s])}}catch{}return n}function ft(e,n){let t=[],o=(d,u="\u539F\u59CB\u756B\u8CEA",f="\u5F71\u97F3\u5408\u4E00",l="video/mp4",h=0)=>{let y=z(d);/^https:\/\//i.test(y)&&t.push({url:y,quality:u,kind:f,mimeType:l,bitrate:h})};[x(e,"og:video"),x(e,"og:video:url"),x(e,"og:video:secure_url"),x(e,"twitter:player:stream")].filter(Boolean).forEach(d=>o(d)),fr(e).forEach(d=>o(d));let r=[/"video_url"\s*:\s*"((?:\\.|[^"])*)"/g,/"videoUrl"\s*:\s*"((?:\\.|[^"])*)"/g,/"contentUrl"\s*:\s*"((?:\\.|[^"])*)"/g,/"content_url"\s*:\s*"((?:\\.|[^"])*)"/g,/"playable_url"\s*:\s*"((?:\\.|[^"])*)"/g,/"playable_url_quality_hd"\s*:\s*"((?:\\.|[^"])*)"/g,/"src"\s*:\s*"((?:\\.|[^"])*?(?:cdninstagram|fbcdn)[^"]*?\.mp4(?:[^"\\]*|\\.)*)"/g];for(let d of r){let u;for(;u=d.exec(e);)o(u[1],/quality_hd|1080|720/i.test(u[0])?"HD":"\u539F\u59CB\u756B\u8CEA")}let i=/"video_versions"\s*:\s*\[([\s\S]*?)\]/g,a;for(;a=i.exec(e);){let d=/\{([\s\S]*?)\}/g,u;for(;u=d.exec(a[1]);){let f=(u[1].match(/"url"\s*:\s*"((?:\\.|[^"])*)"/)||[])[1],l=Number((u[1].match(/"width"\s*:\s*(\d+)/)||[])[1]||0),h=Number((u[1].match(/"height"\s*:\s*(\d+)/)||[])[1]||0);f&&o(f,h?`${h}p`:l?`${l}px`:"\u539F\u59CB\u756B\u8CEA","\u5F71\u97F3\u5408\u4E00","video/mp4",h*l)}}let s=[x(e,"og:image"),x(e,"twitter:image")].filter(Boolean),c=new Map;for(let d of t){let u=Ee(d.url);c.has(u)||c.set(u,d)}return{media:[...c.values()],images:s}}function tn(e,n,t){return/\/(?:accounts\/login|login|challenge|checkpoint)(?:\/|$)/i.test(e.pathname)?!0:(t==="instagram"?["Log in \u2022 Instagram","loginForm","accounts/login"]:["Log in \u2022 Threads","LoginForm","login"]).filter(r=>n.includes(r)).length>=2}async function Me(e,n,t=""){let o=n==="instagram"?"https://www.instagram.com/":"https://www.threads.com/",r=new Headers({"User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1","Accept-Language":"zh-TW,zh;q=0.9,en;q=0.7",Accept:"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",Referer:o,"Cache-Control":"no-cache",Pragma:"no-cache"});return t&&r.set("Cookie",t),fetch(e,{headers:r,redirect:"follow",cache:"no-store"})}function _t(e){return(e.pathname.match(/^\/(?:reel|p|tv)\/([^/?#]+)/i)||[])[1]||""}function lr(e,n,t=""){let o=String(t).match(/(?:^|;\s*)csrftoken=([^;]+)/i);if(o)return decodeURIComponent(o[1]);let r=[/"csrf_token"\s*:\s*"([^"]+)"/i,/"csrfToken"\s*:\s*"([^"]+)"/i,/csrftoken=([^;"'\\]+)/i];for(let s of r){let c=e.match(s);if(c)return z(c[1])}let a=(n&&n.headers?String(n.headers.get("set-cookie")||""):"").match(/csrftoken=([^;]+)/i);return a?decodeURIComponent(a[1]):""}function hr(e){let n=[],t=[],o=new Set,r=[e],i=(s,c=0,d=0)=>{let u=z(s);!/^https:\/\//i.test(u)||!/(?:cdninstagram|fbcdn)/i.test(u)||n.push({url:u,quality:d?`${d}p`:c?`${c}px`:"\u539F\u59CB\u756B\u8CEA",kind:"\u5F71\u97F3\u5408\u4E00",mimeType:"video/mp4",bitrate:Number(c||0)*Number(d||0)})};for(;r.length;){let s=r.shift();if(!s||typeof s!="object"||o.has(s))continue;if(o.add(s),typeof s.video_url=="string"&&i(s.video_url,s.original_width||s.width,s.original_height||s.height),typeof s.videoUrl=="string"&&i(s.videoUrl,s.width,s.height),typeof s.contentUrl=="string"&&/(?:\.mp4|cdninstagram|fbcdn)/i.test(s.contentUrl)&&i(s.contentUrl,s.width,s.height),Array.isArray(s.video_versions))for(let d of s.video_versions)i(d&&d.url,d&&d.width,d&&d.height);let c=s.image_versions2&&s.image_versions2.candidates&&s.image_versions2.candidates[0]&&s.image_versions2.candidates[0].url;c&&t.push(z(c));for(let d of Object.values(s))d&&typeof d=="object"&&r.push(...Array.isArray(d)?d:[d])}let a=new Map;for(let s of n){let c=Ee(s.url),d=a.get(c);(!d||s.bitrate>d.bitrate)&&a.set(c,s)}return{media:[...a.values()],images:[...new Set(t)]}}function pr(...e){let n=new Map,t=[];for(let o of e){for(let r of o?.media||[]){let i=Ee(r.url);(!n.has(i)||(r.bitrate||0)>(n.get(i).bitrate||0))&&n.set(i,r)}for(let r of o?.images||[])r&&!t.includes(r)&&t.push(r)}return{media:[...n.values()],images:t}}function Sr(e){let n=ft(e,"instagram"),t=[...n.media],o=[...n.images],r=(d,u=0,f=0)=>{let l=z(d);/^https:\/\//i.test(l)&&/(?:cdninstagram|fbcdn)/i.test(l)&&t.push({url:l,quality:f?`${f}p`:u?`${u}px`:"\u539F\u59CB\u756B\u8CEA",kind:"\u5F71\u97F3\u5408\u4E00",mimeType:"video/mp4",bitrate:Number(u)*Number(f)})},i=[e,Z(e),e.replace(/\\u0026/gi,"&").replace(/\\u003d/gi,"=").replace(/\\u002f/gi,"/").replace(/\\\//g,"/")],a=[/["']video_url["']\s*:\s*["']([^"']+)["']/gi,/["']videoUrl["']\s*:\s*["']([^"']+)["']/gi,/["']contentUrl["']\s*:\s*["']([^"']+)["']/gi,/(https?:\\?\/\\?\/(?:[^"'<>\\]|\\.)*?(?:cdninstagram|fbcdn)(?:[^"'<>\\]|\\.)*?\.mp4(?:[^"'<>\\]|\\.)*)/gi];for(let d of i)for(let u of a){u.lastIndex=0;let f;for(;f=u.exec(d);)r(f[1])}let s=[...e.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)];for(let d of s){let u=Z(d[1]).trim();if(!u||!/[{[]/.test(u))continue;let f=[];for(let l=0;l<u.length;l++)(u[l]==="{"||u[l]==="[")&&f.push(l);for(let l of f.slice(0,30))try{let h=JSON.parse(u.slice(l)),y=hr(h);t.push(...y.media),o.push(...y.images);break}catch{}}let c=new Map;for(let d of t){let u=Ee(d.url);(!c.has(u)||(d.bitrate||0)>(c.get(u).bitrate||0))&&c.set(u,d)}return{media:[...c.values()],images:[...new Set(o)]}}async function br(e,n,t){let o=_t(e);if(!o)return{media:[],images:[]};let r=e.pathname.startsWith("/reel/")?"reel":"p";for(let i of["embed/captioned/","embed/"]){let a=new URL(`https://www.instagram.com/${r}/${o}/${i}`),s=await Me(a,"instagram",n),c=await s.text();if(t.push(`\u3010INSTAGRAM EMBED\u3011/${r}/${o}/${i} \u56DE\u50B3 HTTP ${s.status}\uFF0CHTML\u300C${c.length}\u300D\u500B\u5B57\u5143\u3002`),!s.ok)continue;let d=Sr(c);if(t.push(`\u3010INSTAGRAM EMBED\u3011\u6DF1\u5C64\u8CC7\u6599\u627E\u5230\u300C${d.media.length}\u300D\u500B\u76EE\u6A19\u5F71\u7247\u683C\u5F0F\u3002`),d.media.length)return d}return{media:[],images:[]}}var Er=600*1e3,mr=1800*1e3,ct=0,dt=0,_r="facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",Rr="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";function gn(e){if(!e)return"";let n=BigInt(0);for(let t of e){let o=Rr.indexOf(t);if(o<0)return"";n=n*BigInt(64)+BigInt(o)}return n.toString()}function An(e,n){let t=String(e||"").match(new RegExp(`(?:^|;s*)${n}=([^;]+)`,"i"));return t?t[1]:""}function Ir(e,n=""){let t=String(e||"").trim();if(!t)return"";let o=["datr","ig_did","mid","csrftoken","ds_user_id","rur","wd","sessionid"],r=[];for(let i of o){let a=An(t,i);i==="csrftoken"&&!a&&(a=n),a&&r.push(`${i}=${a}`)}return r.join("; ")}function nn(e){let n=(Array.isArray(e)?e:[]).filter(t=>t&&t.url);return n.length?n.reduce((t,o)=>{let r=Number(t.width||0)*Number(t.height||0);return Number(o.width||0)*Number(o.height||0)>r?o:t}):null}function rn(e,n,t){let o=e.indexOf(t,n);if(o<0||o-n>8e4)return"";let r=/"url":"(https:.*?)"/.exec(e.slice(o,o+9e3))?.[1];if(!r)return"";try{return JSON.parse(`"${r}"`)}catch{return z(r)}}function gr(e,n){let t=[`"pk":"${n}"`,`"pk":${n}`,`"id":"${n}`],o=-1;for(let a of t)if(o=e.indexOf(a),o>=0)break;if(o<0)return{media:[],images:[]};let r=rn(e,o,"video_versions"),i=rn(e,o,"image_versions2");return r?{media:[{url:r,quality:"\u539F\u59CB\u756B\u8CEA",kind:"\u5F71\u97F3\u5408\u4E00",mimeType:"video/mp4",bitrate:0}],images:i?[i]:[]}:{media:[],images:i?[i]:[]}}async function Ar(e,n){if(Date.now()<ct){let c=Math.ceil((ct-Date.now())/1e3);return n.push(`\u3010INSTAGRAM CRAWLER\u3011\u4ECD\u5728 HTTP 429 \u51B7\u537B\u671F\uFF0C\u5269\u9918\u7D04\u300C${c}\u300D\u79D2\u3002`),{media:[],images:[]}}let t=_t(e),o=gn(t);if(!t||!o)return{media:[],images:[]};let r=new URL(`/reel/${t}/`,"https://www.instagram.com"),i=await fetch(r,{headers:{"User-Agent":_r,Accept:"text/html,application/xhtml+xml","Accept-Language":"en-US,en;q=0.9"},redirect:"follow",cache:"no-store"}),a=await i.text();if(n.push(`\u3010INSTAGRAM CRAWLER\u3011\u9023\u7D50\u9810\u89BD\u9801\u9762\u56DE\u50B3 HTTP ${i.status}\uFF0CHTML\u300C${a.length}\u300D\u500B\u5B57\u5143\u3002`),i.status===429)return ct=Date.now()+Er,n.push("\u3010INSTAGRAM CRAWLER\u3011\u5DF2\u555F\u7528 10 \u5206\u9418\u51B7\u537B\uFF0C\u907F\u514D\u6301\u7E8C\u89F8\u767C\u901F\u7387\u9650\u5236\u3002"),{media:[],images:[]};if(!i.ok||!a)return{media:[],images:[]};let s=gr(a,o);return n.push(`\u3010INSTAGRAM CRAWLER\u3011Media ID ${o}\uFF1B\u9328\u9EDE\uFF1A${a.includes(`"pk":"${o}"`)||a.includes(`"pk":${o}`)?"\u627E\u5230":"\u672A\u627E\u5230"}\uFF1Bvideo_versions\uFF1A${a.includes("video_versions")?"\u5B58\u5728":"\u4E0D\u5B58\u5728"}\uFF1B\u76EE\u6A19\u5F71\u7247\uFF1A\u300C${s.media.length}\u300D\u500B\u3002`),s}function yr(e,n){let t=`${JSON.stringify(e||{})} ${String(n||"")}`.toLowerCase();return t.includes("checkpoint_required")||t.includes("challenge_required")||t.includes("consent_required")?"checkpoint":t.includes("login_required")||t.includes("not logged in")||t.includes("please wait")?"login":""}async function Tr(e,n,t,o,r){if(!n)return r.push("\u3010INSTAGRAM MEDIA API\u3011\u672A\u63D0\u4F9B IG_COOKIE\uFF0C\u7565\u904E\u767B\u5165\u5DE5\u4F5C\u968E\u6BB5 API\u3002"),{media:[],images:[]};if(Date.now()<dt){let k=Math.ceil((dt-Date.now())/1e3);return r.push(`\u3010INSTAGRAM MEDIA API\u3011\u5DE5\u4F5C\u968E\u6BB5\u4ECD\u5728\u5B89\u5168\u51B7\u537B\u671F\uFF0C\u5269\u9918\u7D04\u300C${k}\u300D\u79D2\u3002`),{media:[],images:[]}}let i=_t(e),a=gn(i);if(!a)return{media:[],images:[]};let s=lr(t,o,n),c=Ir(n,s),d=An(c,"csrftoken")||s,u=new Headers({"User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1",Accept:"*/*","Accept-Language":"zh-TW,zh;q=0.9,en;q=0.7",Referer:e.href,"X-IG-App-ID":"936619743392459","X-ASBD-ID":"129477",Cookie:c});d&&u.set("X-CSRFToken",d);let f=await fetch(`https://www.instagram.com/api/v1/media/${encodeURIComponent(a)}/info/`,{headers:u,redirect:"follow",cache:"no-store"}),l=await f.text();r.push(`\u3010INSTAGRAM MEDIA API\u3011/api/v1/media/${a}/info/ \u56DE\u50B3 HTTP ${f.status}\uFF0C\u5167\u5BB9\u300C${l.length}\u300D\u500B\u5B57\u5143\u3002`);let h=null;try{h=JSON.parse(l.replace(/^for \(;;\);/,""))}catch{}let y=yr(h,l);if(y==="checkpoint")return dt=Date.now()+mr,r.push("\u3010INSTAGRAM MEDIA API\u3011\u5DE5\u4F5C\u968E\u6BB5\u8981\u6C42 checkpoint\uFF0Fchallenge\uFF0C\u5DF2\u505C\u6B62\u4F7F\u7528 Cookie 30 \u5206\u9418\u4EE5\u964D\u4F4E\u5E33\u865F\u98A8\u96AA\u3002"),{media:[],images:[]};if(!f.ok||!h?.items?.[0]){let k=h?.message||h?.error_title||h?.status||(y==="login"?"\u767B\u5165\u5DE5\u4F5C\u968E\u6BB5\u5DF2\u5931\u6548":"\u6C92\u6709 items[0]");return r.push(`\u3010INSTAGRAM MEDIA API\u3011\u672A\u53D6\u5F97\u5A92\u9AD4\uFF1A${k}\u3002`),{media:[],images:[]}}let O=[],T=[],E=[h.items[0]];for(;E.length;){let k=E.shift();if(!k||typeof k!="object")continue;let m=nn(k.video_versions);m?.url&&O.push({url:z(m.url),quality:m.height?`${m.height}p`:"\u539F\u59CB\u756B\u8CEA",kind:"\u5F71\u97F3\u5408\u4E00",mimeType:"video/mp4",bitrate:Number(m.width||0)*Number(m.height||0)});let N=nn(k.image_versions2?.candidates);N?.url&&T.push(z(N.url)),Array.isArray(k.carousel_media)&&E.push(...k.carousel_media)}let I=new Map;for(let k of O){let m=Ee(k.url),N=I.get(m);(!N||k.bitrate>N.bitrate)&&I.set(m,k)}return r.push(`\u3010INSTAGRAM MEDIA API\u3011\u627E\u5230\u300C${I.size}\u300D\u500B\u5F71\u7247\u5A92\u9AD4\uFF0C\u5305\u542B\u8F2A\u64AD\u9805\u76EE\u3002`),{media:[...I.values()],images:[...new Set(T)]}}async function on(e,n,t,o,r){let i=[],a=await br(e,o,r);if(i.push(a),a.media.length)return a;let s=await Ar(e,r);if(i.push(s),s.media.length)return s;let c=await Tr(e,o,n,t,r);return i.push(c),pr(...i)}async function kr(e,n,t){for(let o of["www.threads.com","www.threads.net"])try{let r=new URL(e);r.hostname=o;let i=await Me(r,"threads",n),a=new URL(i.url);if(t.push(`\u3010THREADS\u3011\u5206\u4EAB\u7DB2\u5740 ${o} \u56DE\u50B3 HTTP ${i.status}\uFF0C\u6700\u7D42\u8DEF\u5F91\uFF1A${a.pathname}`),/^\/@[^/]+\/post\/[^/?#]+/i.test(a.pathname)||/^\/t\/[^/?#]+/i.test(a.pathname))return a.hostname="www.threads.com",a.search="",t.push(`\u3010THREADS\u3011\u5DF2\u8F49\u70BA\u8CBC\u6587\u6C38\u4E45\u7DB2\u5740\uFF1A${a.pathname}`),a;let s=await i.text();for(let c of[x(s,"og:url"),x(s,"twitter:url"),(s.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)/i)||[])[1]])try{let d=new URL(z(c),r);if(/^\/@[^/]+\/post\/[^/?#]+/i.test(d.pathname))return d.hostname="www.threads.com",d.search="",t.push(`\u3010THREADS\u3011\u5DF2\u5F9E\u5206\u4EAB\u9801\u53D6\u5F97\u8CBC\u6587\u6C38\u4E45\u7DB2\u5740\uFF1A${d.pathname}`),d}catch{}}catch(r){t.push(`\u3010THREADS\u3011\u5206\u4EAB\u7DB2\u5740\u5099\u63F4\u5931\u6557\uFF1A${r.message}\u3002`)}return e}async function an(e,n,t,o){let r=n==="instagram"?"INSTAGRAM":"THREADS",i;try{i=dr(e,n)}catch(I){return _({error:I.message,code:`${r}_INVALID_URL`,version:b},400)}let a=ur(i,n);if(a==="unknown")return _({error:`${n==="instagram"?"Instagram":"Threads"} \u7DB2\u5740\u4E0D\u662F\u53EF\u8FA8\u8B58\u7684\u8CBC\u6587\u3001Reel\u3001Story\u3001Highlight \u6216\u77ED\u7DB2\u5740\u3002`,code:`${r}_UNSUPPORTED_URL`,version:b},400);let s=[`\u3010${r}\u3011\u5DF2\u8FA8\u8B58${a==="reel"?" Reels":a==="story"?" Stories":a==="highlight"?" Highlights":a==="share"?"\u5206\u4EAB":"\u8CBC\u6587"}\u7DB2\u5740\uFF1A${i.pathname}`],c=In(t,o,n);if(n==="threads"&&a==="share"&&(i=await kr(i,"",s),!(/^\/@[^/]+\/post\/[^/?#]+/i.test(i.pathname)||/^\/t\/[^/?#]+/i.test(i.pathname))))return s.push("\u3010THREADS\u3011\u5206\u4EAB\u7DB2\u5740\u672A\u89E3\u6790\u6210\u6709\u6548\u8CBC\u6587\uFF0C\u505C\u6B62\u6383\u63CF\u9996\u9801\u6216\u932F\u8AA4\u9801\u9762\u7684\u80CC\u666F\u5A92\u9AD4\u3002"),_({platform:n,contentType:"share",canonicalUrl:"",formats:[],steps:s,version:b,code:"THREADS_SHARE_INVALID",error:"Threads \u5206\u4EAB\u7DB2\u5740\u5DF2\u5931\u6548\u3001\u8CBC\u6587\u4E0D\u5B58\u5728\uFF0C\u6216\u5E73\u53F0\u672A\u56DE\u50B3\u6709\u6548\u7684\u8CBC\u6587\u6C38\u4E45\u7DB2\u5740\u3002"},422);let d=await Me(i,n,""),u=new URL(d.url),f=await d.text();if(s.push(`\u3010${r}\u3011\u8A2A\u5BA2\u9801\u9762\u56DE\u50B3 HTTP ${d.status}\uFF0CHTML\u300C${f.length}\u300D\u500B\u5B57\u5143\u3002`),n==="threads"&&(!(/^\/@[^/]+\/post\/[^/?#]+/i.test(u.pathname)||/^\/t\/[^/?#]+/i.test(u.pathname))||u.searchParams.get("error")==="invalid_post"))return s.push("\u3010THREADS\u3011\u6700\u7D42\u9801\u9762\u4E0D\u662F\u6709\u6548\u8CBC\u6587\uFF0C\u505C\u6B62\u6383\u63CF\u80CC\u666F\u5A92\u9AD4\u3002"),_({platform:n,contentType:a,canonicalUrl:"",formats:[],steps:s,version:b,code:"THREADS_INVALID_POST",error:"Threads \u8CBC\u6587\u4E0D\u5B58\u5728\u3001\u5DF2\u5931\u6548\uFF0C\u6216\u5206\u4EAB\u7DB2\u5740\u6C92\u6709\u5C0D\u61C9\u5230\u6709\u6548\u8CBC\u6587\u3002"},422);let l=ft(f,n);n==="instagram"&&["reel","post"].includes(a)&&!l.media.length&&(s.push("\u3010INSTAGRAM\u3011\u975C\u614B HTML \u6C92\u6709\u76EE\u6A19\u5F71\u7247\uFF0C\u4F9D\u5E8F\u5617\u8A66 Embed\u3001Crawler View \u8207\u767B\u5165 Media API\u3002"),l=await on(i,f,d,"",s));let h=a==="story"||a==="highlight";if((!d.ok||tn(u,f,n)||!l.media.length)&&c&&(s.push(`\u3010${r}\u3011\u8A2A\u5BA2\u9801\u9762\u672A\u53D6\u5F97\u5F71\u7247\uFF0C\u4F7F\u7528\u5206\u9801\u5DE5\u4F5C\u968E\u6BB5\u6216 Worker Secret \u518D\u89E3\u6790\u4E00\u6B21\u3002`),d=await Me(i,n,c),u=new URL(d.url),f=await d.text(),s.push(`\u3010${r}\u3011\u767B\u5165\u5DE5\u4F5C\u968E\u6BB5\u9801\u9762\u56DE\u50B3 HTTP ${d.status}\uFF0CHTML\u300C${f.length}\u300D\u500B\u5B57\u5143\u3002`),l=ft(f,n),n==="instagram"&&["reel","post"].includes(a)&&!l.media.length&&(l=await on(i,f,d,c,s))),!l.media.length){let I=h||tn(u,f,n);return _({platform:n,contentType:a,canonicalUrl:u.href,formats:[],steps:s,version:b,code:I?`${r}_SESSION_REQUIRED`:`${r}_MEDIA_NOT_FOUND`,error:I&&!c?`${n==="instagram"?"Instagram":"Threads"} \u6B64\u5167\u5BB9\u9700\u8981\u767B\u5165\u5DE5\u4F5C\u968E\u6BB5\uFF0C\u8ACB\u5728\u9032\u968E\u8A2D\u5B9A\u8CBC\u5165\u5C0D\u61C9 Cookie\u3002`:void 0,note:I?"\u767B\u5165\u5DE5\u4F5C\u968E\u6BB5\u4E0D\u5B58\u5728\u3001\u5DF2\u5931\u6548\u6216\u5E33\u6236\u6C92\u6709\u89C0\u770B\u6B0A\u9650\u3002":"\u9801\u9762\u5DF2\u8F09\u5165\uFF0C\u4F46\u6C92\u6709\u627E\u5230\u5F71\u7247\uFF1B\u5167\u5BB9\u53EF\u80FD\u662F\u7D14\u6587\u5B57\u3001\u5716\u7247\u3001\u8F2A\u64AD\u5716\u7247\u3001\u5DF2\u522A\u9664\u6216\u5E73\u53F0\u9801\u9762\u683C\u5F0F\u5DF2\u66F4\u65B0\u3002"},I&&!c?401:200)}let y=l.media.map((I,k)=>({itag:`${n}-${k+1}`,quality:I.quality,kind:I.kind,container:I.mimeType.includes("webm")?"webm":"mp4",mimeType:I.mimeType,codec:"",bitrate:I.bitrate||0,contentLength:"",source:r,url:I.url})).sort((I,k)=>k.bitrate-I.bitrate),O=En(x(f,"og:title")||x(f,"twitter:title")||`${n==="instagram"?"Instagram":"Threads"} \u5F71\u7247`),T=l.images[0]||"",E=(i.pathname.match(/(?:reel|p|tv|post|t|stories\/[^/]+)\/([^/]+)/i)||[])[1]||`${n}-${Date.now()}`;return s.push(`\u3010${r}\u3011\u627E\u5230\u300C${y.length}\u300D\u500B\u5F71\u7247\u683C\u5F0F\u3002`),_({platform:n,contentType:a,id:E,canonicalUrl:u.href,source:r,version:b,code:"OK",title:O,thumbnail:T,formats:y,steps:s,note:""})}async function Or(e,n,t,o){let r;try{r=new URL(n)}catch{return _({error:"\u5A92\u9AD4\u7DB2\u5740\u7121\u6548\u3002",code:"SOCIAL_MEDIA_INVALID_URL",version:b},400)}if(r.protocol!=="https:"||!Mi.some(f=>r.hostname===f.slice(1)||r.hostname.endsWith(f)))return _({error:"\u6B64 Instagram\uFF0FThreads \u5A92\u9AD4\u7DB2\u57DF\u672A\u5217\u5165\u5141\u8A31\u6E05\u55AE\u3002",code:"SOCIAL_MEDIA_DOMAIN_DENIED",version:b},403);let i=In(e,o,t),a=t==="instagram"?"https://www.instagram.com/":"https://www.threads.com/",s=new Headers({"User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1",Referer:a,Accept:"*/*","Accept-Encoding":"identity"});i&&s.set("Cookie",i);let c=e.headers.get("Range");c&&s.set("Range",c);let d=await fetch(r,{method:e.method,headers:s,redirect:"follow",cache:"no-store"}),u=new Headers(d.headers);return Object.entries(X()).forEach(([f,l])=>u.set(f,l)),u.set("Cache-Control","no-store"),u.set("X-OwO-Version",b),u.set("Content-Disposition",`attachment; filename="${t}-video.mp4"`),new Response(d.body,{status:d.status,headers:u})}var lt=1800,Nr=60;function De(e,n,t,o=""){let r=String(t||"ANDROID").replace(/[^A-Za-z0-9_-]/g,"_"),i=String(o||"legacy").replace(/[^A-Za-z0-9_-]/g,"_"),a=`https://owo-media-cache.invalid/youtube/${encodeURIComponent(e)}/${i}/${encodeURIComponent(String(n))}/${r}`;return new Request(a,{method:"GET"})}function yn(e,n,t){return De(e,n,t,"latest")}var ht=1200;function Tn(e,n){return new Request(`https://owo.youtube-sabr.invalid/session/${encodeURIComponent(e)}/${encodeURIComponent(n)}`)}async function Rt(e,n,t,o){if(typeof caches>"u"||!caches.default||!e||!n||!t)return!1;let r=we(t),i=It(t);if(!r.streamingUrl||!r.ustreamerConfig||!i.length)return!1;let a={id:e,sessionId:n,source:"VISIONOS",streamingUrl:r.streamingUrl,ustreamerConfig:r.ustreamerConfig,formats:i,createdAt:Date.now()},s={"Content-Type":"application/json; charset=utf-8","Cache-Control":`public, max-age=${ht}`};return await caches.default.put(Tn(e,n),new Response(JSON.stringify(a),{headers:s})),o.push(`\u3010VISIONOS SABR SESSION\u3011Session ${String(n).slice(0,8)} \u5DF2\u4FDD\u5B58\u5B8C\u6574 SABR Context\uFF0C\u6709\u6548\u671F\u7D04 ${ht} \u79D2\u3002`),!0}async function kn(e,n){if(typeof caches>"u"||!caches.default||!e||!n)return null;let t=await caches.default.match(Tn(e,n));if(!t)return null;try{let o=await t.json(),r=Date.now()-Number(o.createdAt||0);return r>ht*1e3||!o.streamingUrl||!o.ustreamerConfig||!Array.isArray(o.formats)?null:{...o,ageMs:r}}catch{return null}}async function Cr(e,n,t,o=""){if(typeof caches>"u"||!caches.default||!e)return;let r=0;for(let i of n)if(!(!i?.url||!i?.itag||!i?.source))try{let a=JSON.stringify({url:i.url,source:i.source,quality:i.quality||"",height:Number(i.height||0),fps:Number(i.fps||0),codec:i.codec||"",kind:i.kind||"",contentLength:Number(i.contentLength||0),sessionId:o,refreshApiKey:i.refreshApiKey||"",refreshVisitorData:i.refreshVisitorData||"",generatedAt:Number(i.generatedAt||Date.now()),storedAt:Date.now()}),s={"Content-Type":"application/json; charset=utf-8","Cache-Control":`public, max-age=${lt}`};await caches.default.put(De(e,i.itag,i.source,o),new Response(a,{headers:s})),await caches.default.put(yn(e,i.itag,i.source),new Response(a,{headers:s})),r++}catch{}r&&t.push(`\u3010\u5A92\u9AD4\u5DE5\u4F5C\u968E\u6BB5\u3011Session ${String(o).slice(0,8)} \u5DF2\u5EFA\u7ACB\u7CBE\u78BA\u7D22\u5F15\u8207\u683C\u5F0F\u5099\u63F4\u7D22\u5F15\uFF0C\u5171\u66AB\u5B58\u300C${r}\u300D\u500B\u683C\u5F0F\u7DB2\u5740\uFF0C\u6709\u6548\u671F\u7D04 ${lt} \u79D2\u3002`)}async function sn(e,n,t,o=""){if(typeof caches>"u"||!caches.default||!e||!n)return null;let r=[{request:De(e,n,t,o),matchMode:"exact-session"},{request:yn(e,n,t),matchMode:"latest-format"}];for(let i of r)try{let a=await caches.default.match(i.request);if(!a)continue;let s=await a.json();if(!s?.url)continue;let c=Date.now()-Number(s.storedAt||0),d=i.matchMode==="latest-format"?Nr*1e3:lt*1e3;if(c>d)continue;return{...s,matchMode:i.matchMode,ageMs:c}}catch{}return null}async function Pr(e,n,t,o=""){if(!(typeof caches>"u"||!caches.default||!e||!n))try{await caches.default.delete(De(e,n,t,o))}catch{}}function Mr(e,n){let t=String(e?.mimeType||""),o=(t.match(/codecs="([^"]+)"/)||[])[1]||"",r=t.startsWith("video/"),i=t.startsWith("audio/")||!!e?.audioQuality,a=r&&i?"\u5F71\u97F3\u5408\u4E00":r?"\u50C5\u8996\u8A0A":i?"\u50C5\u97F3\u8A0A":"\u5A92\u9AD4";if(n.kind&&a!==n.kind)return-1;let s=0,c=Number(e?.height||0),d=Number(e?.fps||0);return n.height&&(s-=Math.abs(c-n.height)*1e5),n.fps&&(s-=Math.abs(d-n.fps)*1e3),n.codec&&o.toLowerCase().includes(n.codec.toLowerCase().split(".")[0])&&(s+=1e7),s+=Number(e?.bitrate||0),s}function wr(e,n){let t=null,o=-1/0;for(let r of H(e)){let i=Mr(r,n);i>o&&(t=r,o=i)}return o>=0?t:null}function ae(e){return Se.find(n=>n.label===e)||Se.find(n=>n.label==="ANDROID")}async function Dr(e,n,t,o,r={},i={},a=""){let s=String(i.apiKey||""),c=String(i.visitorData||"");if(!s)throw new Error("\u89E3\u6790\u5DE5\u4F5C\u968E\u6BB5\u672A\u63D0\u4F9B Player API Key\u3002");let d=[...new Set([t,"ANDROID_VR","ANDROID","IOS","WEB","TV"].filter(Boolean))],u=[];for(let f of d)try{let l=await be(s,c,e,ae(f),a),h=H(l).find(I=>String(I.itag)===String(n)),y=!1;if(h||(h=wr(l,r),y=!!h),!h){u.push(`${f}: \u7121 itag ${n} \u6216\u7B49\u6548\u683C\u5F0F`);continue}let T=pn(h,{signature:null,n:null},{signature:0,signatureFailed:0,n:0,nFailed:0});if(!T){u.push(`${f}: \u683C\u5F0F\u7121\u53EF\u7528\u7DB2\u5740`);continue}let E=bt({...h,_source:f},T);return o.push(`\u3010\u76F4\u63A5 Player \u5237\u65B0\u3011${f} \u53D6\u5F97${y?"\u7B49\u6548\u683C\u5F0F":"\u539F itag"}\uFF1Aitag ${h.itag}\uFF1B${E?.quality||"\u672A\u77E5\u756B\u8CEA"}\uFF1B${E?.container||"\u672A\u77E5\u5BB9\u5668"}\uFF1B${E?.codec||"\u672A\u77E5\u7DE8\u78BC"}\u3002`),{url:T,sourceLabel:f,contentLength:Number(E?.contentLength||0),selectedItag:String(h.itag),equivalent:y}}catch(l){u.push(`${f}: ${l.message}`)}throw new Error(`\u6240\u6709 Player Client \u5747\u672A\u53D6\u5F97\u539F itag \u6216\u7B49\u6548\u683C\u5F0F\uFF08${u.join("\uFF1B")}\uFF09\u3002`)}function J(e){let n=String(e||"").toUpperCase();return n==="ANDROID"?"com.google.android.youtube/21.35.35 (Linux; U; Android 14) gzip":n==="ANDROID_VR"?"com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 14) gzip":n==="ANDROID_CREATOR"?"com.google.android.apps.youtube.creator/24.35.100 (Linux; U; Android 14) gzip":n==="ANDROID_MUSIC"?"com.google.android.apps.youtube.music/7.18.52 (Linux; U; Android 14) gzip":n==="ANDROID_TESTSUITE"?"com.google.android.youtube/1.9 (Linux; U; Android 14) gzip":n==="YTSTUDIO_ANDROID"?"com.google.android.apps.youtube.creator/24.35.100 (Linux; U; Android 14) gzip":n==="YTMUSIC_ANDROID"?"com.google.android.apps.youtube.music/7.18.52 (Linux; U; Android 14) gzip":n==="IOS"||n==="VISIONOS"?"com.google.ios.youtube/21.35.3 (iPhone16,2; U; CPU iOS 18_6_2 like Mac OS X)":n==="WEB_SAFARI"?"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15":"Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36"}function On(e){let n=String(e.headers.get("Range")||"").match(/^bytes=(\d+)-(\d+)$/i);return n?{start:Number(n[1]),end:Number(n[2]),header:`bytes=${n[1]}-${n[2]}`,query:`${n[1]}-${n[2]}`}:null}function Lr(e,n,t){let o=Nn(e,n),r=On(e);return t&&r&&o.set("Range",r.header),o}function Nn(e,n){let t=new Headers,o=e.headers.get("Range");return o&&t.set("Range",o),t.set("Accept","*/*"),t.set("Accept-Encoding","identity"),t.set("Origin","https://www.youtube.com"),t.set("Referer","https://www.youtube.com/"),t.set("User-Agent",J(n)),t}function xr(e,n){let t=bt(e,n);return t?{kind:t.kind,height:Number(t.height||0),fps:Number(t.fps||0),codec:String(t.codec||"").toLowerCase(),container:String(t.container||"").toLowerCase(),contentLength:Number(t.contentLength||0)}:null}function Ur(e,n,t){return e&&e.kind===n.kind&&e.height===Number(n.height||0)&&e.fps===Number(n.fps||0)&&e.codec===String(n.codec||"").toLowerCase()&&e.container===String(n.container||"").toLowerCase()&&e.contentLength===Number(t||0)}function It(e){return ie(e).map(n=>({itag:Number(n.itag||0),lastModified:String(n.lastModified||"0"),xtags:n.xtags||"",width:Number(n.width||0),height:Number(n.height||0),contentLength:Number(n.contentLength||0),mimeType:n.mimeType||"",quality:n.quality||"",qualityLabel:n.qualityLabel||"",averageBitrate:Number(n.averageBitrate||0),bitrate:Number(n.bitrate||0),audioQuality:n.audioQuality||"",approxDurationMs:Number(n.approxDurationMs||0),audioTrackId:n.audioTrack?.id||""})).filter(n=>n.itag&&n.bitrate)}async function Br(e,n,t,o,r,i,a,s=""){let c=[];if(!/^[A-Za-z0-9_-]{11}$/.test(n||""))return _({error:"\u5F71\u7247 ID \u683C\u5F0F\u932F\u8AA4\u3002",code:"INVALID_VIDEO_ID",version:b,steps:c},400);let d=await kn(n,a);if(d)c.push(`\u3010VISIONOS SABR \u4E0B\u8F09\u6AA2\u67E5\u3011SABR Session\uFF1A\u547D\u4E2D\uFF1BSession ${String(a).slice(0,8)}\uFF1B\u5FEB\u53D6\u7D04 ${Math.round(d.ageMs/1e3)} \u79D2\u3002`);else{if(c.push(`\u3010VISIONOS SABR \u4E0B\u8F09\u6AA2\u67E5\u3011SABR Session\uFF1A\u672A\u547D\u4E2D\u6216\u5DF2\u904E\u671F\uFF1BSession ${String(a||"none").slice(0,8)}\u3002`),!r)return _({error:"SABR Session \u672A\u547D\u4E2D\u4E14\u7F3A\u5C11 Player API Key\uFF0C\u8ACB\u91CD\u65B0\u89E3\u6790\u5F71\u7247\u3002",code:"SABR_SESSION_EXPIRED",version:b,steps:c},409);let M=ae("VISIONOS"),C;try{C=await be(r,i,n,M,s)}catch(v){return _({error:`VISIONOS Player API \u5931\u6557\uFF1A${v.message}`,code:"SABR_PLAYER_FAILED",version:b,steps:c},422)}let R=we(C),B=It(C);if(c.push(`\u3010VISIONOS SABR \u4E0B\u8F09\u6AA2\u67E5\u3011Player \u72C0\u614B\uFF1A${Ce(C).status}\uFF1B\u539F\u59CB\u683C\u5F0F\uFF1A${ie(C).length} \u500B\uFF1B\u53EF\u7528 itag\uFF1A${B.map(v=>v.itag).join("\u3001")||"\u7121"}\u3002`),c.push(`\u3010VISIONOS SABR \u4E0B\u8F09\u6AA2\u67E5\u3011serverAbrStreamingUrl\uFF1A${R.streamingUrl?"\u5B58\u5728":"\u7F3A\u5C11"}\uFF1BvideoPlaybackUstreamerConfig\uFF1A${R.ustreamerConfig?"\u5B58\u5728":"\u7F3A\u5C11"}\u3002`),!R.streamingUrl)return _({error:"VISIONOS Player Response \u7F3A\u5C11 serverAbrStreamingUrl\u3002",code:"SABR_STREAMING_URL_MISSING",version:b,steps:c},409);if(!R.ustreamerConfig)return _({error:"VISIONOS Player Response \u7F3A\u5C11 videoPlaybackUstreamerConfig\u3002",code:"SABR_USTREAMER_CONFIG_MISSING",version:b,steps:c},409);d={id:n,sessionId:a,source:"VISIONOS",streamingUrl:R.streamingUrl,ustreamerConfig:R.ustreamerConfig,formats:B,createdAt:Date.now(),ageMs:0},a&&await Rt(n,a,C,c)}let u=d.formats,f=u.find(M=>String(M.itag)===String(t)),l=u.filter(M=>String(M.mimeType||"").startsWith("video/")),h=u.filter(M=>String(M.mimeType||"").startsWith("audio/")||M.audioQuality);if(c.push(`\u3010VISIONOS SABR \u4E0B\u8F09\u6AA2\u67E5\u3011\u8981\u6C42\u8ECC\u9053\uFF1A${o}\uFF1B\u8981\u6C42 itag\uFF1A${t}\uFF1B\u53EF\u7528\u8996\u8A0A itag\uFF1A${l.map(M=>M.itag).join("\u3001")||"\u7121"}\uFF1B\u53EF\u7528\u97F3\u8A0A itag\uFF1A${h.map(M=>M.itag).join("\u3001")||"\u7121"}\u3002`),c.push("\u3010VISIONOS SABR \u4E0B\u8F09\u6AA2\u67E5\u3011serverAbrStreamingUrl\uFF1A\u5B58\u5728\uFF1BvideoPlaybackUstreamerConfig\uFF1A\u5B58\u5728\u3002 "),!f)return _({error:`SABR Session \u4E2D\u6C92\u6709\u539F\u9078\u64C7\u7684 itag ${t}\u3002`,code:"SABR_SELECTED_ITAG_MISSING",version:b,steps:c},409);let y=String(f.mimeType||"").startsWith("video/"),O=y?f:l.sort((M,C)=>C.bitrate-M.bitrate)[0],T=y?h.sort((M,C)=>C.bitrate-M.bitrate)[0]:f;if(!O||!T)return _({error:"SABR Session \u7F3A\u5C11\u6210\u5C0D\u7684\u8996\u8A0A\u6216\u97F3\u8A0A\u683C\u5F0F\u3002",code:"SABR_PAIR_MISSING",version:b,steps:c},409);let E=ae("VISIONOS"),I=new pe({fetch:(M,C={})=>{let R=new Headers(C.headers||{});return R.set("User-Agent",J("VISIONOS")),R.set("Accept-Language","zh-TW,zh;q=0.9,en;q=0.8"),fetch(M,{...C,headers:R})},serverAbrStreamingUrl:d.streamingUrl,videoPlaybackUstreamerConfig:d.ustreamerConfig,durationMs:Number(f.approxDurationMs||O.approxDurationMs||T.approxDurationMs||0),formats:u,clientInfo:{clientName:5,clientVersion:E.clientVersion,osName:E.osName,osVersion:E.osVersion,deviceMake:E.deviceMake,deviceModel:E.deviceModel,acceptLanguage:"zh-TW",acceptRegion:"TW"}}),k=Number(f.contentLength||0),m=Number(f.approxDurationMs||O.approxDurationMs||T.approxDurationMs||0),N=o==="audio"?1:2;c.push(`\u3010VISIONOS SABR \u5B8C\u6574\u4E0B\u8F09\u3011${o==="audio"?"\u97F3\u8A0A":"\u8996\u8A0A"}\u63A1\u55AE\u8ECC\u6A21\u5F0F\uFF1B\u9810\u671F\u5927\u5C0F\uFF1A${k||"\u672A\u77E5"} bytes\uFF1B\u9810\u671F\u6642\u9593\uFF1A${m||"\u672A\u77E5"} ms\u3002`);let P;try{P=await I.start({videoFormat:O.itag,audioFormat:T.itag,enabledTrackTypes:N,maxRetries:8,stallDetectionMs:3e4})}catch(M){return _({error:`VISIONOS SABR \u555F\u52D5\u5931\u6557\uFF1A${M.message}`,code:"SABR_START_FAILED",version:b,steps:c},422)}let g=o==="audio"?P.audioStream:P.videoStream,S={...X(),"Content-Type":o==="audio"?"audio/mp4":"video/mp4","Cache-Control":"no-store","X-OwO-Media-Mode":"visionos-sabr-complete-track","X-OwO-Media-Source":"VISIONOS","X-OwO-Itag":String(t),"X-OwO-Sabr-Session":String(a||""),"X-OwO-Expected-Bytes":String(k||0),"X-OwO-Expected-Duration-Ms":String(m||0),"X-OwO-Sabr-Track-Mode":o==="audio"?"audio-only":"video-only","X-OwO-Version":b};return new Response(g,{status:200,headers:S})}function vr(e,n){let t=n instanceof Uint8Array?n:new Uint8Array(n),o=new Uint8Array(5+t.byteLength);return o[0]=e==="audio"?2:1,new DataView(o.buffer).setUint32(1,t.byteLength,!1),o.set(t,5),o}async function Fr(e,n,t,o,r,i,a,s=""){let c=[];if(!/^[A-Za-z0-9_-]{11}$/.test(n||""))return _({error:"\u5F71\u7247 ID \u683C\u5F0F\u932F\u8AA4\u3002",code:"INVALID_VIDEO_ID",version:b,steps:c},400);let d=await kn(n,a);if(!d){if(!r)return _({error:"SABR Session \u5DF2\u904E\u671F\uFF0C\u8ACB\u91CD\u65B0\u89E3\u6790\u5F71\u7247\u3002",code:"SABR_SESSION_EXPIRED",version:b,steps:c},409);let T;try{T=await be(r,i,n,ae("VISIONOS"),s)}catch(k){return _({error:`VISIONOS Player API \u5931\u6557\uFF1A${k.message}`,code:"SABR_PLAYER_FAILED",version:b,steps:c},422)}let E=we(T),I=It(T);if(!E.streamingUrl)return _({error:"VISIONOS Player Response \u7F3A\u5C11 serverAbrStreamingUrl\u3002",code:"SABR_STREAMING_URL_MISSING",version:b,steps:c},409);if(!E.ustreamerConfig)return _({error:"VISIONOS Player Response \u7F3A\u5C11 videoPlaybackUstreamerConfig\u3002",code:"SABR_USTREAMER_CONFIG_MISSING",version:b,steps:c},409);d={streamingUrl:E.streamingUrl,ustreamerConfig:E.ustreamerConfig,formats:I,createdAt:Date.now(),ageMs:0},a&&await Rt(n,a,T,c)}let u=d.formats.find(T=>String(T.itag)===String(t)&&String(T.mimeType||"").startsWith("video/")),f=d.formats.find(T=>String(T.itag)===String(o)&&(String(T.mimeType||"").startsWith("audio/")||T.audioQuality));if(!u||!f)return _({error:"SABR Session \u7F3A\u5C11\u6240\u9078\u8996\u8A0A\u6216\u97F3\u8A0A\u8ECC\u3002",code:"SABR_PAIR_MISSING",version:b,steps:c},409);let l=ae("VISIONOS"),h=new pe({fetch:(T,E={})=>{let I=new Headers(E.headers||{});return I.set("User-Agent",J("VISIONOS")),I.set("Accept-Language","zh-TW,zh;q=0.9,en;q=0.8"),fetch(T,{...E,headers:I})},serverAbrStreamingUrl:d.streamingUrl,videoPlaybackUstreamerConfig:d.ustreamerConfig,durationMs:Number(u.approxDurationMs||f.approxDurationMs||0),formats:d.formats,clientInfo:{clientName:5,clientVersion:l.clientVersion,osName:l.osName,osVersion:l.osVersion,deviceMake:l.deviceMake,deviceModel:l.deviceModel,acceptLanguage:"zh-TW",acceptRegion:"TW"}}),y;try{y=await h.start({videoFormat:u.itag,audioFormat:f.itag,enabledTrackTypes:0,maxRetries:12,stallDetectionMs:45e3,maxReadaheadMs:45e3})}catch(T){return _({error:`VISIONOS SABR \u96D9\u8ECC\u555F\u52D5\u5931\u6557\uFF1A${T.message}`,code:"SABR_START_FAILED",version:b,steps:c},422)}let O=new ReadableStream({start(T){let E=2,I=!1,k=async(m,N)=>{let P=m.getReader();try{for(;;){let{done:g,value:S}=await P.read();if(g)break;S?.byteLength&&T.enqueue(vr(N,S))}}catch(g){I||(I=!0,T.error(g))}finally{E--,E===0&&!I&&T.close()}};k(y.videoStream,"video"),k(y.audioStream,"audio")},cancel(){try{h.abort()}catch{}}});return new Response(O,{status:200,headers:{...X(),"Content-Type":"application/x-owo-sabr-pair","Cache-Control":"no-store","X-OwO-Media-Mode":"visionos-sabr-realtime-pair","X-OwO-Expected-Video-Bytes":String(u.contentLength||0),"X-OwO-Expected-Audio-Bytes":String(f.contentLength||0),"X-OwO-Expected-Duration-Ms":String(u.approxDurationMs||f.approxDurationMs||0),"X-OwO-Version":b}})}async function cn(e,{id:n,itag:t,source:o,apiKey:r,visitorData:i,start:a,end:s,wanted:c,total:d,muxed:u=!1},f=""){let l=[];if(!/^[A-Za-z0-9_-]{11}$/.test(n||""))return _({error:"\u5F71\u7247 ID \u683C\u5F0F\u932F\u8AA4\u3002",code:"INVALID_VIDEO_ID",version:b,steps:l},400);if(!r)return _({error:"\u7F3A\u5C11 Player API Key\uFF0C\u8ACB\u91CD\u65B0\u89E3\u6790\u5F71\u7247\u3002",code:"PLAYER_API_KEY_MISSING",version:b,steps:l},409);let h=u?"ANDROID":o||"ANDROID_VR",y=ae(h);l.push(`\u3010${u?"\u5F71\u97F3\u5408\u4E00":"\u9AD8\u756B\u8CEA\u5340\u6BB5"}\u540C\u5DE5\u4F5C\u968E\u6BB5\u3011\u547C\u53EB ${h} Player API \u53D6\u5F97 itag ${t}\u3002`);let O;try{O=await be(r,i,n,y,f)}catch(g){return _({error:`${h} Player API \u5931\u6557\uFF1A${g.message}`,code:"PLAYER_TEMPORARILY_FAILED",version:b,steps:l},422)}let T=H(O).find(g=>String(g.itag)===String(t));if(!T)return _({error:`${h} \u672C\u6B21\u672A\u63D0\u4F9B itag ${t}\u3002`,code:"HQ_FORMAT_TEMPORARILY_MISSING",version:b,steps:l},409);let E=St(T);if(!E)return _({error:`${h} itag ${t} \u6C92\u6709\u53EF\u7528\u5A92\u9AD4\u7DB2\u5740\u3002`,code:"MEDIA_URL_MISSING",version:b,steps:l},409);let I=xr(T,E);if(!u&&!Ur(I,c,d))return _({error:"\u5373\u6642\u53D6\u5F97\u7684\u5A92\u9AD4\u8ECC\u8207\u539F\u9078\u64C7\u4E0D\u4E00\u81F4\uFF0C\u672A\u6DF7\u63A5\u5340\u6BB5\u3002",code:"MEDIA_TRACK_CHANGED",version:b,actual:I,steps:l},409);let k=new URL(E);if(k.protocol!=="https:"||!dn.some(g=>k.hostname.endsWith(g)))return _({error:"\u5A92\u9AD4\u7DB2\u57DF\u672A\u5217\u5165\u5141\u8A31\u6E05\u55AE\u3002",code:"MEDIA_DOMAIN_DENIED",version:b,steps:l},403);let m=Nn(e,h);u?m.delete("Range"):m.set("Range",`bytes=${a}-${s}`);let N=await fetch(k,{method:"GET",headers:m,redirect:"follow",cache:"no-store"});if(l.push(`\u3010${u?"\u5F71\u97F3\u5408\u4E00":"\u9AD8\u756B\u8CEA\u5340\u6BB5"}\u540C\u5DE5\u4F5C\u968E\u6BB5\u3011${h} itag ${t}${u?"":` bytes=${a}-${s}`} \u56DE\u50B3 HTTP ${N.status}\u3002`),![200,206].includes(N.status)){try{await N.body?.cancel()}catch{}return _({error:`\u540C\u5DE5\u4F5C\u968E\u6BB5\u5A92\u9AD4\u8ACB\u6C42\u906D\u62D2\uFF1AHTTP ${N.status}\u3002`,code:"IMMEDIATE_MEDIA_REJECTED",version:b,steps:l},N.status===403?403:422)}let P=new Headers(N.headers);return Object.entries(X()).forEach(([g,S])=>P.set(g,S)),P.set("Cache-Control","no-store"),P.set("X-OwO-Media-Mode",u?"muxed-same-invocation":"hq-segment-same-invocation"),P.set("X-OwO-Media-Source",h),P.set("X-OwO-Version",b),new Response(N.body,{status:N.status,headers:P})}async function $r(e,n,t,o,r,i={},a="",s="",c={}){let d=[],u="",f="",l=0,h=!1,y=String(o||""),O=String(n||""),T=String(a||"none").slice(0,8);if(d.push(`\u3010\u5A92\u9AD4\u5DE5\u4F5C\u968E\u6BB5\u3011\u8ACB\u6C42 Session\uFF1A${T}\uFF1B\u5F71\u7247\uFF1A${t||"\u672A\u77E5"}\uFF1Bitag\uFF1A${o||"\u672A\u77E5"}\uFF1B\u4F86\u6E90\uFF1A${r||"ANDROID"}\u3002`),!u&&t&&o){let g=await sn(t,o,r||"ANDROID",a);if(g?.url){u=g.url,r=g.source||r,f=g.matchMode==="exact-session"?"session-cache":"format-fallback-cache",l=Number(g.contentLength||0),c={apiKey:g.refreshApiKey||c.apiKey||"",visitorData:g.refreshVisitorData||c.visitorData||""};let S=g.matchMode==="exact-session"?"\u7CBE\u78BA Session":"\u683C\u5F0F\u5099\u63F4";d.push(`\u3010\u5A92\u9AD4\u5DE5\u4F5C\u968E\u6BB5\u3011\u547D\u4E2D${S}\u7D22\u5F15\uFF1A${r} / itag ${o}\uFF1B\u5FEB\u53D6\u7D04 ${Math.round(g.ageMs/1e3)} \u79D2\u3002`)}else d.push(`\u3010\u5A92\u9AD4\u5DE5\u4F5C\u968E\u6BB5\u3011Session ${T} \u7684\u7CBE\u78BA\u7D22\u5F15\u8207\u683C\u5F0F\u5099\u63F4\u7D22\u5F15\u5747\u672A\u547D\u4E2D\u3002`)}if(!u&&O&&(u=O,f="analysis-fallback",d.push("\u3010\u5A92\u9AD4\u5DE5\u4F5C\u968E\u6BB5\u3011\u5FEB\u53D6\u672A\u547D\u4E2D\uFF0C\u6539\u7528\u89E3\u6790\u56DE\u61C9\u96A8\u683C\u5F0F\u50B3\u56DE\u7684\u53D7\u9A57\u8B49\u7DB2\u5740\uFF0C\u4E0D\u5148\u555F\u52D5 WATCH \u5237\u65B0\u3002")),!u&&t&&o)return d.push("\u3010\u5A92\u9AD4\u5DE5\u4F5C\u968E\u6BB5\u3011\u5FEB\u53D6\u8207\u89E3\u6790\u7DB2\u5740\u7686\u4E0D\u5B58\u5728\uFF0C\u505C\u6B62\u5A92\u9AD4\u8ACB\u6C42\u4E26\u8981\u6C42\u524D\u7AEF\u91CD\u65B0\u89E3\u6790\u3002"),_({error:"\u5A92\u9AD4\u5DE5\u4F5C\u968E\u6BB5\u672A\u547D\u4E2D\uFF0C\u8ACB\u91CD\u65B0\u89E3\u6790\u5F71\u7247\u5F8C\u7ACB\u5373\u4E0B\u8F09\u3002",code:"MEDIA_SESSION_MISS",version:b,steps:d},409);let E;try{E=new URL(u),l=l||Number(E.searchParams.get("clen")||0)}catch{return _({error:"\u5A92\u9AD4\u7DB2\u5740\u7121\u6548\u3002",code:"INVALID_MEDIA_URL",version:b,steps:d},400)}if(E.protocol!=="https:"||!dn.some(g=>E.hostname.endsWith(g)))return _({error:"\u6B64\u5A92\u9AD4\u7DB2\u57DF\u672A\u5217\u5165\u5141\u8A31\u6E05\u55AE\u3002",code:"MEDIA_DOMAIN_DENIED",version:b,steps:d},403);let I=On(e);async function k(g){return fetch(g,{method:e.method,headers:Lr(e,r,!0),redirect:"follow",cache:"no-store"})}d.push(`\u3010\u5A92\u9AD4\u8ACB\u6C42\u3011\u4F7F\u7528 ${r||"UNKNOWN"} Client \u8EAB\u5206\u5B58\u53D6 ${f||"legacy"} \u7DB2\u5740${I?`\uFF0C\u5340\u6BB5 ${I.header}`:""}\u3002`);let m=await k(E);if(d.push(`\u3010\u5A92\u9AD4\u8ACB\u6C42\u3011${r||"UNKNOWN"} \u56DE\u50B3 HTTP ${m.status}\u3002`),m.status===403&&t&&o&&f==="analysis-url"){let g=await sn(t,o,r||"ANDROID",a);g?.url&&g.url!==E.href&&(d.push(`\u3010\u5A92\u9AD4\u5DE5\u4F5C\u968E\u6BB5\u3011\u89E3\u6790\u7DB2\u5740\u906D\u62D2\uFF0C\u6539\u7528 ${r} / itag ${o} \u7684\u77ED\u6548\u5FEB\u53D6\u7DB2\u5740\u3002`),E=new URL(g.url),f="session-cache",m=await k(E),d.push(`\u3010\u5A92\u9AD4\u8ACB\u6C42\u3011\u77ED\u6548\u5FEB\u53D6\u7DB2\u5740\u56DE\u50B3 HTTP ${m.status}\u3002`))}if([403,416].includes(m.status)&&t&&o){d.push(`\u3010\u5A92\u9AD4\u55AE\u6B21\u5237\u65B0\u3011${r||"ANDROID"} / itag ${o} \u7684 ${I?.header||"\u76EE\u524D\u5340\u6BB5"} \u56DE\u50B3 HTTP ${m.status}\uFF1B\u53EA\u57F7\u884C\u4E00\u6B21\u76F4\u63A5 Player \u5237\u65B0\uFF0C\u4E0D\u91CD\u65B0 WATCH\u3002`),await Pr(t,o,r||"ANDROID",a);try{let g=await Dr(t,o,r||"ANDROID",d,i,c,s);if(g.equivalent&&String(g.selectedItag||o)!==String(o))return _({error:`\u76F4\u63A5 Player \u5237\u65B0\u53D6\u5F97\u4E0D\u540C itag ${g.selectedItag}\uFF0C\u56FA\u5B9A\u4E94\u6BB5\u4E0B\u8F09\u4E0D\u6DF7\u63A5\u4E0D\u540C\u4F4D\u5143\u6D41\uFF0C\u8ACB\u91CD\u65B0\u89E3\u6790\u5F8C\u518D\u4E0B\u8F09\u3002`,code:"MEDIA_TRACK_CHANGED",version:b,steps:d},409);E=new URL(g.url),r=g.sourceLabel,y=String(g.selectedItag||o),f="single-player-refresh",l=Number(g.contentLength||l||0),m=await k(E),d.push(`\u3010\u5A92\u9AD4\u55AE\u6B21\u5237\u65B0\u3011${I?.header||"\u76EE\u524D\u5340\u6BB5"} \u4F7F\u7528\u5237\u65B0\u7DB2\u5740\u91CD\u8A66\u4E00\u6B21\uFF0C\u56DE\u50B3 HTTP ${m.status}\u3002`)}catch(g){return d.push(`\u3010\u5A92\u9AD4\u55AE\u6B21\u5237\u65B0\u5931\u6557\u3011${g.message}`),_({error:`\u5A92\u9AD4\u5340\u6BB5\u906D\u62D2\uFF0C\u55AE\u6B21 Player \u5237\u65B0\u5931\u6557\uFF1A${g.message}`,code:"MEDIA_REFRESH_FAILED",version:b,steps:d},422)}}if([403,416].includes(m.status))return _({error:`Google Video Server \u62D2\u7D55\u5A92\u9AD4\u5340\u6BB5\uFF1AHTTP ${m.status}\u3002\u56FA\u5B9A\u4E94\u6BB5\u4E0B\u8F09\u5DF2\u57F7\u884C\u539F\u7DB2\u5740\u4E00\u6B21\u8207 Player \u5237\u65B0\u7DB2\u5740\u4E00\u6B21\u3002`,code:"MEDIA_URL_FORBIDDEN",version:b,steps:d},m.status===403?403:409);let P=new Headers(m.headers);if(Object.entries(X()).forEach(([g,S])=>P.set(g,S)),P.set("Cache-Control","no-store"),P.set("X-OwO-Media-Mode",f||"legacy"),P.set("X-OwO-Media-Source",r||"UNKNOWN"),P.set("X-OwO-Version",b),P.set("X-OwO-Selected-Itag",y),h&&P.set("X-OwO-Track-Restart","1"),l>0&&P.set("X-OwO-Media-Total",String(l)),new URL(e.url).searchParams.get("download")==="1"){let g=(new URL(e.url).searchParams.get("ext")||"bin").replace(/[^a-z0-9]/gi,"");P.set("Content-Disposition",`attachment; filename="youtube-media.${g}"`)}return new Response(m.body,{status:m.status,headers:P})}var Hs={async fetch(e,n){if(e.method==="OPTIONS"){let o=new Headers(X()),r=e.headers.get("Access-Control-Request-Headers");return r&&o.set("Access-Control-Allow-Headers",r),o.set("Content-Length","0"),new Response(null,{status:204,headers:o})}let t=new URL(e.url);try{if(t.pathname==="/youtube"&&e.method==="GET"){let o=String(t.searchParams.get("mode")||"quick").toLowerCase(),r=["quick","hq","all"].includes(o)?o:"quick";return await Qi(t.searchParams.get("id"),r,te(e,n))}return t.pathname==="/facebook"&&e.method==="GET"?await sr(t.searchParams.get("url"),n,e):t.pathname==="/facebook-media"&&["GET","HEAD"].includes(e.method)?await cr(e,t.searchParams.get("url"),n):t.pathname==="/instagram"&&e.method==="GET"?await an(t.searchParams.get("url"),"instagram",e,n):t.pathname==="/threads"&&e.method==="GET"?await an(t.searchParams.get("url"),"threads",e,n):t.pathname==="/social-media"&&["GET","HEAD"].includes(e.method)?await Or(e,t.searchParams.get("url"),t.searchParams.get("platform")==="threads"?"threads":"instagram",n):t.pathname==="/youtube-sabr-pair-download"&&e.method==="GET"?await Fr(e,t.searchParams.get("id")||"",t.searchParams.get("videoItag")||"",t.searchParams.get("audioItag")||"",t.searchParams.get("apiKey")||"",t.searchParams.get("visitorData")||"",t.searchParams.get("sessionId")||"",te(e,n)):t.pathname==="/youtube-hls-playlist"&&e.method==="GET"?await Xi(t.searchParams.get("url")||""):t.pathname==="/youtube-hls-segment"&&e.method==="GET"?await ji(t.searchParams.get("url")||""):t.pathname==="/youtube-sabr-download"&&e.method==="GET"?await Br(e,t.searchParams.get("id")||"",t.searchParams.get("itag")||"",t.searchParams.get("track")||"video",t.searchParams.get("apiKey")||"",t.searchParams.get("visitorData")||"",t.searchParams.get("sessionId")||"",te(e,n)):t.pathname==="/youtube-muxed-download"&&e.method==="GET"?await cn(e,{id:t.searchParams.get("id")||"",itag:t.searchParams.get("itag")||"18",apiKey:t.searchParams.get("apiKey")||"",visitorData:t.searchParams.get("visitorData")||"",muxed:!0},te(e,n)):t.pathname==="/youtube-hq-segment"&&e.method==="GET"?await cn(e,{id:t.searchParams.get("id")||"",itag:t.searchParams.get("itag")||"",source:t.searchParams.get("source")||"ANDROID_VR",apiKey:t.searchParams.get("apiKey")||"",visitorData:t.searchParams.get("visitorData")||"",start:Number(t.searchParams.get("start")||0),end:Number(t.searchParams.get("end")||0),total:Number(t.searchParams.get("total")||0),wanted:{kind:t.searchParams.get("kind")||"",height:Number(t.searchParams.get("height")||0),fps:Number(t.searchParams.get("fps")||0),codec:t.searchParams.get("codec")||"",container:t.searchParams.get("container")||""}},te(e,n)):t.pathname==="/media"&&["GET","HEAD"].includes(e.method)?await $r(e,t.searchParams.get("url"),t.searchParams.get("id"),t.searchParams.get("itag"),t.searchParams.get("source"),{quality:t.searchParams.get("quality")||"",height:Number(t.searchParams.get("height")||0),fps:Number(t.searchParams.get("fps")||0),codec:t.searchParams.get("codec")||"",kind:t.searchParams.get("kind")||""},t.searchParams.get("sessionId")||"",te(e,n),{apiKey:t.searchParams.get("refreshApiKey")||"",visitorData:t.searchParams.get("refreshVisitorData")||""}):_({service:Oi,version:b,build:ki,facebookSession:!!(n&&n.FB_COOKIE),facebookStories:!0,instagram:!0,threads:!0,webCookieInput:!0,youtubeSession:!!te(e,n),endpoints:["GET /youtube?id=VIDEO_ID&mode=quick|hq|all","GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT&url=SIGNED_URL","GET /facebook?url=FACEBOOK_URL","GET /facebook-media?url=MEDIA_URL"]})}catch(o){return _({error:o.message||"Worker \u57F7\u884C\u5931\u6557",code:o.code||"WORKER_INTERNAL_ERROR",version:b,steps:Array.isArray(o.steps)?o.steps:[]},Number(o.httpStatus||500))}}};export{Hs as default};
+function At(){let e=this.buf,n=this.pos,t=0,o=0;for(let i=0;i<28;i+=7){let a=e[n++];if(t|=(a&127)<<i,(a&128)==0){this.pos=n,this.assertBounds(),this.varint64Lo=t,this.varint64Hi=o;return}}let r=e[n++];if(t|=(r&15)<<28,o=(r&112)>>4,(r&128)==0){this.pos=n,this.assertBounds(),this.varint64Lo=t,this.varint64Hi=o;return}for(let i=3;i<=31;i+=7){let a=e[n++];if(o|=(a&127)<<i,(a&128)==0){this.pos=n,this.assertBounds(),this.varint64Lo=t,this.varint64Hi=o;return}}throw new Error("invalid varint")}var me=4294967296;function Le(e){let n=e[0]==="-";n&&(e=e.slice(1));let t=1e6,o=0,r=0;function i(a,s){let c=Number(e.slice(a,s));r*=t,o=o*t+c,o>=me&&(r=r+(o/me|0),o=o%me)}return i(-24,-18),i(-18,-12),i(-12,-6),i(-6),n?Tt(o,r):Ue(o,r)}function yt(e,n){let t=Ue(e,n),o=t.hi&2147483648;o&&(t=Tt(t.lo,t.hi));let r=xe(t.lo,t.hi);return o?"-"+r:r}function xe(e,n){if({lo:e,hi:n}=Cn(e,n),n<=2097151)return String(me*n+e);let t=e&16777215,o=(e>>>24|n<<8)&16777215,r=n>>16&65535,i=t+o*6777216+r*6710656,a=o+r*8147497,s=r*2,c=1e7;return i>=c&&(a+=Math.floor(i/c),i%=c),a>=c&&(s+=Math.floor(a/c),a%=c),s.toString()+gt(a)+gt(i)}function Cn(e,n){return{lo:e>>>0,hi:n>>>0}}function Ue(e,n){return{lo:e|0,hi:n|0}}function Tt(e,n){return n=~n,e?e=~e+1:n+=1,Ue(e,n)}var gt=e=>{let n=String(e);return"0000000".slice(n.length)+n};function kt(){let e=this.buf[this.pos++];if((e&128)===0)return this.assertBounds(),e;let n=e&127;if(e=this.buf[this.pos++],n|=(e&127)<<7,(e&128)===0)return this.assertBounds(),n;if(e=this.buf[this.pos++],n|=(e&127)<<14,(e&128)===0)return this.assertBounds(),n;if(e=this.buf[this.pos++],n|=(e&127)<<21,(e&128)===0)return this.assertBounds(),n;e=this.buf[this.pos++],n|=(e&15)<<28;for(let t=5;(e&128)!==0&&t<10;t++)e=this.buf[this.pos++];if((e&128)!==0)throw new Error("invalid varint");return this.assertBounds(),n>>>0}var V=Pn();function Pn(){let e=new DataView(new ArrayBuffer(8));if(typeof BigInt=="function"&&typeof e.getBigInt64=="function"&&typeof e.getBigUint64=="function"&&typeof e.setBigInt64=="function"&&typeof e.setBigUint64=="function"&&(!!globalThis.Deno||!!globalThis.Bun||typeof process!="object"||typeof process.env!="object"||process.env.BUF_BIGINT_DISABLE!=="1")){let t=BigInt("-9223372036854775808"),o=BigInt("9223372036854775807"),r=BigInt("0"),i=BigInt("18446744073709551615");return{zero:BigInt(0),supported:!0,parse(a){let s=typeof a=="bigint"?a:BigInt(a);if(s>o||s<t)throw new Error(`invalid int64: ${a}`);return s},uParse(a){let s=typeof a=="bigint"?a:BigInt(a);if(s>i||s<r)throw new Error(`invalid uint64: ${a}`);return s},enc(a){return e.setBigInt64(0,this.parse(a),!0),{lo:e.getInt32(0,!0),hi:e.getInt32(4,!0)}},uEnc(a){return e.setBigInt64(0,this.uParse(a),!0),{lo:e.getInt32(0,!0),hi:e.getInt32(4,!0)}},dec(a,s){return e.setInt32(0,a,!0),e.setInt32(4,s,!0),e.getBigInt64(0,!0)},uDec(a,s){return e.setInt32(0,a,!0),e.setInt32(4,s,!0),e.getBigUint64(0,!0)}}}return{zero:"0",supported:!1,parse(t){return typeof t!="string"&&(t=t.toString()),Ot(t),t},uParse(t){return typeof t!="string"&&(t=t.toString()),Nt(t),t},enc(t){return typeof t!="string"&&(t=t.toString()),Ot(t),Le(t)},uEnc(t){return typeof t!="string"&&(t=t.toString()),Nt(t),Le(t)},dec(t,o){return yt(t,o)},uDec(t,o){return xe(t,o)}}}function Ot(e){if(!/^-?[0-9]+$/.test(e))throw new Error("invalid int64: "+e)}function Nt(e){if(!/^[0-9]+$/.test(e))throw new Error("invalid uint64: "+e)}var Be;function Mn(e){var n;Be=Object.assign(Object.assign({},e),{encodeUtf8Into:(n=e.encodeUtf8Into)!==null&&n!==void 0?n:Fe(e.encodeUtf8.bind(e))})}function ve(){if(!Be){let e=globalThis;if(!e.TextEncoder||!e.TextDecoder)throw new Error("encoding API missing: install TextEncoder and TextDecoder on globalThis");let n=new e.TextEncoder,t=new e.TextDecoder,o,r={encodeUtf8(a){return n.encode(a)},decodeUtf8(a,s){return s?(o||(o=new e.TextDecoder("utf-8",{fatal:!0})),o.decode(a)):t.decode(a)},checkUtf8(a){try{return encodeURIComponent(a),!0}catch{return!1}}};n.encodeInto&&(r.encodeUtf8Into=n.encodeInto.bind(n));let i=String.prototype.isWellFormed;i&&(r.checkUtf8=a=>i.call(a)),Mn(r)}return Be}function Fe(e){return(n,t)=>{let o=e(n);return t.set(o),{written:o.byteLength}}}var j;(function(e){e[e.Varint=0]="Varint",e[e.Bit64=1]="Bit64",e[e.LengthDelimited=2]="LengthDelimited",e[e.StartGroup=3]="StartGroup",e[e.EndGroup=4]="EndGroup",e[e.Bit32=5]="Bit32"})(j||(j={}));var wn=4294967295,Dn=2147483647,Ln=-2147483648,A=class{constructor(n){this.stackPos=[],this.encodeUtf8Into=n?Fe(n):ve().encodeUtf8Into,this.buffer=Pt,this.viewCache=Un,this.pos=0}ensureCapacity(n){let t=this.pos+n;if(t>this.buffer.length){let o=this.buffer.length||xn;for(;o<t;)o*=2;let r=new Uint8Array(o);this.pos>0&&r.set(this.buffer),this.buffer=r}}view(){let n=this.buffer,t=this.viewCache;if(t.byteLength===n.byteLength)return t;let o=new DataView(n.buffer);return this.viewCache=o,o}finish(){let n=this.buffer.slice(0,this.pos);return this.pos=0,this.stackPos=[],n}fork(){return this.stackPos.push(this.pos),this.ensureCapacity(ce),this.buffer[this.pos++]=0,this}join(){let n=this.stackPos.pop();if(n===void 0)throw new Error("invalid state, fork stack empty");let t=this.pos-n-ce,o=$e(t);return o>ce&&(this.ensureCapacity(o-ce),this.buffer.copyWithin(n+o,n+ce,this.pos)),this.pos=n,this.uint32(t),this.pos+=t,this}tag(n,t){return this.uint32((n<<3|t)>>>0)}raw(n){return this.ensureCapacity(n.length),this.buffer.set(n,this.pos),this.pos+=n.length,this}uint32(n){if(Ct(n),this.ensureCapacity(5),n<128)return this.buffer[this.pos++]=n,this;for(;n>127;)this.buffer[this.pos++]=n&127|128,n>>>=7;return this.buffer[this.pos++]=n,this}int32(n){if(He(n),n>=0)return this.uint32(n);this.ensureCapacity(10);for(let t=0;t<9;t++)this.buffer[this.pos++]=n&127|128,n>>=7;return this.buffer[this.pos++]=1,this}bool(n){return this.ensureCapacity(1),this.buffer[this.pos++]=n?1:0,this}bytes(n){return this.uint32(n.byteLength),this.raw(n)}string(n){typeof n!="string"&&(n=String(n));let t=n.length;if(t<=Mt){this.ensureCapacity(t+1);let c=this.buffer,d=this.pos;c[d++]=t;let u=0;for(;u<t;u++){let f=n.charCodeAt(u);if(f>127)break;c[d++]=f}if(u==t)return this.pos=d,this}this.ensureCapacity(t*3+5);let o=$e(t),r=this.buffer,i=this.pos,{written:a}=this.encodeUtf8Into(n,r.subarray(i+o)),s=$e(a);return s!=o&&r.copyWithin(i+s,i+o,i+o+a),this.uint32(a),this.pos+=a,this}float(n){return Bn(n),this.ensureCapacity(4),this.view().setFloat32(this.pos,n,!0),this.pos+=4,this}double(n){return this.ensureCapacity(8),this.view().setFloat64(this.pos,n,!0),this.pos+=8,this}fixed32(n){return Ct(n),this.ensureCapacity(4),this.view().setUint32(this.pos,n,!0),this.pos+=4,this}sfixed32(n){return He(n),this.ensureCapacity(4),this.view().setInt32(this.pos,n,!0),this.pos+=4,this}sint32(n){return He(n),this.uint32((n<<1^n>>31)>>>0)}sfixed64(n){let t=V.enc(n);this.ensureCapacity(8);let o=this.view();return o.setInt32(this.pos,t.lo,!0),o.setInt32(this.pos+4,t.hi,!0),this.pos+=8,this}fixed64(n){let t=V.uEnc(n);this.ensureCapacity(8);let o=this.view();return o.setInt32(this.pos,t.lo,!0),o.setInt32(this.pos+4,t.hi,!0),this.pos+=8,this}int64(n){let t=V.enc(n);return this.writeVarint64(t.lo,t.hi)}sint64(n){let t=V.enc(n),o=t.hi>>31,r=t.lo<<1^o,i=(t.hi<<1|t.lo>>>31)^o;return this.writeVarint64(r,i)}uint64(n){let t=V.uEnc(n);return this.writeVarint64(t.lo,t.hi)}writeVarint64(n,t){this.ensureCapacity(10);let o=this.buffer,r=this.pos;for(let s=0;s<28;s=s+7){let c=n>>>s,d=!(!(c>>>7)&&t==0);if(o[r++]=(d?c|128:c)&255,!d)return this.pos=r,this}let i=n>>>28&15|(t&7)<<4,a=t>>3!=0;if(o[r++]=(a?i|128:i)&255,!a)return this.pos=r,this;for(let s=3;s<31;s=s+7){let c=t>>>s,d=!!(c>>>7);if(o[r++]=(d?c|128:c)&255,!d)return this.pos=r,this}return o[r++]=t>>>31&1,this.pos=r,this}},xn=128,ce=1,Pt=new Uint8Array(0),Un=new DataView(Pt.buffer),Mt=32;function $e(e){return e<128?1:e<16384?2:e<2097152?3:e<268435456?4:5}var p=class{constructor(n,t=ve().decodeUtf8){this.decodeUtf8=t,this.varint64Lo=0,this.varint64Hi=0,this.varint64=At,this.uint32=kt,this.buf=n,this.len=n.length,this.pos=0,this.view=new DataView(n.buffer,n.byteOffset,n.byteLength)}tag(){let n=this.pos,t=this.uint32(),o=this.pos-n;if(o>5||o==5&&this.buf[this.pos-1]>15)throw new Error("illegal tag: varint overflows uint32");let r=t>>>3,i=t&7;if(r<=0||i>5)throw new Error("illegal tag: field no "+r+" wire type "+i);return[r,i]}skip(n,t,o=100){let r=this.pos;switch(n){case j.Varint:for(;this.buf[this.pos++]&128;);break;case j.Bit64:this.pos+=4;case j.Bit32:this.pos+=4;break;case j.LengthDelimited:let i=this.uint32();this.pos+=i;break;case j.StartGroup:if(o<=0)throw new Error("maximum recursion depth reached");for(;;){let[a,s]=this.tag();if(s===j.EndGroup){if(t!==void 0&&a!==t)throw new Error("invalid end group tag");break}this.skip(s,a,o-1)}break;default:throw new Error("cant skip wire type "+n)}return this.assertBounds(),this.buf.subarray(r,this.pos)}assertBounds(){if(this.pos>this.len)throw new RangeError("premature EOF")}int32(){return this.uint32()|0}sint32(){let n=this.uint32();return n>>>1^-(n&1)}int64(){return this.varint64(),V.dec(this.varint64Lo,this.varint64Hi)}uint64(){return this.varint64(),V.uDec(this.varint64Lo,this.varint64Hi)}sint64(){this.varint64();let n=this.varint64Lo,t=this.varint64Hi,o=-(n&1);return n=(n>>>1|(t&1)<<31)^o,t=t>>>1^o,V.dec(n,t)}bool(){let n=this.buf[this.pos];return n<128?(this.pos++,n!==0):(this.varint64(),this.varint64Lo!==0||this.varint64Hi!==0)}fixed32(){return this.view.getUint32((this.pos+=4)-4,!0)}sfixed32(){return this.view.getInt32((this.pos+=4)-4,!0)}fixed64(){return V.uDec(this.sfixed32(),this.sfixed32())}sfixed64(){return V.dec(this.sfixed32(),this.sfixed32())}float(){return this.view.getFloat32((this.pos+=4)-4,!0)}double(){return this.view.getFloat64((this.pos+=8)-8,!0)}bytes(){let n=this.uint32(),t=this.pos;return this.pos+=n,this.assertBounds(),this.buf.subarray(t,t+n)}string(n){let t=this.bytes(),o=t.length;if(o<=Mt){let r=new Array(o);for(let i=0;i<o;i++){let a=t[i];if(a>127)return this.decodeUtf8(t,n);r[i]=a}return String.fromCharCode.apply(String,r)}return this.decodeUtf8(t,n)}};function He(e){if(typeof e=="string")e=Number(e);else if(typeof e!="number")throw new Error("invalid int32: "+typeof e);if(!Number.isInteger(e)||e>Dn||e<Ln)throw new Error("invalid int32: "+e)}function Ct(e){if(typeof e=="string")e=Number(e);else if(typeof e!="number")throw new Error("invalid uint32: "+typeof e);if(!Number.isInteger(e)||e>wn||e<0)throw new Error("invalid uint32: "+e)}function Bn(e){if(typeof e=="string"){let n=e;if(e=Number(e),Number.isNaN(e)&&n!=="NaN")throw new Error("invalid float32: "+n)}else if(typeof e!="number")throw new Error("invalid float32: "+typeof e);if(!Number.isFinite(Math.fround(e))&&Number.isFinite(e))throw new Error("invalid float32: "+e)}function vn(){return{itag:0,lastModified:"0",xtags:""}}var L={encode(e,n=new A){return e.itag!==void 0&&e.itag!==0&&n.uint32(8).int32(e.itag),e.lastModified!==void 0&&e.lastModified!=="0"&&n.uint32(16).uint64(e.lastModified),e.xtags!==void 0&&e.xtags!==""&&n.uint32(26).string(e.xtags),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=vn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.itag=t.int32();continue}case 2:{if(i!==16)break;r.lastModified=t.uint64().toString();continue}case 3:{if(i!==26)break;r.xtags=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Fn(){return{legacyStart:0,legacyEnd:0,start:0,end:0}}var re={encode(e,n=new A){return e.legacyStart!==void 0&&e.legacyStart!==0&&n.uint32(8).int32(e.legacyStart),e.legacyEnd!==void 0&&e.legacyEnd!==0&&n.uint32(16).int32(e.legacyEnd),e.start!==void 0&&e.start!==0&&n.uint32(24).int32(e.start),e.end!==void 0&&e.end!==0&&n.uint32(32).int32(e.end),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Fn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.legacyStart=t.int32();continue}case 2:{if(i!==16)break;r.legacyEnd=t.int32();continue}case 3:{if(i!==24)break;r.start=t.int32();continue}case 4:{if(i!==32)break;r.end=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function $n(){return{trackType:0,isHdr:!1}}var Ve={encode(e,n=new A){return e.trackType!==void 0&&e.trackType!==0&&n.uint32(8).int32(e.trackType),e.isHdr!==void 0&&e.isHdr!==!1&&n.uint32(16).bool(e.isHdr),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=$n();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.trackType=t.int32();continue}case 2:{if(i!==16)break;r.isHdr=t.bool();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Hn(){return{authorizedFormats:[],sabrLicenseConstraint:new Uint8Array(0)}}var _e={encode(e,n=new A){for(let t of e.authorizedFormats)Ve.encode(t,n.uint32(10).fork()).join();return e.sabrLicenseConstraint!==void 0&&e.sabrLicenseConstraint.length!==0&&n.uint32(18).bytes(e.sabrLicenseConstraint),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Hn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.authorizedFormats.push(Ve.decode(t,t.uint32()));continue}case 2:{if(i!==18)break;r.sabrLicenseConstraint=t.bytes();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Vn(){return{videoId:"",formatId:void 0,endTimeMs:"0",endSegmentNumber:"0",mimeType:"",initRange:void 0,indexRange:void 0,field8:"0",durationUnits:"0",durationTimescale:"0"}}var We={encode(e,n=new A){return e.videoId!==void 0&&e.videoId!==""&&n.uint32(10).string(e.videoId),e.formatId!==void 0&&L.encode(e.formatId,n.uint32(18).fork()).join(),e.endTimeMs!==void 0&&e.endTimeMs!=="0"&&n.uint32(24).int64(e.endTimeMs),e.endSegmentNumber!==void 0&&e.endSegmentNumber!=="0"&&n.uint32(32).int64(e.endSegmentNumber),e.mimeType!==void 0&&e.mimeType!==""&&n.uint32(42).string(e.mimeType),e.initRange!==void 0&&re.encode(e.initRange,n.uint32(50).fork()).join(),e.indexRange!==void 0&&re.encode(e.indexRange,n.uint32(58).fork()).join(),e.field8!==void 0&&e.field8!=="0"&&n.uint32(64).int64(e.field8),e.durationUnits!==void 0&&e.durationUnits!=="0"&&n.uint32(72).int64(e.durationUnits),e.durationTimescale!==void 0&&e.durationTimescale!=="0"&&n.uint32(80).int64(e.durationTimescale),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Vn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.videoId=t.string();continue}case 2:{if(i!==18)break;r.formatId=L.decode(t,t.uint32());continue}case 3:{if(i!==24)break;r.endTimeMs=t.int64().toString();continue}case 4:{if(i!==32)break;r.endSegmentNumber=t.int64().toString();continue}case 5:{if(i!==42)break;r.mimeType=t.string();continue}case 6:{if(i!==50)break;r.initRange=re.decode(t,t.uint32());continue}case 7:{if(i!==58)break;r.indexRange=re.decode(t,t.uint32());continue}case 8:{if(i!==64)break;r.field8=t.int64().toString();continue}case 9:{if(i!==72)break;r.durationUnits=t.int64().toString();continue}case 10:{if(i!==80)break;r.durationTimescale=t.int64().toString();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Wn(){return{startTicks:"0",durationTicks:"0",timescale:0}}var Y={encode(e,n=new A){return e.startTicks!==void 0&&e.startTicks!=="0"&&n.uint32(8).int64(e.startTicks),e.durationTicks!==void 0&&e.durationTicks!=="0"&&n.uint32(16).int64(e.durationTicks),e.timescale!==void 0&&e.timescale!==0&&n.uint32(24).int32(e.timescale),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Wn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.startTicks=t.int64().toString();continue}case 2:{if(i!==16)break;r.durationTicks=t.int64().toString();continue}case 3:{if(i!==24)break;r.timescale=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Kn(){return{headerId:0,videoId:"",itag:0,lmt:"0",xtags:"",startRange:"0",compressionAlgorithm:0,isInitSeg:!1,sequenceNumber:0,bitrateBps:"0",startMs:"0",durationMs:"0",formatId:void 0,contentLength:"0",timeRange:void 0,sequenceLmt:"0"}}var Ke={encode(e,n=new A){return e.headerId!==void 0&&e.headerId!==0&&n.uint32(8).uint32(e.headerId),e.videoId!==void 0&&e.videoId!==""&&n.uint32(18).string(e.videoId),e.itag!==void 0&&e.itag!==0&&n.uint32(24).int32(e.itag),e.lmt!==void 0&&e.lmt!=="0"&&n.uint32(32).uint64(e.lmt),e.xtags!==void 0&&e.xtags!==""&&n.uint32(42).string(e.xtags),e.startRange!==void 0&&e.startRange!=="0"&&n.uint32(48).int64(e.startRange),e.compressionAlgorithm!==void 0&&e.compressionAlgorithm!==0&&n.uint32(56).int32(e.compressionAlgorithm),e.isInitSeg!==void 0&&e.isInitSeg!==!1&&n.uint32(64).bool(e.isInitSeg),e.sequenceNumber!==void 0&&e.sequenceNumber!==0&&n.uint32(72).int32(e.sequenceNumber),e.bitrateBps!==void 0&&e.bitrateBps!=="0"&&n.uint32(80).int64(e.bitrateBps),e.startMs!==void 0&&e.startMs!=="0"&&n.uint32(88).int64(e.startMs),e.durationMs!==void 0&&e.durationMs!=="0"&&n.uint32(96).int64(e.durationMs),e.formatId!==void 0&&L.encode(e.formatId,n.uint32(106).fork()).join(),e.contentLength!==void 0&&e.contentLength!=="0"&&n.uint32(112).int64(e.contentLength),e.timeRange!==void 0&&Y.encode(e.timeRange,n.uint32(122).fork()).join(),e.sequenceLmt!==void 0&&e.sequenceLmt!=="0"&&n.uint32(128).uint64(e.sequenceLmt),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Kn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.headerId=t.uint32();continue}case 2:{if(i!==18)break;r.videoId=t.string();continue}case 3:{if(i!==24)break;r.itag=t.int32();continue}case 4:{if(i!==32)break;r.lmt=t.uint64().toString();continue}case 5:{if(i!==42)break;r.xtags=t.string();continue}case 6:{if(i!==48)break;r.startRange=t.int64().toString();continue}case 7:{if(i!==56)break;r.compressionAlgorithm=t.int32();continue}case 8:{if(i!==64)break;r.isInitSeg=t.bool();continue}case 9:{if(i!==72)break;r.sequenceNumber=t.int32();continue}case 10:{if(i!==80)break;r.bitrateBps=t.int64().toString();continue}case 11:{if(i!==88)break;r.startMs=t.int64().toString();continue}case 12:{if(i!==96)break;r.durationMs=t.int64().toString();continue}case 13:{if(i!==106)break;r.formatId=L.decode(t,t.uint32());continue}case 14:{if(i!==112)break;r.contentLength=t.int64().toString();continue}case 15:{if(i!==122)break;r.timeRange=Y.decode(t,t.uint32());continue}case 16:{if(i!==128)break;r.sequenceLmt=t.uint64().toString();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Gn(){return{formatId:void 0,startTimeMs:"0",durationMs:"0",startSegmentIndex:0,endSegmentIndex:0,timeRange:void 0,field9:void 0,field11:void 0,field12:void 0}}var ee={encode(e,n=new A){return e.formatId!==void 0&&L.encode(e.formatId,n.uint32(10).fork()).join(),e.startTimeMs!=="0"&&n.uint32(16).int64(e.startTimeMs),e.durationMs!=="0"&&n.uint32(24).int64(e.durationMs),e.startSegmentIndex!==0&&n.uint32(32).int32(e.startSegmentIndex),e.endSegmentIndex!==0&&n.uint32(40).int32(e.endSegmentIndex),e.timeRange!==void 0&&Y.encode(e.timeRange,n.uint32(50).fork()).join(),e.field9!==void 0&&wt.encode(e.field9,n.uint32(74).fork()).join(),e.field11!==void 0&&Re.encode(e.field11,n.uint32(90).fork()).join(),e.field12!==void 0&&Re.encode(e.field12,n.uint32(98).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Gn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.formatId=L.decode(t,t.uint32());continue}case 2:{if(i!==16)break;r.startTimeMs=t.int64().toString();continue}case 3:{if(i!==24)break;r.durationMs=t.int64().toString();continue}case 4:{if(i!==32)break;r.startSegmentIndex=t.int32();continue}case 5:{if(i!==40)break;r.endSegmentIndex=t.int32();continue}case 6:{if(i!==50)break;r.timeRange=Y.decode(t,t.uint32());continue}case 9:{if(i!==74)break;r.field9=wt.decode(t,t.uint32());continue}case 11:{if(i!==90)break;r.field11=Re.decode(t,t.uint32());continue}case 12:{if(i!==98)break;r.field12=Re.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Yn(){return{field1:[]}}var wt={encode(e,n=new A){for(let t of e.field1)Dt.encode(t,n.uint32(10).fork()).join();return n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Yn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.field1.push(Dt.decode(t,t.uint32()));continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function qn(){return{videoId:"",lmt:"0"}}var Dt={encode(e,n=new A){return e.videoId!==void 0&&e.videoId!==""&&n.uint32(10).string(e.videoId),e.lmt!==void 0&&e.lmt!=="0"&&n.uint32(16).uint64(e.lmt),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=qn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.videoId=t.string();continue}case 2:{if(i!==16)break;r.lmt=t.uint64().toString();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function zn(){return{field1:0,field2:0,field3:0}}var Re={encode(e,n=new A){return e.field1!==void 0&&e.field1!==0&&n.uint32(8).int32(e.field1),e.field2!==void 0&&e.field2!==0&&n.uint32(16).int32(e.field2),e.field3!==void 0&&e.field3!==0&&n.uint32(24).int32(e.field3),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=zn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.field1=t.int32();continue}case 2:{if(i!==16)break;r.field2=t.int32();continue}case 3:{if(i!==24)break;r.field3=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Xn(){return{videoFormatCapabilities:[],audioFormatCapabilities:[],hdrModeBitmask:0}}var Ie={encode(e,n=new A){for(let t of e.videoFormatCapabilities)Lt.encode(t,n.uint32(10).fork()).join();for(let t of e.audioFormatCapabilities)xt.encode(t,n.uint32(18).fork()).join();return e.hdrModeBitmask!==void 0&&e.hdrModeBitmask!==0&&n.uint32(40).int32(e.hdrModeBitmask),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Xn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.videoFormatCapabilities.push(Lt.decode(t,t.uint32()));continue}case 2:{if(i!==18)break;r.audioFormatCapabilities.push(xt.decode(t,t.uint32()));continue}case 5:{if(i!==40)break;r.hdrModeBitmask=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function jn(){return{videoCodec:0,maxHeight:0,maxWidth:0,maxFramerate:0,maxBitrateBps:0,is10BitSupported:!1}}var Lt={encode(e,n=new A){return e.videoCodec!==void 0&&e.videoCodec!==0&&n.uint32(8).int32(e.videoCodec),e.maxHeight!==void 0&&e.maxHeight!==0&&n.uint32(24).int32(e.maxHeight),e.maxWidth!==void 0&&e.maxWidth!==0&&n.uint32(32).int32(e.maxWidth),e.maxFramerate!==void 0&&e.maxFramerate!==0&&n.uint32(88).int32(e.maxFramerate),e.maxBitrateBps!==void 0&&e.maxBitrateBps!==0&&n.uint32(96).int32(e.maxBitrateBps),e.is10BitSupported!==void 0&&e.is10BitSupported!==!1&&n.uint32(120).bool(e.is10BitSupported),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=jn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.videoCodec=t.int32();continue}case 3:{if(i!==24)break;r.maxHeight=t.int32();continue}case 4:{if(i!==32)break;r.maxWidth=t.int32();continue}case 11:{if(i!==88)break;r.maxFramerate=t.int32();continue}case 12:{if(i!==96)break;r.maxBitrateBps=t.int32();continue}case 15:{if(i!==120)break;r.is10BitSupported=t.bool();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Qn(){return{audioCodec:0,numChannels:0,maxBitrateBps:0,spatialCapabilityBitmask:0}}var xt={encode(e,n=new A){return e.audioCodec!==void 0&&e.audioCodec!==0&&n.uint32(8).int32(e.audioCodec),e.numChannels!==void 0&&e.numChannels!==0&&n.uint32(16).int32(e.numChannels),e.maxBitrateBps!==void 0&&e.maxBitrateBps!==0&&n.uint32(24).int32(e.maxBitrateBps),e.spatialCapabilityBitmask!==void 0&&e.spatialCapabilityBitmask!==0&&n.uint32(48).int32(e.spatialCapabilityBitmask),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Qn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.audioCodec=t.int32();continue}case 2:{if(i!==16)break;r.numChannels=t.int32();continue}case 3:{if(i!==24)break;r.maxBitrateBps=t.int32();continue}case 6:{if(i!==48)break;r.spatialCapabilityBitmask=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Zn(){return{resolution:0,field2:0,videoFmt:void 0,audioFmt:void 0}}var oe={encode(e,n=new A){return e.resolution!==void 0&&e.resolution!==0&&n.uint32(8).int32(e.resolution),e.field2!==void 0&&e.field2!==0&&n.uint32(16).int32(e.field2),e.videoFmt!==void 0&&L.encode(e.videoFmt,n.uint32(58).fork()).join(),e.audioFmt!==void 0&&L.encode(e.audioFmt,n.uint32(66).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Zn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.resolution=t.int32();continue}case 2:{if(i!==16)break;r.field2=t.int32();continue}case 7:{if(i!==58)break;r.videoFmt=L.decode(t,t.uint32());continue}case 8:{if(i!==66)break;r.audioFmt=L.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function Jn(){return{timeSinceLastManualFormatSelectionMs:"0",lastManualDirection:0,lastManualSelectedResolution:0,detailedNetworkType:0,clientViewportWidth:0,clientViewportHeight:0,clientBitrateCapBytesPerSec:"0",stickyResolution:0,clientViewportIsFlexible:!1,bandwidthEstimate:"0",minAudioQuality:0,maxAudioQuality:0,videoQualitySetting:0,audioRoute:0,playerTimeMs:"0",timeSinceLastSeek:"0",dataSaverMode:!1,networkMeteredState:0,visibility:0,playbackRate:0,elapsedWallTimeMs:"0",mediaCapabilities:void 0,timeSinceLastActionMs:"0",enabledTrackTypesBitfield:0,maxPacingRate:0,playerState:"0",drcEnabled:!1,field48:0,field50:0,field51:0,sabrReportRequestCancellationInfo:0,disableStreamingXhr:!1,field57:"0",preferVp9:!1,av1QualityThreshold:0,field60:0,isPrefetch:!1,sabrSupportQualityConstraints:!1,sabrLicenseConstraint:new Uint8Array(0),allowProximaLiveLatency:0,sabrForceProxima:0,field67:0,sabrForceMaxNetworkInterruptionDurationMs:"0",audioTrackId:"",enableVoiceBoost:!1,playbackAuthorization:void 0}}var de={encode(e,n=new A){return e.timeSinceLastManualFormatSelectionMs!==void 0&&e.timeSinceLastManualFormatSelectionMs!=="0"&&n.uint32(104).int64(e.timeSinceLastManualFormatSelectionMs),e.lastManualDirection!==void 0&&e.lastManualDirection!==0&&n.uint32(112).sint32(e.lastManualDirection),e.lastManualSelectedResolution!==void 0&&e.lastManualSelectedResolution!==0&&n.uint32(128).int32(e.lastManualSelectedResolution),e.detailedNetworkType!==void 0&&e.detailedNetworkType!==0&&n.uint32(136).int32(e.detailedNetworkType),e.clientViewportWidth!==void 0&&e.clientViewportWidth!==0&&n.uint32(144).int32(e.clientViewportWidth),e.clientViewportHeight!==void 0&&e.clientViewportHeight!==0&&n.uint32(152).int32(e.clientViewportHeight),e.clientBitrateCapBytesPerSec!==void 0&&e.clientBitrateCapBytesPerSec!=="0"&&n.uint32(160).int64(e.clientBitrateCapBytesPerSec),e.stickyResolution!==void 0&&e.stickyResolution!==0&&n.uint32(168).int32(e.stickyResolution),e.clientViewportIsFlexible!==void 0&&e.clientViewportIsFlexible!==!1&&n.uint32(176).bool(e.clientViewportIsFlexible),e.bandwidthEstimate!==void 0&&e.bandwidthEstimate!=="0"&&n.uint32(184).int64(e.bandwidthEstimate),e.minAudioQuality!==void 0&&e.minAudioQuality!==0&&n.uint32(192).int32(e.minAudioQuality),e.maxAudioQuality!==void 0&&e.maxAudioQuality!==0&&n.uint32(200).int32(e.maxAudioQuality),e.videoQualitySetting!==void 0&&e.videoQualitySetting!==0&&n.uint32(208).int32(e.videoQualitySetting),e.audioRoute!==void 0&&e.audioRoute!==0&&n.uint32(216).int32(e.audioRoute),e.playerTimeMs!==void 0&&e.playerTimeMs!=="0"&&n.uint32(224).int64(e.playerTimeMs),e.timeSinceLastSeek!==void 0&&e.timeSinceLastSeek!=="0"&&n.uint32(232).int64(e.timeSinceLastSeek),e.dataSaverMode!==void 0&&e.dataSaverMode!==!1&&n.uint32(240).bool(e.dataSaverMode),e.networkMeteredState!==void 0&&e.networkMeteredState!==0&&n.uint32(256).int32(e.networkMeteredState),e.visibility!==void 0&&e.visibility!==0&&n.uint32(272).int32(e.visibility),e.playbackRate!==void 0&&e.playbackRate!==0&&n.uint32(285).float(e.playbackRate),e.elapsedWallTimeMs!==void 0&&e.elapsedWallTimeMs!=="0"&&n.uint32(288).int64(e.elapsedWallTimeMs),e.mediaCapabilities!==void 0&&Ie.encode(e.mediaCapabilities,n.uint32(306).fork()).join(),e.timeSinceLastActionMs!==void 0&&e.timeSinceLastActionMs!=="0"&&n.uint32(312).int64(e.timeSinceLastActionMs),e.enabledTrackTypesBitfield!==void 0&&e.enabledTrackTypesBitfield!==0&&n.uint32(320).int32(e.enabledTrackTypesBitfield),e.maxPacingRate!==void 0&&e.maxPacingRate!==0&&n.uint32(344).int32(e.maxPacingRate),e.playerState!==void 0&&e.playerState!=="0"&&n.uint32(352).int64(e.playerState),e.drcEnabled!==void 0&&e.drcEnabled!==!1&&n.uint32(368).bool(e.drcEnabled),e.field48!==void 0&&e.field48!==0&&n.uint32(384).int32(e.field48),e.field50!==void 0&&e.field50!==0&&n.uint32(400).int32(e.field50),e.field51!==void 0&&e.field51!==0&&n.uint32(408).int32(e.field51),e.sabrReportRequestCancellationInfo!==void 0&&e.sabrReportRequestCancellationInfo!==0&&n.uint32(432).int32(e.sabrReportRequestCancellationInfo),e.disableStreamingXhr!==void 0&&e.disableStreamingXhr!==!1&&n.uint32(448).bool(e.disableStreamingXhr),e.field57!==void 0&&e.field57!=="0"&&n.uint32(456).int64(e.field57),e.preferVp9!==void 0&&e.preferVp9!==!1&&n.uint32(464).bool(e.preferVp9),e.av1QualityThreshold!==void 0&&e.av1QualityThreshold!==0&&n.uint32(472).int32(e.av1QualityThreshold),e.field60!==void 0&&e.field60!==0&&n.uint32(480).int32(e.field60),e.isPrefetch!==void 0&&e.isPrefetch!==!1&&n.uint32(488).bool(e.isPrefetch),e.sabrSupportQualityConstraints!==void 0&&e.sabrSupportQualityConstraints!==!1&&n.uint32(496).bool(e.sabrSupportQualityConstraints),e.sabrLicenseConstraint!==void 0&&e.sabrLicenseConstraint.length!==0&&n.uint32(506).bytes(e.sabrLicenseConstraint),e.allowProximaLiveLatency!==void 0&&e.allowProximaLiveLatency!==0&&n.uint32(512).int32(e.allowProximaLiveLatency),e.sabrForceProxima!==void 0&&e.sabrForceProxima!==0&&n.uint32(528).int32(e.sabrForceProxima),e.field67!==void 0&&e.field67!==0&&n.uint32(536).int32(e.field67),e.sabrForceMaxNetworkInterruptionDurationMs!==void 0&&e.sabrForceMaxNetworkInterruptionDurationMs!=="0"&&n.uint32(544).int64(e.sabrForceMaxNetworkInterruptionDurationMs),e.audioTrackId!==void 0&&e.audioTrackId!==""&&n.uint32(554).string(e.audioTrackId),e.enableVoiceBoost!==void 0&&e.enableVoiceBoost!==!1&&n.uint32(608).bool(e.enableVoiceBoost),e.playbackAuthorization!==void 0&&_e.encode(e.playbackAuthorization,n.uint32(634).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Jn();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 13:{if(i!==104)break;r.timeSinceLastManualFormatSelectionMs=t.int64().toString();continue}case 14:{if(i!==112)break;r.lastManualDirection=t.sint32();continue}case 16:{if(i!==128)break;r.lastManualSelectedResolution=t.int32();continue}case 17:{if(i!==136)break;r.detailedNetworkType=t.int32();continue}case 18:{if(i!==144)break;r.clientViewportWidth=t.int32();continue}case 19:{if(i!==152)break;r.clientViewportHeight=t.int32();continue}case 20:{if(i!==160)break;r.clientBitrateCapBytesPerSec=t.int64().toString();continue}case 21:{if(i!==168)break;r.stickyResolution=t.int32();continue}case 22:{if(i!==176)break;r.clientViewportIsFlexible=t.bool();continue}case 23:{if(i!==184)break;r.bandwidthEstimate=t.int64().toString();continue}case 24:{if(i!==192)break;r.minAudioQuality=t.int32();continue}case 25:{if(i!==200)break;r.maxAudioQuality=t.int32();continue}case 26:{if(i!==208)break;r.videoQualitySetting=t.int32();continue}case 27:{if(i!==216)break;r.audioRoute=t.int32();continue}case 28:{if(i!==224)break;r.playerTimeMs=t.int64().toString();continue}case 29:{if(i!==232)break;r.timeSinceLastSeek=t.int64().toString();continue}case 30:{if(i!==240)break;r.dataSaverMode=t.bool();continue}case 32:{if(i!==256)break;r.networkMeteredState=t.int32();continue}case 34:{if(i!==272)break;r.visibility=t.int32();continue}case 35:{if(i!==285)break;r.playbackRate=t.float();continue}case 36:{if(i!==288)break;r.elapsedWallTimeMs=t.int64().toString();continue}case 38:{if(i!==306)break;r.mediaCapabilities=Ie.decode(t,t.uint32());continue}case 39:{if(i!==312)break;r.timeSinceLastActionMs=t.int64().toString();continue}case 40:{if(i!==320)break;r.enabledTrackTypesBitfield=t.int32();continue}case 43:{if(i!==344)break;r.maxPacingRate=t.int32();continue}case 44:{if(i!==352)break;r.playerState=t.int64().toString();continue}case 46:{if(i!==368)break;r.drcEnabled=t.bool();continue}case 48:{if(i!==384)break;r.field48=t.int32();continue}case 50:{if(i!==400)break;r.field50=t.int32();continue}case 51:{if(i!==408)break;r.field51=t.int32();continue}case 54:{if(i!==432)break;r.sabrReportRequestCancellationInfo=t.int32();continue}case 56:{if(i!==448)break;r.disableStreamingXhr=t.bool();continue}case 57:{if(i!==456)break;r.field57=t.int64().toString();continue}case 58:{if(i!==464)break;r.preferVp9=t.bool();continue}case 59:{if(i!==472)break;r.av1QualityThreshold=t.int32();continue}case 60:{if(i!==480)break;r.field60=t.int32();continue}case 61:{if(i!==488)break;r.isPrefetch=t.bool();continue}case 62:{if(i!==496)break;r.sabrSupportQualityConstraints=t.bool();continue}case 63:{if(i!==506)break;r.sabrLicenseConstraint=t.bytes();continue}case 64:{if(i!==512)break;r.allowProximaLiveLatency=t.int32();continue}case 66:{if(i!==528)break;r.sabrForceProxima=t.int32();continue}case 67:{if(i!==536)break;r.field67=t.int32();continue}case 68:{if(i!==544)break;r.sabrForceMaxNetworkInterruptionDurationMs=t.int64().toString();continue}case 69:{if(i!==554)break;r.audioTrackId=t.string();continue}case 76:{if(i!==608)break;r.enableVoiceBoost=t.bool();continue}case 79:{if(i!==634)break;r.playbackAuthorization=_e.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ei(){return{clientInfo:void 0,poToken:new Uint8Array(0),playbackCookie:new Uint8Array(0),field4:new Uint8Array(0),sabrContexts:[],unsentSabrContexts:[],field7:"",field8:void 0}}var ue={encode(e,n=new A){e.clientInfo!==void 0&&Ge.encode(e.clientInfo,n.uint32(10).fork()).join(),e.poToken!==void 0&&e.poToken.length!==0&&n.uint32(18).bytes(e.poToken),e.playbackCookie!==void 0&&e.playbackCookie.length!==0&&n.uint32(26).bytes(e.playbackCookie),e.field4!==void 0&&e.field4.length!==0&&n.uint32(34).bytes(e.field4);for(let t of e.sabrContexts)Bt.encode(t,n.uint32(42).fork()).join();n.uint32(50).fork();for(let t of e.unsentSabrContexts)n.int32(t);return n.join(),e.field7!==void 0&&e.field7!==""&&n.uint32(58).string(e.field7),e.field8!==void 0&&vt.encode(e.field8,n.uint32(66).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ei();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.clientInfo=Ge.decode(t,t.uint32());continue}case 2:{if(i!==18)break;r.poToken=t.bytes();continue}case 3:{if(i!==26)break;r.playbackCookie=t.bytes();continue}case 4:{if(i!==34)break;r.field4=t.bytes();continue}case 5:{if(i!==42)break;r.sabrContexts.push(Bt.decode(t,t.uint32()));continue}case 6:{if(i===48){r.unsentSabrContexts.push(t.int32());continue}if(i===50){let a=t.uint32()+t.pos;for(;t.pos<a;)r.unsentSabrContexts.push(t.int32());continue}break}case 7:{if(i!==58)break;r.field7=t.string();continue}case 8:{if(i!==66)break;r.field8=vt.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ti(){return{deviceMake:"",deviceModel:"",clientName:0,clientVersion:"",osName:"",osVersion:"",acceptLanguage:"",acceptRegion:"",screenWidthPoints:0,screenHeightPoints:0,screenWidthInches:0,screenHeightInches:0,screenPixelDensity:0,clientFormFactor:0,gmscoreVersionCode:0,windowWidthPoints:0,windowHeightPoints:0,androidSdkVersion:0,screenDensityFloat:0,utcOffsetMinutes:"0",timeZone:"",chipset:"",glDeviceInfo:void 0}}var Ge={encode(e,n=new A){return e.deviceMake!==void 0&&e.deviceMake!==""&&n.uint32(98).string(e.deviceMake),e.deviceModel!==void 0&&e.deviceModel!==""&&n.uint32(106).string(e.deviceModel),e.clientName!==void 0&&e.clientName!==0&&n.uint32(128).int32(e.clientName),e.clientVersion!==void 0&&e.clientVersion!==""&&n.uint32(138).string(e.clientVersion),e.osName!==void 0&&e.osName!==""&&n.uint32(146).string(e.osName),e.osVersion!==void 0&&e.osVersion!==""&&n.uint32(154).string(e.osVersion),e.acceptLanguage!==void 0&&e.acceptLanguage!==""&&n.uint32(170).string(e.acceptLanguage),e.acceptRegion!==void 0&&e.acceptRegion!==""&&n.uint32(178).string(e.acceptRegion),e.screenWidthPoints!==void 0&&e.screenWidthPoints!==0&&n.uint32(296).int32(e.screenWidthPoints),e.screenHeightPoints!==void 0&&e.screenHeightPoints!==0&&n.uint32(304).int32(e.screenHeightPoints),e.screenWidthInches!==void 0&&e.screenWidthInches!==0&&n.uint32(317).float(e.screenWidthInches),e.screenHeightInches!==void 0&&e.screenHeightInches!==0&&n.uint32(325).float(e.screenHeightInches),e.screenPixelDensity!==void 0&&e.screenPixelDensity!==0&&n.uint32(328).int32(e.screenPixelDensity),e.clientFormFactor!==void 0&&e.clientFormFactor!==0&&n.uint32(368).int32(e.clientFormFactor),e.gmscoreVersionCode!==void 0&&e.gmscoreVersionCode!==0&&n.uint32(400).int32(e.gmscoreVersionCode),e.windowWidthPoints!==void 0&&e.windowWidthPoints!==0&&n.uint32(440).int32(e.windowWidthPoints),e.windowHeightPoints!==void 0&&e.windowHeightPoints!==0&&n.uint32(448).int32(e.windowHeightPoints),e.androidSdkVersion!==void 0&&e.androidSdkVersion!==0&&n.uint32(512).int32(e.androidSdkVersion),e.screenDensityFloat!==void 0&&e.screenDensityFloat!==0&&n.uint32(525).float(e.screenDensityFloat),e.utcOffsetMinutes!==void 0&&e.utcOffsetMinutes!=="0"&&n.uint32(536).int64(e.utcOffsetMinutes),e.timeZone!==void 0&&e.timeZone!==""&&n.uint32(642).string(e.timeZone),e.chipset!==void 0&&e.chipset!==""&&n.uint32(738).string(e.chipset),e.glDeviceInfo!==void 0&&Ut.encode(e.glDeviceInfo,n.uint32(818).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ti();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 12:{if(i!==98)break;r.deviceMake=t.string();continue}case 13:{if(i!==106)break;r.deviceModel=t.string();continue}case 16:{if(i!==128)break;r.clientName=t.int32();continue}case 17:{if(i!==138)break;r.clientVersion=t.string();continue}case 18:{if(i!==146)break;r.osName=t.string();continue}case 19:{if(i!==154)break;r.osVersion=t.string();continue}case 21:{if(i!==170)break;r.acceptLanguage=t.string();continue}case 22:{if(i!==178)break;r.acceptRegion=t.string();continue}case 37:{if(i!==296)break;r.screenWidthPoints=t.int32();continue}case 38:{if(i!==304)break;r.screenHeightPoints=t.int32();continue}case 39:{if(i!==317)break;r.screenWidthInches=t.float();continue}case 40:{if(i!==325)break;r.screenHeightInches=t.float();continue}case 41:{if(i!==328)break;r.screenPixelDensity=t.int32();continue}case 46:{if(i!==368)break;r.clientFormFactor=t.int32();continue}case 50:{if(i!==400)break;r.gmscoreVersionCode=t.int32();continue}case 55:{if(i!==440)break;r.windowWidthPoints=t.int32();continue}case 56:{if(i!==448)break;r.windowHeightPoints=t.int32();continue}case 64:{if(i!==512)break;r.androidSdkVersion=t.int32();continue}case 65:{if(i!==525)break;r.screenDensityFloat=t.float();continue}case 67:{if(i!==536)break;r.utcOffsetMinutes=t.int64().toString();continue}case 80:{if(i!==642)break;r.timeZone=t.string();continue}case 92:{if(i!==738)break;r.chipset=t.string();continue}case 102:{if(i!==818)break;r.glDeviceInfo=Ut.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ni(){return{glRenderer:"",glEsVersionMajor:0,glEsVersionMinor:0}}var Ut={encode(e,n=new A){return e.glRenderer!==void 0&&e.glRenderer!==""&&n.uint32(10).string(e.glRenderer),e.glEsVersionMajor!==void 0&&e.glEsVersionMajor!==0&&n.uint32(16).int32(e.glEsVersionMajor),e.glEsVersionMinor!==void 0&&e.glEsVersionMinor!==0&&n.uint32(24).int32(e.glEsVersionMinor),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ni();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.glRenderer=t.string();continue}case 2:{if(i!==16)break;r.glEsVersionMajor=t.int32();continue}case 3:{if(i!==24)break;r.glEsVersionMinor=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ii(){return{type:0,value:new Uint8Array(0)}}var Bt={encode(e,n=new A){return e.type!==void 0&&e.type!==0&&n.uint32(8).int32(e.type),e.value!==void 0&&e.value.length!==0&&n.uint32(18).bytes(e.value),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ii();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.type=t.int32();continue}case 2:{if(i!==18)break;r.value=t.bytes();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ri(){return{field1:new Uint8Array(0),field2:void 0}}var vt={encode(e,n=new A){return e.field1!==void 0&&e.field1.length!==0&&n.uint32(10).bytes(e.field1),e.field2!==void 0&&Ft.encode(e.field2,n.uint32(18).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ri();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.field1=t.bytes();continue}case 2:{if(i!==18)break;r.field2=Ft.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function oi(){return{code:0,message:""}}var Ft={encode(e,n=new A){return e.code!==void 0&&e.code!==0&&n.uint32(8).int32(e.code),e.message!==void 0&&e.message!==""&&n.uint32(18).string(e.message),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=oi();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.code=t.int32();continue}case 2:{if(i!==18)break;r.message=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ai(){return{clientAbrState:void 0,selectedFormatIds:[],bufferedRanges:[],playerTimeMs:"0",videoPlaybackUstreamerConfig:new Uint8Array(0),field6:void 0,preferredAudioFormatIds:[],preferredVideoFormatIds:[],preferredSubtitleFormatIds:[],streamerContext:void 0,field21:void 0,field22:0,field23:0,field1000:[]}}var Ye={encode(e,n=new A){e.clientAbrState!==void 0&&de.encode(e.clientAbrState,n.uint32(10).fork()).join();for(let t of e.selectedFormatIds)L.encode(t,n.uint32(18).fork()).join();for(let t of e.bufferedRanges)ee.encode(t,n.uint32(26).fork()).join();e.playerTimeMs!==void 0&&e.playerTimeMs!=="0"&&n.uint32(32).int64(e.playerTimeMs),e.videoPlaybackUstreamerConfig!==void 0&&e.videoPlaybackUstreamerConfig.length!==0&&n.uint32(42).bytes(e.videoPlaybackUstreamerConfig),e.field6!==void 0&&$t.encode(e.field6,n.uint32(50).fork()).join();for(let t of e.preferredAudioFormatIds)L.encode(t,n.uint32(130).fork()).join();for(let t of e.preferredVideoFormatIds)L.encode(t,n.uint32(138).fork()).join();for(let t of e.preferredSubtitleFormatIds)L.encode(t,n.uint32(146).fork()).join();e.streamerContext!==void 0&&ue.encode(e.streamerContext,n.uint32(154).fork()).join(),e.field21!==void 0&&Ht.encode(e.field21,n.uint32(170).fork()).join(),e.field22!==void 0&&e.field22!==0&&n.uint32(176).int32(e.field22),e.field23!==void 0&&e.field23!==0&&n.uint32(184).int32(e.field23);for(let t of e.field1000)Vt.encode(t,n.uint32(8002).fork()).join();return n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ai();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.clientAbrState=de.decode(t,t.uint32());continue}case 2:{if(i!==18)break;r.selectedFormatIds.push(L.decode(t,t.uint32()));continue}case 3:{if(i!==26)break;r.bufferedRanges.push(ee.decode(t,t.uint32()));continue}case 4:{if(i!==32)break;r.playerTimeMs=t.int64().toString();continue}case 5:{if(i!==42)break;r.videoPlaybackUstreamerConfig=t.bytes();continue}case 6:{if(i!==50)break;r.field6=$t.decode(t,t.uint32());continue}case 16:{if(i!==130)break;r.preferredAudioFormatIds.push(L.decode(t,t.uint32()));continue}case 17:{if(i!==138)break;r.preferredVideoFormatIds.push(L.decode(t,t.uint32()));continue}case 18:{if(i!==146)break;r.preferredSubtitleFormatIds.push(L.decode(t,t.uint32()));continue}case 19:{if(i!==154)break;r.streamerContext=ue.decode(t,t.uint32());continue}case 21:{if(i!==170)break;r.field21=Ht.decode(t,t.uint32());continue}case 22:{if(i!==176)break;r.field22=t.int32();continue}case 23:{if(i!==184)break;r.field23=t.int32();continue}case 1e3:{if(i!==8002)break;r.field1000.push(Vt.decode(t,t.uint32()));continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function si(){return{formatId:void 0,lmt:"0",sequenceNumber:0,timeRange:void 0,field5:0}}var $t={encode(e,n=new A){return e.formatId!==void 0&&L.encode(e.formatId,n.uint32(10).fork()).join(),e.lmt!==void 0&&e.lmt!=="0"&&n.uint32(16).sint64(e.lmt),e.sequenceNumber!==void 0&&e.sequenceNumber!==0&&n.uint32(24).int32(e.sequenceNumber),e.timeRange!==void 0&&Y.encode(e.timeRange,n.uint32(34).fork()).join(),e.field5!==void 0&&e.field5!==0&&n.uint32(40).int32(e.field5),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=si();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.formatId=L.decode(t,t.uint32());continue}case 2:{if(i!==16)break;r.lmt=t.sint64().toString();continue}case 3:{if(i!==24)break;r.sequenceNumber=t.int32();continue}case 4:{if(i!==34)break;r.timeRange=Y.decode(t,t.uint32());continue}case 5:{if(i!==40)break;r.field5=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ci(){return{field1:[],field2:new Uint8Array(0),field3:"",field4:0,field5:0,field6:""}}var Ht={encode(e,n=new A){for(let t of e.field1)n.uint32(10).string(t);return e.field2!==void 0&&e.field2.length!==0&&n.uint32(18).bytes(e.field2),e.field3!==void 0&&e.field3!==""&&n.uint32(26).string(e.field3),e.field4!==void 0&&e.field4!==0&&n.uint32(32).int32(e.field4),e.field5!==void 0&&e.field5!==0&&n.uint32(40).int32(e.field5),e.field6!==void 0&&e.field6!==""&&n.uint32(50).string(e.field6),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ci();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.field1.push(t.string());continue}case 2:{if(i!==18)break;r.field2=t.bytes();continue}case 3:{if(i!==26)break;r.field3=t.string();continue}case 4:{if(i!==32)break;r.field4=t.int32();continue}case 5:{if(i!==40)break;r.field5=t.int32();continue}case 6:{if(i!==50)break;r.field6=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function di(){return{formatIds:[],ud:[],clipId:""}}var Vt={encode(e,n=new A){for(let t of e.formatIds)L.encode(t,n.uint32(10).fork()).join();for(let t of e.ud)ee.encode(t,n.uint32(18).fork()).join();return e.clipId!==void 0&&e.clipId!==""&&n.uint32(26).string(e.clipId),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=di();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.formatIds.push(L.decode(t,t.uint32()));continue}case 2:{if(i!==18)break;r.ud.push(ee.decode(t,t.uint32()));continue}case 3:{if(i!==26)break;r.clipId=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function ui(){return{targetAudioReadaheadMs:0,targetVideoReadaheadMs:0,maxTimeSinceLastRequestMs:0,backoffTimeMs:0,minAudioReadaheadMs:0,minVideoReadaheadMs:0,playbackCookie:void 0,videoId:""}}var qe={encode(e,n=new A){return e.targetAudioReadaheadMs!==void 0&&e.targetAudioReadaheadMs!==0&&n.uint32(8).int32(e.targetAudioReadaheadMs),e.targetVideoReadaheadMs!==void 0&&e.targetVideoReadaheadMs!==0&&n.uint32(16).int32(e.targetVideoReadaheadMs),e.maxTimeSinceLastRequestMs!==void 0&&e.maxTimeSinceLastRequestMs!==0&&n.uint32(24).int32(e.maxTimeSinceLastRequestMs),e.backoffTimeMs!==void 0&&e.backoffTimeMs!==0&&n.uint32(32).int32(e.backoffTimeMs),e.minAudioReadaheadMs!==void 0&&e.minAudioReadaheadMs!==0&&n.uint32(40).int32(e.minAudioReadaheadMs),e.minVideoReadaheadMs!==void 0&&e.minVideoReadaheadMs!==0&&n.uint32(48).int32(e.minVideoReadaheadMs),e.playbackCookie!==void 0&&oe.encode(e.playbackCookie,n.uint32(58).fork()).join(),e.videoId!==void 0&&e.videoId!==""&&n.uint32(66).string(e.videoId),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=ui();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.targetAudioReadaheadMs=t.int32();continue}case 2:{if(i!==16)break;r.targetVideoReadaheadMs=t.int32();continue}case 3:{if(i!==24)break;r.maxTimeSinceLastRequestMs=t.int32();continue}case 4:{if(i!==32)break;r.backoffTimeMs=t.int32();continue}case 5:{if(i!==40)break;r.minAudioReadaheadMs=t.int32();continue}case 6:{if(i!==48)break;r.minVideoReadaheadMs=t.int32();continue}case 7:{if(i!==58)break;r.playbackCookie=oe.decode(t,t.uint32());continue}case 8:{if(i!==66)break;r.videoId=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function fi(){return{type:"",code:0}}var ze={encode(e,n=new A){return e.type!==void 0&&e.type!==""&&n.uint32(10).string(e.type),e.code!==void 0&&e.code!==0&&n.uint32(16).int32(e.code),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=fi();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.type=t.string();continue}case 2:{if(i!==16)break;r.code=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function li(){return{url:""}}var Xe={encode(e,n=new A){return e.url!==void 0&&e.url!==""&&n.uint32(10).string(e.url),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=li();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.url=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function hi(){return{token:""}}var ge={encode(e,n=new A){return e.token!==void 0&&e.token!==""&&n.uint32(10).string(e.token),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=hi();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.token=t.string();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function pi(){return{reloadPlaybackParams:void 0}}var je={encode(e,n=new A){return e.reloadPlaybackParams!==void 0&&ge.encode(e.reloadPlaybackParams,n.uint32(10).fork()).join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=pi();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==10)break;r.reloadPlaybackParams=ge.decode(t,t.uint32());continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};var Qe={UNSPECIFIED:0,0:"UNSPECIFIED",OVERWRITE:1,1:"OVERWRITE",KEEP_EXISTING:2,2:"KEEP_EXISTING",UNRECOGNIZED:-1,"-1":"UNRECOGNIZED"};function Ei(){return{type:0,scope:0,value:new Uint8Array(0),sendByDefault:!1,writePolicy:0}}var Ze={encode(e,n=new A){return e.type!==void 0&&e.type!==0&&n.uint32(8).int32(e.type),e.scope!==void 0&&e.scope!==0&&n.uint32(16).int32(e.scope),e.value!==void 0&&e.value.length!==0&&n.uint32(26).bytes(e.value),e.sendByDefault!==void 0&&e.sendByDefault!==!1&&n.uint32(32).bool(e.sendByDefault),e.writePolicy!==void 0&&e.writePolicy!==0&&n.uint32(40).int32(e.writePolicy),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=Ei();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.type=t.int32();continue}case 2:{if(i!==16)break;r.scope=t.int32();continue}case 3:{if(i!==26)break;r.value=t.bytes();continue}case 4:{if(i!==32)break;r.sendByDefault=t.bool();continue}case 5:{if(i!==40)break;r.writePolicy=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function mi(){return{startPolicy:[],stopPolicy:[],discardPolicy:[]}}var Je={encode(e,n=new A){n.uint32(10).fork();for(let t of e.startPolicy)n.int32(t);n.join(),n.uint32(18).fork();for(let t of e.stopPolicy)n.int32(t);n.join(),n.uint32(26).fork();for(let t of e.discardPolicy)n.int32(t);return n.join(),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=mi();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i===8){r.startPolicy.push(t.int32());continue}if(i===10){let a=t.uint32()+t.pos;for(;t.pos<a;)r.startPolicy.push(t.int32());continue}break}case 2:{if(i===16){r.stopPolicy.push(t.int32());continue}if(i===18){let a=t.uint32()+t.pos;for(;t.pos<a;)r.stopPolicy.push(t.int32());continue}break}case 3:{if(i===24){r.discardPolicy.push(t.int32());continue}if(i===26){let a=t.uint32()+t.pos;for(;t.pos<a;)r.discardPolicy.push(t.int32());continue}break}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};function _i(){return{status:0,maxRetries:0}}var et={encode(e,n=new A){return e.status!==void 0&&e.status!==0&&n.uint32(8).int32(e.status),e.maxRetries!==void 0&&e.maxRetries!==0&&n.uint32(16).int32(e.maxRetries),n},decode(e,n){let t=e instanceof p?e:new p(e),o=n===void 0?t.len:t.pos+n,r=_i();for(;t.pos<o;){let i=t.uint32();switch(i>>>3){case 1:{if(i!==8)break;r.status=t.int32();continue}case 2:{if(i!==16)break;r.maxRetries=t.int32();continue}}if((i&7)===4||i===0)break;t.skip(i&7)}return r}};var $={UNKNOWN:0,0:"UNKNOWN",ONESIE_HEADER:10,10:"ONESIE_HEADER",ONESIE_DATA:11,11:"ONESIE_DATA",ONESIE_ENCRYPTED_MEDIA:12,12:"ONESIE_ENCRYPTED_MEDIA",MEDIA_HEADER:20,20:"MEDIA_HEADER",MEDIA:21,21:"MEDIA",MEDIA_END:22,22:"MEDIA_END",CONFIG:30,30:"CONFIG",LIVE_METADATA:31,31:"LIVE_METADATA",HOSTNAME_CHANGE_HINT_DEPRECATED:32,32:"HOSTNAME_CHANGE_HINT_DEPRECATED",LIVE_METADATA_PROMISE:33,33:"LIVE_METADATA_PROMISE",LIVE_METADATA_PROMISE_CANCELLATION:34,34:"LIVE_METADATA_PROMISE_CANCELLATION",NEXT_REQUEST_POLICY:35,35:"NEXT_REQUEST_POLICY",USTREAMER_VIDEO_AND_FORMAT_METADATA:36,36:"USTREAMER_VIDEO_AND_FORMAT_METADATA",FORMAT_SELECTION_CONFIG:37,37:"FORMAT_SELECTION_CONFIG",USTREAMER_SELECTED_MEDIA_STREAM:38,38:"USTREAMER_SELECTED_MEDIA_STREAM",FORMAT_INITIALIZATION_METADATA:42,42:"FORMAT_INITIALIZATION_METADATA",SABR_REDIRECT:43,43:"SABR_REDIRECT",SABR_ERROR:44,44:"SABR_ERROR",SABR_SEEK:45,45:"SABR_SEEK",RELOAD_PLAYER_RESPONSE:46,46:"RELOAD_PLAYER_RESPONSE",PLAYBACK_START_POLICY:47,47:"PLAYBACK_START_POLICY",ALLOWED_CACHED_FORMATS:48,48:"ALLOWED_CACHED_FORMATS",START_BW_SAMPLING_HINT:49,49:"START_BW_SAMPLING_HINT",PAUSE_BW_SAMPLING_HINT:50,50:"PAUSE_BW_SAMPLING_HINT",SELECTABLE_FORMATS:51,51:"SELECTABLE_FORMATS",REQUEST_IDENTIFIER:52,52:"REQUEST_IDENTIFIER",REQUEST_CANCELLATION_POLICY:53,53:"REQUEST_CANCELLATION_POLICY",ONESIE_PREFETCH_REJECTION:54,54:"ONESIE_PREFETCH_REJECTION",TIMELINE_CONTEXT:55,55:"TIMELINE_CONTEXT",REQUEST_PIPELINING:56,56:"REQUEST_PIPELINING",SABR_CONTEXT_UPDATE:57,57:"SABR_CONTEXT_UPDATE",STREAM_PROTECTION_STATUS:58,58:"STREAM_PROTECTION_STATUS",SABR_CONTEXT_SENDING_POLICY:59,59:"SABR_CONTEXT_SENDING_POLICY",LAWNMOWER_POLICY:60,60:"LAWNMOWER_POLICY",SABR_ACK:61,61:"SABR_ACK",END_OF_TRACK:62,62:"END_OF_TRACK",CACHE_LOAD_POLICY:63,63:"CACHE_LOAD_POLICY",LAWNMOWER_MESSAGING_POLICY:64,64:"LAWNMOWER_MESSAGING_POLICY",PREWARM_CONNECTION:65,65:"PREWARM_CONNECTION",PLAYBACK_DEBUG_INFO:66,66:"PLAYBACK_DEBUG_INFO",SNACKBAR_MESSAGE:67,67:"SNACKBAR_MESSAGE",UNRECOGNIZED:-1,"-1":"UNRECOGNIZED"};var U={NONE:0,0:"NONE",ERROR:1,1:"ERROR",WARN:2,2:"WARN",INFO:3,3:"INFO",DEBUG:4,4:"DEBUG",ALL:99,99:"ALL"},fe=class e{constructor(){this.currentLogLevels=new Set([U.INFO,U.ERROR])}static getInstance(){return e.instance||(e.instance=new e),e.instance}setLogLevels(...n){n.length===0||n.includes(U.NONE)?this.currentLogLevels=new Set:n.includes(U.ALL)?this.currentLogLevels=new Set([U.ERROR,U.WARN,U.INFO,U.DEBUG]):this.currentLogLevels=new Set(n.filter(t=>t!==U.NONE&&t!==U.ALL))}getLogLevels(){return new Set(this.currentLogLevels)}log(n,t,...o){if(n!==U.NONE&&this.currentLogLevels.has(n)){let r=`[${U[n]}] [${t}]`;switch(n){case U.ERROR:console.error(r,...o);break;case U.WARN:console.warn(r,...o);break;case U.INFO:console.info(r,...o);break;case U.DEBUG:console.debug(r,...o);break}}}error(n,...t){this.log(U.ERROR,n,...t)}warn(n,...t){this.log(U.WARN,n,...t)}info(n,...t){this.log(U.INFO,n,...t)}debug(n,...t){this.log(U.DEBUG,n,...t)}};var le="2147483647",Kt={VIDEO_AND_AUDIO:0,0:"VIDEO_AND_AUDIO",AUDIO_ONLY:1,1:"AUDIO_ONLY",VIDEO_ONLY:2,2:"VIDEO_ONLY"};function tt(e){let n=e.replace(/-/g,"+").replace(/_/g,"/"),t=n.padEnd(n.length+(4-n.length%4)%4,"=");return new Uint8Array(atob(t).split("").map(o=>o.charCodeAt(0)))}function Gt(e){let n=e.reduce((r,i)=>r+i.length,0),t=new Uint8Array(n),o=0;for(let r of e)t.set(r,o),o+=r.length;return t}function nt(e){return new Promise(n=>setTimeout(n,e))}var Ri=function(e,n,t,o,r){if(o==="m")throw new TypeError("Private method is not writable");if(o==="a"&&!r)throw new TypeError("Private accessor was defined without a setter");if(typeof n=="function"?e!==n||!r:!n.has(e))throw new TypeError("Cannot write private member to an object whose class did not declare it");return o==="a"?r.call(e,t):r?r.value=t:n.set(e,t),t},q=function(e,n,t,o){if(t==="a"&&!o)throw new TypeError("Private accessor was defined without a getter");if(typeof n=="function"?e!==n||!o:!n.has(e))throw new TypeError("Cannot read private member from an object whose class did not declare it");return t==="m"?o:t==="a"?o.call(e):o?o.value:n.get(e)},Ae,W,he=class extends Event{constructor(n,t){super(n,t),Ae.set(this,void 0),Ri(this,Ae,t?.detail??null,"f")}get detail(){return q(this,Ae,"f")}};Ae=new WeakMap;var ye=class extends EventTarget{constructor(){super(),W.set(this,new Map)}emit(n,...t){let o=new he(n,{detail:t});this.dispatchEvent(o)}on(n,t){let o=r=>{r instanceof he?t(...r.detail):t(r)};q(this,W,"f").set(t,{type:n,wrapper:o}),this.addEventListener(n,o)}once(n,t){let o=r=>{r instanceof he?t(...r.detail):t(r),this.off(n,t)};q(this,W,"f").set(t,{type:n,wrapper:o}),this.addEventListener(n,o)}off(n,t){let o=q(this,W,"f").get(t);o&&o.type===n&&(this.removeEventListener(n,o.wrapper),q(this,W,"f").delete(t))}removeAllListeners(n){if(n)for(let[t,o]of q(this,W,"f").entries())o.type===n&&(this.removeEventListener(n,o.wrapper),q(this,W,"f").delete(t));else for(let[t,o]of q(this,W,"f").entries())this.removeEventListener(o.type,o.wrapper),q(this,W,"f").delete(t)}};W=new WeakMap;function it(e,n){return`${e||""}:${n||""}`}function K(e){if(e)return it(e.itag,e.xtags)}function Yt(e){return it(e.itag,e.xtags)}function rt(e){return e.formatId?it(e.formatId.itag,e.formatId.xtags):""}function at(e){return e.formatInitializationMetadata?.mimeType?.includes("video")?"video":"audio"}function Te(e){return Array.from(e.downloadedSegments.values()).reduce((n,t)=>n+parseInt(t.durationMs||"0"),0)}function Ii(e,n){return e.filter(t=>t.mimeType?n?t.mimeType.includes("audio"):t.mimeType.includes("video"):!1)}function st(e,n,t){if(!e.length)return;let o=Ii(e,t.isAudio);if(!o.length)return;if(typeof n=="number")return o.find(i=>i.itag===n);if(n&&typeof n!="function")return n;if(typeof n=="function")return n(o);let r=o;return t.language&&(r=r.filter(i=>i.language===t.language)),t.quality&&(r=r.filter(i=>t.isAudio?!!i.audioQuality?.toLowerCase().includes(t.quality?.toLowerCase()||""):!!i.qualityLabel?.toLowerCase().includes(t.quality?.toLowerCase()||""))),t.isAudio?t.preferOpus&&(r=ot(r,"opus")):t.preferH264&&(r=r.filter(i=>!!i.mimeType&&i.mimeType.includes("mp4")&&i.mimeType.includes("avc"))),t.preferWebM?r=ot(r,"webm"):t.preferMP4&&(r=ot(r,"mp4")),t.isAudio?r.sort((i,a)=>(a.bitrate||0)-(i.bitrate||0))[0]:r.sort((i,a)=>(a.height||0)-(i.height||0))[0]}function ot(e,n){return e.filter(t=>t.mimeType?.includes(n))}var ke=class e{constructor(n=[]){this.chunks=[],this.currentChunkOffset=this.currentChunkIndex=0,this.currentDataView=void 0,this.totalLength=0,n.forEach(t=>this.append(t))}append(n){if(n instanceof Uint8Array){if(this.canMergeWithLastChunk(n)){let t=this.chunks[this.chunks.length-1];this.chunks[this.chunks.length-1]=new Uint8Array(t.buffer,t.byteOffset,t.length+n.length),this.resetFocus()}else this.chunks.push(n);this.totalLength+=n.length}else n.chunks.forEach(t=>this.append(t))}split(n){let t=new e,o=new e,r=this.chunks[Symbol.iterator](),i=r.next();for(;!i.done;){let a=i.value;n>=a.length?(t.append(a),n-=a.length):n>0?(t.append(new Uint8Array(a.buffer,a.byteOffset,n)),o.append(new Uint8Array(a.buffer,a.byteOffset+n,a.length-n)),n=0):o.append(a),i=r.next()}return{extractedBuffer:t,remainingBuffer:o}}getLength(){return this.totalLength}canReadBytes(n,t){return n+t<=this.totalLength}getUint8(n){return this.focus(n),this.chunks[this.currentChunkIndex][n-this.currentChunkOffset]}focus(n){if(!this.isFocused(n)){for(n<this.currentChunkOffset&&this.resetFocus();this.currentChunkOffset+this.chunks[this.currentChunkIndex].length<=n&&this.currentChunkIndex<this.chunks.length-1;)this.currentChunkOffset+=this.chunks[this.currentChunkIndex].length,this.currentChunkIndex+=1;this.currentDataView=void 0}}isFocused(n){return n>=this.currentChunkOffset&&n<this.currentChunkOffset+this.chunks[this.currentChunkIndex].length}resetFocus(){this.currentDataView=void 0,this.currentChunkIndex=0,this.currentChunkOffset=0}canMergeWithLastChunk(n){if(this.chunks.length===0)return!1;let t=this.chunks[this.chunks.length-1];return t.buffer===n.buffer&&t.byteOffset+t.length===n.byteOffset}};var Oe=class{constructor(n){this.compositeBuffer=n}read(n){for(;;){let t=0,[o,r]=this.readVarInt(t);t=r;let[i,a]=this.readVarInt(t);if(t=a,o<0||i<0)break;if(!this.compositeBuffer.canReadBytes(t,i)){if(!this.compositeBuffer.canReadBytes(t,1))break;return{type:o,size:i,data:this.compositeBuffer}}let s=this.compositeBuffer.split(t).remainingBuffer.split(i);t=0,n({type:o,size:i,data:s.extractedBuffer}),this.compositeBuffer=s.remainingBuffer}}readVarInt(n){let t;if(this.compositeBuffer.canReadBytes(n,1)){let r=this.compositeBuffer.getUint8(n);t=r<128?1:r<192?2:r<224?3:r<240?4:5}else t=0;if(t<1||!this.compositeBuffer.canReadBytes(n,t))return[-1,n];let o;switch(t){case 1:o=this.compositeBuffer.getUint8(n++);break;case 2:{let r=this.compositeBuffer.getUint8(n++),i=this.compositeBuffer.getUint8(n++);o=(r&63)+64*i;break}case 3:{let r=this.compositeBuffer.getUint8(n++),i=this.compositeBuffer.getUint8(n++),a=this.compositeBuffer.getUint8(n++);o=(r&31)+32*(i+256*a);break}case 4:{let r=this.compositeBuffer.getUint8(n++),i=this.compositeBuffer.getUint8(n++),a=this.compositeBuffer.getUint8(n++),s=this.compositeBuffer.getUint8(n++);o=(r&15)+16*(i+256*(a+256*s));break}default:{let r=n+1;if(this.compositeBuffer.focus(r),this.canReadFromCurrentChunk(r,4))o=this.getCurrentDataView().getUint32(r-this.compositeBuffer.currentChunkOffset,!0);else{let i=this.compositeBuffer.getUint8(r+2)+256*this.compositeBuffer.getUint8(r+3);o=this.compositeBuffer.getUint8(r)+256*(this.compositeBuffer.getUint8(r+1)+256*i)}n+=5;break}}return[o,n]}canReadFromCurrentChunk(n,t){return n-this.compositeBuffer.currentChunkOffset+t<=this.compositeBuffer.chunks[this.compositeBuffer.currentChunkIndex].length}getCurrentDataView(){if(!this.compositeBuffer.currentDataView){let n=this.compositeBuffer.chunks[this.compositeBuffer.currentChunkIndex];this.compositeBuffer.currentDataView=new DataView(n.buffer,n.byteOffset,n.length)}return this.compositeBuffer.currentDataView}};var w="SabrStream",gi=10,Ai=8e3,yi=500,Ti=3e4,zt=5,pe=class extends ye{on(n,t){super.on(n,t)}once(n,t){super.once(n,t)}constructor(n={}){super(),this.logger=fe.getInstance(),this.formatIds=[],this.umpPartHandlers=new Map([[$.FORMAT_INITIALIZATION_METADATA,this.handleFormatInitializationMetadata.bind(this)],[$.NEXT_REQUEST_POLICY,this.handleNextRequestPolicy.bind(this)],[$.SABR_ERROR,this.handleSabrError.bind(this)],[$.SABR_REDIRECT,this.handleSabrRedirect.bind(this)],[$.SABR_CONTEXT_UPDATE,this.handleSabrContextUpdate.bind(this)],[$.SABR_CONTEXT_SENDING_POLICY,this.handleSabrContextSendingPolicy.bind(this)],[$.STREAM_PROTECTION_STATUS,this.handleStreamProtectionStatus.bind(this)],[$.RELOAD_PLAYER_RESPONSE,this.handleReloadPlayerResponse.bind(this)],[$.MEDIA_HEADER,this.handleMediaHeader.bind(this)],[$.MEDIA,this.handleMedia.bind(this)],[$.MEDIA_END,this.handleMediaEnd.bind(this)]]),this.sabrContexts=new Map,this.activeSabrContextTypes=new Set,this.initializedFormatsMap=new Map,this.partialSegmentQueue=new Map,this.requestNumber=0,this.durationMs=1/0,this.mediaHeadersProcessed=!1,this._errored=!1,this._aborted=!1,this.progressTracker={lastProgressTime:Date.now(),lastDownloadedDuration:0,stallCount:0},this.fetchFunction=n?.fetch||fetch,this.serverAbrStreamingUrl=n.serverAbrStreamingUrl,this.videoPlaybackUstreamerConfig=n.videoPlaybackUstreamerConfig,this.clientInfo=n.clientInfo,this.poToken=n.poToken,this.durationMs=n.durationMs||1/0,this.formatIds=n.formats||[],this.videoStream=new ReadableStream({start:t=>{this.videoController=t}}),this.audioStream=new ReadableStream({start:t=>{this.audioController=t}})}setPoToken(n){this.poToken=n}setServerAbrFormats(n){this.formatIds.push(...n)}setDurationMs(n){this.durationMs=n}setStreamingURL(n){this.serverAbrStreamingUrl=n}setUstreamerConfig(n){this.videoPlaybackUstreamerConfig=n}setClientInfo(n){this.clientInfo=n}abort(){this.logger.debug(w,"Aborting download process"),this._aborted=!0,this.abortController?.abort(),this.videoController?.error(new Error("Download aborted.")),this.audioController?.error(new Error("Download aborted.")),this.resetState(),this.emit("abort")}getState(){if(!this.mainFormat)throw new Error("Main format is not initialized, cannot get state.");let n=Te(this.mainFormat),t=[];for(let[o,r]of this.initializedFormatsMap.entries())t.push({formatKey:o,formatInitializationMetadata:r.formatInitializationMetadata,downloadedSegments:Array.from(r.downloadedSegments.entries()),lastMediaHeaders:r.lastMediaHeaders});return{durationMs:this.durationMs,requestNumber:this.requestNumber,activeSabrContexts:Array.from(this.activeSabrContextTypes),sabrContextUpdates:Array.from(this.sabrContexts.entries()),formatToDiscard:this.formatToDiscard,cachedBufferedRanges:this.cachedBufferedRanges||[],nextRequestPolicy:this.nextRequestPolicy,initializedFormats:t,playerTimeMs:n}}async start(n){let{videoFormat:t,audioFormat:o}=this.selectFormats(n);return this.setupStreamingProcess(t,o,n).then(),{videoStream:this.videoStream,audioStream:this.audioStream,selectedFormats:{videoFormat:t,audioFormat:o}}}async setupStreamingProcess(n,t,o){try{this._errored=!1,this._aborted=!1;let r=0;o.state&&this.restoreState(n,t,o.state)&&(r=o.state.playerTimeMs||0);let i=o.maxRetries!==void 0?o.maxRetries:gi,a=o.enabledTrackTypes??Kt.VIDEO_AND_AUDIO,s={playerTimeMs:r,audioTrackId:t.audioTrackId,playbackRate:1,stickyResolution:n.height||360,drcEnabled:t.isDrc,clientViewportIsFlexible:!1,visibility:1,enabledTrackTypesBitfield:a};(s.enabledTrackTypesBitfield===1||s.enabledTrackTypesBitfield===2)&&(this.formatToDiscard=s.enabledTrackTypesBitfield===1?K(n):K(t));let c=Date.now()-Number(r||0),d=Math.max(15e3,Number(o.maxReadaheadMs||45e3));for(;parseInt(s.playerTimeMs)<this.durationMs;){if(this._aborted){this.logger.debug(w,"Download process aborted, exiting streaming loop.");break}this.logger.debug(w,`Starting new segment fetch at playback position: ${s.playerTimeMs}ms`),this.mainFormat=s.enabledTrackTypesBitfield===1?this.initializedFormatsMap.get(K(t)||""):this.initializedFormatsMap.get(K(n)||""),this.mainFormat&&this.validateAndCorrectDuration(this.mainFormat.formatInitializationMetadata);let u=this.mainFormat?Te(this.mainFormat):0,f=Math.min(this.durationMs,Math.max(0,Date.now()-c)),l=u-f;l>d&&await new Promise(O=>setTimeout(O,Math.min(5e3,l-d))),s.playerTimeMs=Math.min(u,Math.max(0,Date.now()-c));let{shouldStop:h}=this.checkForStall({playerTimeMs:u,stallDetectionMs:o.stallDetectionMs});if(h||(s.playerTimeMs=s.playerTimeMs.toString(),!await this.executeWithRetry(()=>this.fetchAndProcessSegments(s,t,n),i)))break}}catch(r){this._aborted||this.errorHandler(r,!0)}finally{this._aborted||(this.validateDownloadedSegments(),this._errored||(this.videoController?.close(),this.audioController?.close()),this.resetState(),this.emit("finish"))}}restoreState(n,t,o){if(this.resetState(),!o||typeof o!="object"||!o.initializedFormats||!Array.isArray(o.initializedFormats)||!o.durationMs||!o.playerTimeMs)return this.logger.warn(w,"Invalid or corrupt state object provided. Starting fresh."),!1;let r=K(n)||"",i=K(t)||"";for(let a of o.initializedFormats){let{formatKey:s,formatInitializationMetadata:c,downloadedSegments:d,lastMediaHeaders:u}=a;if(s!==r&&s!==i){this.logger.warn(w,`State contains an unexpected format key "${s}". It will be ignored.`);continue}this.initializedFormatsMap.set(s,{formatInitializationMetadata:c,downloadedSegments:new Map(d),lastMediaHeaders:u||[]})}return!this.initializedFormatsMap.has(r)||!this.initializedFormatsMap.has(i)?(this.logger.warn(w,"State is missing required format data for the selected video/audio formats. Starting fresh."),this.resetState(),!1):(this.durationMs=o.durationMs,this.requestNumber=o.requestNumber||0,this.activeSabrContextTypes=new Set(o.activeSabrContexts||[]),this.sabrContexts=new Map(o.sabrContextUpdates||[]),this.formatToDiscard=o.formatToDiscard,this.cachedBufferedRanges=o.cachedBufferedRanges||[],this.nextRequestPolicy=o.nextRequestPolicy,!0)}checkForStall(n){let t=Date.now(),o=n.playerTimeMs,r=n.stallDetectionMs||Ti;if(o>this.progressTracker.lastDownloadedDuration)return this.progressTracker.lastProgressTime=t,this.progressTracker.lastDownloadedDuration=o,this.progressTracker.stallCount=0,{shouldStop:!1,stalled:!1};if(t-this.progressTracker.lastProgressTime>r){if(this.progressTracker.stallCount++,this.logger.warn(w,`Stream stalled for ${r}ms (stall #${this.progressTracker.stallCount})`),this.progressTracker.stallCount>=zt)throw new Error(`Stream stalled ${zt} times, aborting`);if(this.progressTracker.lastProgressTime=t,Math.abs(this.durationMs-o)<5e3){this.logger.warn(w,"Stream is close to completion, but stalled. Checking if we have the last segment.");let a=parseInt(this.mainFormat?.formatInitializationMetadata.endSegmentNumber||"0")||-1,s=this.mainFormat?.downloadedSegments.get(a);if(s&&s.segmentNumber===a)return this.logger.warn(w,"Last segment is already downloaded. Stopping further processing."),{shouldStop:!0,stalled:!0}}return{shouldStop:!1,stalled:!0}}return{shouldStop:!1,stalled:!1}}selectFormats(n){let t=st(this.formatIds,n.videoFormat,{quality:n.videoQuality,preferWebM:n.preferWebM,preferH264:n.preferH264,preferMP4:n.preferMP4,isAudio:!1}),o=st(this.formatIds,n.audioFormat,{quality:n.audioQuality,language:n.audioLanguage,preferOpus:n.preferOpus,preferMP4:n.preferMP4,preferWebM:n.preferWebM,isAudio:!0});if(this.durationMs<0)throw new Error("Invalid duration");if(!t||!o)throw new Error("No suitable formats found for download");return{videoFormat:t,audioFormat:o}}async fetchAndProcessSegments(n,t,o){let r=this.initializedFormatsMap.get(K(o)||""),i=this.initializedFormatsMap.get(K(t)||"");this.cachedBufferedRanges?.length||(this.cachedBufferedRanges=this.buildBufferedRanges(r,i));let a=this.buildRequestBody(n,t,o);this.mediaHeadersProcessed=!1;let s=await this.makeStreamingRequest(a),c=await this.processStreamingResponse(s);if(c.length){if((this.streamProtectionStatus?.status||0)>=2&&!c.includes($.MEDIA))throw new Error("No media parts or protocol updates received from server.")}else throw new Error("No valid parts received from server.");(c.includes($.MEDIA_HEADER)&&r?.lastMediaHeaders?.length&&i?.lastMediaHeaders?.length||n.enabledTrackTypesBitfield!==0&&this.mainFormat?.lastMediaHeaders?.length)&&(this.mediaHeadersProcessed=!0)}buildBufferedRanges(n,t){let o=[],r=[n,t];for(let i of r){if(!i?.lastMediaHeaders.length||rt(i.formatInitializationMetadata)===this.formatToDiscard)continue;let a=i.lastMediaHeaders,s=a.reduce((c,d)=>c+parseInt(d.durationMs||"0"),0);o.push({durationMs:s.toString(),formatId:i.formatInitializationMetadata.formatId,startTimeMs:String(a[0].startMs||"0"),startSegmentIndex:a[0].sequenceNumber||1,endSegmentIndex:a[a.length-1].sequenceNumber||1,timeRange:{durationTicks:s.toString(),startTicks:a[0].startMs,timescale:a[0].timeRange?.timescale}}),i.lastMediaHeaders=[]}return o}buildRequestBody(n,t,o){if(!this.videoPlaybackUstreamerConfig)throw new Error("Video playback ustreamer config must be set before starting.");if(!this.clientInfo)throw new Error("Client info must be set before starting.");let r=this.cachedBufferedRanges||[],{sabrContexts:i,unsentSabrContexts:a}=this.prepareSabrContexts(),{selectedFormatIds:s,updatedBufferedRanges:c}=this.prepareFormatSelections([o,t],r);return Ye.encode({clientAbrState:n,preferredAudioFormatIds:[t],preferredVideoFormatIds:[o],preferredSubtitleFormatIds:[],selectedFormatIds:s,videoPlaybackUstreamerConfig:tt(this.videoPlaybackUstreamerConfig),streamerContext:{sabrContexts:i,unsentSabrContexts:a,poToken:this.poToken?tt(this.poToken):void 0,playbackCookie:this.nextRequestPolicy?.playbackCookie?oe.encode(this.nextRequestPolicy.playbackCookie).finish():void 0,clientInfo:this.clientInfo},bufferedRanges:c,field1000:[]}).finish()}prepareSabrContexts(){let n=[],t=[];for(let o of this.sabrContexts.values())this.activeSabrContextTypes.has(o.type)?n.push(o):t.push(o.type);return{sabrContexts:n,unsentSabrContexts:t}}prepareFormatSelections(n,t){let o=[],r=[...t],i=this.initializedFormatsMap.size>0;for(let a of n){let s=K(a),c=this.formatToDiscard&&s===this.formatToDiscard;c&&r.push({formatId:a,durationMs:le,startTimeMs:String(0),startSegmentIndex:parseInt(le),endSegmentIndex:parseInt(le),timeRange:{durationTicks:le,startTicks:"0",timescale:1e3}}),(i||c)&&o.push(a)}return{selectedFormatIds:o,updatedBufferedRanges:r}}async makeStreamingRequest(n){if(!this.serverAbrStreamingUrl)throw new Error("Server ABR streaming URL not configured.");let t=new URL(this.serverAbrStreamingUrl);t.searchParams.set("rn",this.requestNumber.toString()),this.abortController=new AbortController;let o=setTimeout(()=>this.abortController?.abort(),6e4);try{return await this.fetchFunction(t,{method:"POST",headers:{"content-type":"application/x-protobuf","accept-encoding":"identity",accept:"application/vnd.yt-ump"},body:n,signal:this.abortController.signal})}finally{clearTimeout(o),this.requestNumber+=1}}async processStreamingResponse(n){if(!n.ok)throw new Error(`Server returned ${n.status} ${n.statusText}`);if(n.headers.get("content-type")!=="application/vnd.yt-ump")throw new Error(`Unexpected content type from server: ${n.headers.get("content-type")}`);let t=n.body.getReader(),o=!1,r,i=[];for(;;){if(this.abortController?.signal?.aborted&&!this._aborted)throw new Error("Stream was aborted.");let{done:a,value:s}=await t.read();if(a){if(!o)throw new Error("Received empty response from server.");break}o=!0;let c;r?(c=r.data,c.append(s)):c=new ke([s]),r=new Oe(c).read(u=>{i.push(u.type);let f=this.umpPartHandlers.get(u.type);f&&f(u)})}return i}async executeWithRetry(n,t){let o=this.nextRequestPolicy?.backoffTimeMs||0;o>0&&(this.logger.debug(w,`Respecting server backoff policy: waiting ${o}ms before request`),await nt(o));for(let r=1;r<=t+1;r++)try{return await n(),this.mediaHeadersProcessed&&(this.cachedBufferedRanges=void 0),!0}catch(i){let a=i;if(this._aborted)return this.logger.debug(w,"Download process aborted, skipping retry."),!1;if(r>t){this.logger.error(w,`Maximum retries (${t}) exceeded while fetching segment: ${a.message}`),this.errorHandler(a,!0);break}let s=Math.min(yi*Math.pow(2,r-1),Ai);this.logger.warn(w,`Segment fetch attempt ${r}/${t+1} failed - retrying in ${s}ms`,a),await nt(s)}finally{this.partialSegmentQueue.clear()}return!1}decodePart(n,t){if(n.data.chunks.length)try{return t.decode(Gt(n.data.chunks))}catch{return}}handleFormatInitializationMetadata(n){let t=this.decodePart(n,We);if(!t)return;let o=rt(t),r={formatInitializationMetadata:t,downloadedSegments:new Map,lastMediaHeaders:[]};this.initializedFormatsMap.set(o,r),this.logger.debug(w,`Initialized format: ${o}`),this.emit("formatInitialization",r)}handleNextRequestPolicy(n){this.nextRequestPolicy=this.decodePart(n,qe)}handleSabrError(n){let t=this.decodePart(n,ze);if(t)throw new Error(`SABR Error: ${t.type} - ${t.code}`)}handleSabrRedirect(n){let t=this.decodePart(n,Xe);t&&t.url&&(this.serverAbrStreamingUrl=t.url,this.logger.debug(w,`Redirecting to ${this.serverAbrStreamingUrl}`))}handleSabrContextUpdate(n){let t=this.decodePart(n,Ze);if(t&&t.type!==void 0&&t.value?.length){if(t.writePolicy===Qe.KEEP_EXISTING&&this.sabrContexts.has(t.type)){this.logger.debug(w,`Skipping SABR context update for type ${t.type}`);return}this.sabrContexts.set(t.type,t),t.sendByDefault&&this.activeSabrContextTypes.add(t.type),this.logger.debug(w,`Received SABR context update (type: ${t.type}, sendByDefault: ${t.sendByDefault})`)}}handleSabrContextSendingPolicy(n){let t=this.decodePart(n,Je);if(t){for(let o of t.startPolicy)this.activeSabrContextTypes.has(o)||(this.activeSabrContextTypes.add(o),this.logger.debug(w,`Activated SABR context for type ${o}`));for(let o of t.stopPolicy)this.activeSabrContextTypes.has(o)&&(this.activeSabrContextTypes.delete(o),this.logger.debug(w,`Deactivated SABR context for type ${o}`));for(let o of t.discardPolicy)this.sabrContexts.has(o)&&(this.sabrContexts.delete(o),this.logger.debug(w,`Discarded SABR context for type ${o}`))}}handleStreamProtectionStatus(n){if(this.streamProtectionStatus=this.decodePart(n,et),!!this.streamProtectionStatus){if(this.emit("streamProtectionStatusUpdate",this.streamProtectionStatus),this.streamProtectionStatus.status===3)throw new Error("Cannot proceed with stream: attestation required");this.streamProtectionStatus.status===2&&this.logger.warn(w,"Attestation pending.")}}handleReloadPlayerResponse(n){let t=this.decodePart(n,je);if(!t)return;let o="Player response reload requested by server";throw this.logger.debug(w,`${o} (token: ${t.reloadPlaybackParams?.token}`),this.emit("reloadPlayerResponse",t),new Error(o)}handleMediaHeader(n){let t=this.decodePart(n,Ke);if(!t)return;let o=t.headerId||0,r=Yt(t),i=t.isInitSeg?0:t.sequenceNumber||0,a=t.durationMs||Math.ceil(parseInt(t.timeRange?.durationTicks||"0")/(t.timeRange?.timescale||0)*1e3).toString(),s=this.initializedFormatsMap.get(r);if(!s){this.logger.warn(w,`No initialized format found for key: ${r} (segment ${i})`);return}let c=at(s);if(s.downloadedSegments.has(i)){this.logger.debug(w,`Segment ${r} (segment: ${i}) already downloaded. Ignoring.`);return}this.partialSegmentQueue.set(o,{formatIdKey:r,segmentNumber:i,durationMs:a,mediaHeader:t,bufferedChunks:[]}),this.logger.debug(w,`Enqueued ${c} segment ${i} (Header ID: ${o}, key: ${r}, duration: ${a}ms)`)}handleMedia(n){let t=n.data.getUint8(0),o=this.partialSegmentQueue.get(t);if(!o){this.logger.debug(w,`Received Media part for an unknown Header ID: ${t}`);return}if(!this.initializedFormatsMap.get(o.formatIdKey)){this.logger.warn(w,`No initialized format found for key ${o.formatIdKey} (segment ${o.segmentNumber})`);return}let i=n.data.split(1).remainingBuffer;for(let a of i.chunks)o.bufferedChunks.push(a)}handleMediaEnd(n){let t=n.data.getUint8(0),o=this.partialSegmentQueue.get(t);if(!o){this.logger.debug(w,`Received MediaEnd for an unknown Header ID: ${t}`);return}let r=o.bufferedChunks.reduce((a,s)=>a+s.length,0);if(r!==parseInt(o.mediaHeader.contentLength||"0")){this.logger.warn(w,`Content length mismatch for segment ${o.segmentNumber} (Header ID: ${t}, key: ${o.formatIdKey}, expected: ${o.mediaHeader.contentLength}, received: ${r})`),this.partialSegmentQueue.delete(t);return}let i=this.initializedFormatsMap.get(o.formatIdKey);if(i){let a=at(i);if(o.bufferedChunks.length)for(let s of o.bufferedChunks)a==="audio"?this.audioController?.enqueue(s):this.videoController?.enqueue(s);this.logger.debug(w,`Received MediaEnd for ${a} segment ${o.segmentNumber} (Header ID: ${t}, key: ${o.formatIdKey})`),o.bufferedChunks.length=0,o.bufferedChunks=[],i.lastMediaHeaders.push(o.mediaHeader),i.downloadedSegments.set(o.segmentNumber,o),this.partialSegmentQueue.delete(t)}}validateAndCorrectDuration(n){let t=parseInt(n.durationUnits||"0"),o=parseInt(n.durationTimescale||"0");if(o===0){this.logger.warn(w,"Invalid timescale (0) in format initialization metadata");return}let r=Math.trunc(t/(o/1e3));this.durationMs!==r&&(this.durationMs=r,this.logger.debug(w,`Corrected stream duration to ${this.durationMs}ms based on format initialization metadata`))}validateDownloadedSegments(){for(let[n,t]of this.initializedFormatsMap.entries()){if(n===this.formatToDiscard){this.logger.debug(w,`Skipping validation for discarded format: ${n}`);continue}let o=Te(t),r=parseInt(t.formatInitializationMetadata.durationUnits||"0"),i=parseInt(t.formatInitializationMetadata.durationTimescale||"0"),a=i?r/(i/1e3):0,s=Math.abs(o-a);if(a>0&&s>a*.01){let h=Math.round(o/a*100);this.logger.warn(w,`Incomplete stream for format ${n}: downloaded ${o}ms (${h}%), expected ${a}ms`)}let c=Array.from(t.downloadedSegments.entries());if(c.length===0)continue;c.sort(([h],[y])=>h-y);let d=parseInt(t.formatInitializationMetadata.endSegmentNumber||"0"),u=[];for(let h=0;h<=d;h++)t.downloadedSegments.has(h)||u.push(h);let f=new Set(c.map(([h])=>h)).size,l=f!==c.length;if(u.length>0){let h=`Format ${n}: Missing segments: [${u.join(", ")}]. Expected range: 0-${d}. `;this.logger.warn(w,h),this.errorHandler(new Error(h),!0)}else this.logger.debug(w,`Format ${n}: All ${d} segments present (100% coverage)`);if(l){let h=`Format ${n}: Found duplicate segment numbers (${c.length} segments but ${f} unique numbers)`;this.logger.warn(w,h),this.errorHandler(new Error(h),!0)}}}resetState(){this.initializedFormatsMap.clear(),this.partialSegmentQueue.clear(),this.activeSabrContextTypes.clear(),this.sabrContexts.clear(),this.nextRequestPolicy=void 0,this.mainFormat=void 0,this.requestNumber=0,this.cachedBufferedRanges=void 0,this.mediaHeadersProcessed=!1,this.streamProtectionStatus=void 0,this.formatToDiscard=void 0,this.abortController=void 0,this.progressTracker={lastProgressTime:Date.now(),lastDownloadedDuration:0,stallCount:0}}errorHandler(n,t=!0){this.resetState(),this.logger.error(w,`Stream error: ${n.message}`),t&&(this._errored=!0,this.videoController?.error(n),this.audioController?.error(n))}};
+const SabrStream = pe;
+const VERSION = "1.0";
+const BUILD = "2026.09.30-v181-hls-fallback-order";
+const SERVICE = "OwO MO Downloader Worker";
+const MEDIA_SUFFIXES = [".googlevideo.com"];
+const FACEBOOK_PAGE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"];
+const FACEBOOK_MEDIA_SUFFIXES = [".fbcdn.net", ".facebook.com"];
+const INSTAGRAM_PAGE_HOSTS = ["instagram.com", "www.instagram.com", "m.instagram.com", "instagr.am", "www.instagr.am"];
+const THREADS_PAGE_HOSTS = ["threads.com", "www.threads.com", "threads.net", "www.threads.net"];
+const META_MEDIA_SUFFIXES = [".cdninstagram.com", ".fbcdn.net", ".instagram.com", ".threads.com", ".threads.net"];
+
+function cors(origin = "*") {
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
+    "Access-Control-Allow-Headers": "Range,Content-Type,Cache-Control,X-FB-Session,X-IG-Session,X-TH-Session,X-YT-Session",
+    "Access-Control-Max-Age": "86400",
+    "Access-Control-Expose-Headers": "Content-Length,Content-Range,Accept-Ranges,Content-Type,Content-Disposition,X-OwO-Media-Total,X-OwO-Media-Mode,X-OwO-Media-Source,X-OwO-Version,X-OwO-Track-Restart,X-OwO-Selected-Itag,X-OwO-Segment-Count,X-OwO-Expected-Bytes,X-OwO-Expected-Duration-Ms,X-OwO-Sabr-Track-Mode,X-OwO-Expected-Video-Bytes,X-OwO-Expected-Audio-Bytes,X-OwO-Expected-Duration-Ms",
+    "Vary": "Origin"
+  };
+}
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: { ...cors(), "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }
+  });
+}
+
+function extractJsonObject(source, marker) {
+  const startAt = source.indexOf(marker);
+  if (startAt < 0) return null;
+  const objectStart = source.indexOf("{", startAt + marker.length);
+  if (objectStart < 0) return null;
+  let depth = 0, quoted = false, escaped = false;
+  for (let i = objectStart; i < source.length; i++) {
+    const char = source[i];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') quoted = false;
+      continue;
+    }
+    if (char === '"') quoted = true;
+    else if (char === "{") depth++;
+    else if (char === "}" && --depth === 0) {
+      try { return JSON.parse(source.slice(objectStart, i + 1)); } catch { return null; }
+    }
+  }
+  return null;
+}
+
+function directUrl(format) {
+  if (format.url) return format.url;
+  if (!format.signatureCipher && !format.cipher) return null;
+  const params = new URLSearchParams(format.signatureCipher || format.cipher);
+  const url = params.get("url");
+  const signature = params.get("sig");
+  const key = params.get("sp") || "signature";
+  if (!url || !signature) return null;
+  const target = new URL(url);
+  target.searchParams.set(key, signature);
+  return target.href;
+}
+
+function normalize(format, resolvedUrl = "") {
+  const url = resolvedUrl || directUrl(format);
+  if (!url) return null;
+  let urlContentLength = "";
+  try { urlContentLength = new URL(url).searchParams.get("clen") || ""; } catch {}
+  const mime = format.mimeType || "";
+  const mimeMain = mime.split(";")[0];
+  const codecs = (mime.match(/codecs="([^"]+)"/) || [])[1] || "";
+  const hasVideo = mimeMain.startsWith("video/");
+  const hasAudio = mimeMain.startsWith("audio/") || Boolean(format.audioQuality);
+  const kind = hasVideo && format.audioQuality ? "影音合一" : hasVideo ? "僅視訊" : hasAudio ? "僅音訊" : "媒體";
+  return {
+    itag: format.itag,
+    quality: format.qualityLabel || format.audioQuality || format.quality || "未知",
+    kind,
+    container: mimeMain.split("/")[1] || "bin",
+    mimeType: mimeMain,
+    codec: codecs,
+    bitrate: format.bitrate || 0,
+    contentLength: format.contentLength || urlContentLength || "",
+    width: Number(format.width || 0),
+    height: Number(format.height || 0),
+    fps: Number(format.fps || 0),
+    source: format._source || format.source || "",
+    generatedAt: Date.now(),
+    url
+  };
+}
+
+
+function normalizeSabrFormat(format, source = "VISIONOS") {
+  const mime = String(format.mimeType || "");
+  const mimeMain = mime.split(";")[0];
+  const codecs = (mime.match(/codecs="([^"]+)"/) || [])[1] || "";
+  const hasVideo = mimeMain.startsWith("video/");
+  const hasAudio = mimeMain.startsWith("audio/") || Boolean(format.audioQuality);
+  return {
+    itag: format.itag,
+    quality: format.qualityLabel || format.audioQuality || format.quality || "未知",
+    kind: hasVideo ? "僅視訊" : hasAudio ? "僅音訊" : "媒體",
+    container: mimeMain.split("/")[1] || "bin",
+    mimeType: mimeMain,
+    codec: codecs,
+    bitrate: Number(format.bitrate || 0),
+    contentLength: Number(format.contentLength || 0),
+    width: Number(format.width || 0),
+    height: Number(format.height || 0),
+    fps: Number(format.fps || 0),
+    source,
+    protocol: "sabr",
+    generatedAt: Date.now(),
+    url: `sabr://${source.toLowerCase()}/${format.itag}`
+  };
+}
+function sabrConfiguration(player) {
+  return {
+    streamingUrl: String(player?.streamingData?.serverAbrStreamingUrl || ""),
+    ustreamerConfig: String(player?.playerConfig?.mediaCommonConfig?.mediaUstreamerRequestConfig?.videoPlaybackUstreamerConfig || "")
+  };
+}
+function hasSabrSeparatedFormats(player) {
+  const formats = rawFormats(player);
+  const video = formats.some(f => String(f.mimeType || "").startsWith("video/") && !f.audioQuality);
+  const audio = formats.some(f => String(f.mimeType || "").startsWith("audio/") || (!String(f.mimeType || "").startsWith("video/") && f.audioQuality));
+  const config = sabrConfiguration(player);
+  return video && audio && Boolean(config.streamingUrl && config.ustreamerConfig);
+}
+
+function configValue(html, key) {
+  const match = html.match(new RegExp('"' + key + '"\\s*:\\s*"([^"]+)"'));
+  return match ? match[1].replace(/\\u0026/g, "&").replace(/\\\//g, "/") : "";
+}
+
+function rawFormats(player) {
+  const data = player && player.streamingData || {};
+  return [...(data.formats || []), ...(data.adaptiveFormats || [])];
+}
+
+function playState(player) {
+  const value = player && player.playabilityStatus || {};
+  return {
+    status: value.status || "UNKNOWN",
+    reason: value.reason || (value.messages || []).join("；") || "未提供原因"
+  };
+}
+
+function hasAddress(format) {
+  return Boolean(format && (format.url || format.signatureCipher || format.cipher));
+}
+
+function addressableFormats(player) {
+  return rawFormats(player).filter(hasAddress);
+}
+
+function sourceSummary(source) {
+  const state = playState(source.player);
+  const rawCount = rawFormats(source.player).length;
+  const addressCount = addressableFormats(source.player).length;
+  return `${source.label}=${state.status}/${rawCount}/${addressCount}`;
+}
+
+const PLAYER_CLIENTS = [
+  { label: "ANDROID", clientName: "ANDROID", clientVersion: "21.35.35", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
+  { label: "ANDROID_VR", clientName: "ANDROID_VR", clientVersion: "1.65.10", osName: "Android", osVersion: "14", androidSdkVersion: 34, deviceMake: "Oculus", deviceModel: "Quest 3" },
+  { label: "ANDROID_CREATOR", clientName: "ANDROID_CREATOR", clientVersion: "24.35.100", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
+  { label: "ANDROID_MUSIC", clientName: "ANDROID_MUSIC", clientVersion: "7.18.52", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
+  { label: "ANDROID_TESTSUITE", clientName: "ANDROID_TESTSUITE", clientVersion: "1.9", osName: "Android", osVersion: "14", androidSdkVersion: 34 },
+  { label: "IOS", clientName: "IOS", clientVersion: "21.35.3", osName: "iPhone", osVersion: "18.6.2.22G100", deviceMake: "Apple", deviceModel: "iPhone16,2" },
+  { label: "IOS_CREATOR", clientName: "IOS_CREATOR", clientVersion: "24.35.100", osName: "iPhone", osVersion: "18.6.2.22G100", deviceMake: "Apple", deviceModel: "iPhone16,2" },
+  { label: "IOS_MUSIC", clientName: "IOS_MUSIC", clientVersion: "7.18.0", osName: "iPhone", osVersion: "18.6.2.22G100", deviceMake: "Apple", deviceModel: "iPhone16,2" },
+  { label: "VISIONOS", clientName: "IOS", clientVersion: "21.35.3", osName: "visionOS", osVersion: "2.6", deviceMake: "Apple", deviceModel: "RealityDevice14,1" },
+  { label: "WEB_EMBEDDED", clientName: "WEB_EMBEDDED_PLAYER", clientVersion: "1.20260909.00.00", clientScreen: "EMBED", embed: true },
+  { label: "WEB", clientName: "WEB", clientVersion: "2.20260909.00.00" },
+  { label: "WEB_SAFARI", clientName: "WEB", clientVersion: "2.20260909.00.00", browserName: "Safari", browserVersion: "18.6", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15" },
+  { label: "MWEB", clientName: "MWEB", clientVersion: "2.20260909.00.00" },
+  { label: "WEB_REMIX", clientName: "WEB_REMIX", clientVersion: "1.20260909.01.00" },
+  { label: "WEB_CREATOR", clientName: "WEB_CREATOR", clientVersion: "1.20260909.00.00" },
+  { label: "WEB_KIDS", clientName: "WEB_KIDS", clientVersion: "2.20260909.00.00" },
+  { label: "TV", clientName: "TVHTML5", clientVersion: "7.20260311.12.00", platform: "TV", userAgent: "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version" },
+  { label: "TV_EMBEDDED", clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER", clientVersion: "2.0", platform: "TV", clientScreen: "EMBED", embed: true },
+  { label: "TV_SIMPLY", clientName: "TVHTML5_SIMPLY", clientVersion: "1.0", platform: "TV" },
+];
+
+const ALL_MODE_CLIENT_ORDER = [
+  "ANDROID",
+  // Primary HLS candidate.
+  "WEB_SAFARI",
+  // Continue through all ordinary non-fallback clients when Safari HLS is unavailable.
+  "TV", "TV_EMBEDDED", "TV_SIMPLY",
+  "WEB_EMBEDDED", "WEB_KIDS", "WEB", "MWEB",
+  "IOS", "IOS_CREATOR", "IOS_MUSIC",
+  "ANDROID_CREATOR", "ANDROID_MUSIC", "ANDROID_TESTSUITE",
+  "WEB_REMIX", "WEB_CREATOR",
+  // Existing implementations remain unchanged; only their search positions are corrected.
+  "ANDROID_VR", "VISIONOS"
+];
+
+const CLIENT_REQUEST_INTERVAL_MS = 1000;
+function stableVisitorData(current) { return String(current || ""); }
+
+function waitFor(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+function orderedAllModeProfiles() {
+  const byLabel = new Map(PLAYER_CLIENTS.map(profile => [profile.label, profile]));
+  return ALL_MODE_CLIENT_ORDER.map(label => byLabel.get(label)).filter(Boolean);
+}
+
+function requestYoutubeCookie(request, env) {
+  const supplied = String(request?.headers?.get("X-YT-Session") || "").trim();
+  const secret = String(env && env.YT_COOKIE || "").trim();
+  return supplied || secret;
+}
+function youtubeCookieValue(cookie, name) {
+  const match = String(cookie || "").match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`, "i"));
+  return match ? match[1] : "";
+}
+async function sha1Hex(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-1", bytes);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+async function youtubeAuthHeaders(cookie) {
+  if (!cookie) return {};
+  const sapisid = youtubeCookieValue(cookie, "SAPISID") || youtubeCookieValue(cookie, "__Secure-3PAPISID");
+  if (!sapisid) return { Cookie: cookie };
+  const timestamp = Math.floor(Date.now() / 1000);
+  const origin = "https://www.youtube.com";
+  const hash = await sha1Hex(`${timestamp} ${sapisid} ${origin}`);
+  return { Cookie: cookie, Authorization: `SAPISIDHASH ${timestamp}_${hash}`, "X-Origin": origin };
+}
+async function innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie = "") {
+  const client = { hl: "zh-TW", gl: "TW", ...profile };
+  delete client.label;
+  delete client.embed;
+  if (visitorData) client.visitorData = visitorData;
+  const context = { client };
+  if (profile.embed) context.thirdParty = { embedUrl: "https://www.youtube.com/" };
+  const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${encodeURIComponent(apiKey)}&prettyPrint=false`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(await youtubeAuthHeaders(youtubeCookie)),
+      "Origin": "https://www.youtube.com",
+      "X-YouTube-Client-Name": profile.clientName,
+      "X-YouTube-Client-Version": profile.clientVersion,
+      ...(visitorData ? { "X-Goog-Visitor-Id": visitorData } : {}),
+      ...(profile.userAgent ? { "User-Agent": profile.userAgent } : {})
+    },
+    body: JSON.stringify({ videoId: id, context, contentCheckOk: true, racyCheckOk: true }),
+    cache: "no-store"
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+const YOUTUBE_MEDIA_PROBE_END = 262143;
+
+/* ═════════════════════════════════════════════════════════════════════
+ * Cloudflare 外部請求額度管理（每次 Worker 呼叫）
+ * Workers Free 每次呼叫最多 50 次外部 fetch；Workers Paid 為 10,000 次。
+ * 超過額度時 fetch 會直接丟出 "Too many subrequests"，過去會被誤判為驗證失敗。
+ * ═════════════════════════════════════════════════════════════════════ */
+const YT_SUBREQUEST_LIMIT = 50;      // 預設採 Free 額度；Paid 方案可由 Worker 變數 YT_SUBREQUEST_LIMIT 調高
+const YT_SUBREQUEST_SAFETY = 4;      // 保留給重新導向與未預期請求的安全餘額
+const YT_POLL_RESERVE = 12;          // 輪詢 Client 時，必須為抽樣驗證、播放器 JS、HLS、補驗證保留的額度
+const YT_PROBE_PER_GROUP = 3;        // 抽樣驗證時，每個群組（視訊／音訊）最多嘗試的網址數
+const YT_VERIFY_MAX_EXTRA = 12;       // 最終驗證階段最多再補驗證幾個網址（抽樣已足以判斷來源是否可用，其餘額度留作緩衝）
+const YT_BACKUP_CLIENTS = new Set(["ANDROID_VR", "VISIONOS"]);
+
+function createSubrequestBudget(limit = YT_SUBREQUEST_LIMIT) {
+  const safeLimit = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Number(limit) : YT_SUBREQUEST_LIMIT;
+  return {
+    limit: safeLimit,
+    used: 0,
+    exhausted: false,
+    probe: new Map(),                // 網址 → 實載驗證結果；抽樣與最終驗證共用，避免重複請求
+    remaining() { return Math.max(0, this.limit - YT_SUBREQUEST_SAFETY - this.used); },
+    take(count = 1) {
+      if (this.exhausted || this.remaining() < count) return false;
+      this.used += count;
+      return true;
+    },
+    noteError(error) {
+      if (/too many subrequests/i.test(String(error && error.message || error))) {
+        this.exhausted = true;
+        return true;
+      }
+      return false;
+    },
+    summary() { return `${this.used}/${this.limit}`; }
+  };
+}
+
+function youtubeFormatGroup(format) {
+  const mime = String(format.mimeType || "");
+  if (mime.startsWith("video/") && format.audioQuality) return "muxed";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/") || format.audioQuality) return "audio";
+  return "other";
+}
+
+function clenFromUrl(url) {
+  try { return Number(new URL(url).searchParams.get("clen") || 0); } catch { return 0; }
+}
+
+/* 對單一媒體網址做 256 KiB Range 驗證。
+ * 回傳 { ok, status, contentLength }；額度不足時回傳 { skipped: true }，呼叫端不得將其視為失敗。 */
+async function probeMediaUrl(url, sourceLabel, budget) {
+  const cached = budget.probe.get(url);
+  if (cached) return cached;
+  if (!budget.take()) return { skipped: true };
+  let response;
+  let result;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Range": `bytes=0-${YOUTUBE_MEDIA_PROBE_END}`,
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+        "Origin": "https://www.youtube.com",
+        "Referer": "https://www.youtube.com/",
+        "User-Agent": youtubeMediaUserAgent(sourceLabel)
+      },
+      redirect: "follow",
+      cache: "no-store"
+    });
+    const ok = response.status === 200 || response.status === 206;
+    const rangeTotal = Number((String(response.headers.get("Content-Range") || "").match(/\/(\d+)$/) || [])[1] || 0);
+    result = { ok, status: response.status, contentLength: ok ? (rangeTotal || clenFromUrl(url) || 0) : 0 };
+  } catch (error) {
+    if (budget.noteError(error)) return { skipped: true, error: String(error.message || error) };
+    result = { ok: false, status: 0, contentLength: 0, error: String(error && error.message || error) };
+  } finally {
+    try { await response?.body?.cancel(); } catch {}
+  }
+  budget.probe.set(url, result);
+  return result;
+}
+
+/* 輪詢階段的抽樣驗證：視訊、音訊各取位元率最高的代表格式，通過即止，每群組最多嘗試 YT_PROBE_PER_GROUP 個。 */
+async function probeYoutubeFormats(player, label, steps, budget) {
+  const groups = { video: [], audio: [] };
+  for (const format of addressableFormats(player)) {
+    const url = directUrl(format);
+    const group = youtubeFormatGroup(format);
+    if (url && groups[group]) groups[group].push({ format, url });
+  }
+  const passed = { video: false, audio: false };
+  let candidates = 0, attempted = 0, passedCount = 0, skipped = false;
+  for (const group of Object.keys(groups)) {
+    const list = groups[group].sort((a, b) => Number(b.format.bitrate || 0) - Number(a.format.bitrate || 0));
+    candidates += list.length;
+    for (const item of list.slice(0, YT_PROBE_PER_GROUP)) {
+      const result = await probeMediaUrl(item.url, label, budget);
+      if (result.skipped) { skipped = true; break; }
+      attempted++;
+      if (result.ok) { passed[group] = true; passedCount++; break; }
+    }
+    if (skipped) break;
+  }
+  steps.push(`【實載驗證】${label} 抽樣驗證（256 KiB Range）：候選「${candidates}」個，實際請求「${attempted}」次，通過「${passedCount}」個；分離視訊：${passed.video ? "有" : "無"}；分離音訊：${passed.audio ? "有" : "無"}${skipped ? "；外部請求額度不足，已中止抽樣" : ""}。`);
+  return { videoOnly: passed.video, audioOnly: passed.audio, skipped };
+}
+async function collectSources(html, watchPlayer, id, steps, mode = "quick", youtubeCookie = "", budget = createSubrequestBudget()) {
+  const output = [{ label: "WATCH_PAGE", player: watchPlayer }];
+  let state = playState(watchPlayer);
+  let rawCount = rawFormats(watchPlayer).length;
+  let addressCount = addressableFormats(watchPlayer).length;
+
+  steps.push(`【WATCH_PAGE】狀態：${state.status}；原始格式：「${rawCount}」個；含網址或密文：「${addressCount}」個；原因：${state.reason}。`);
+
+  if (rawCount && !addressCount) {
+    steps.push("【SABR】WATCH_PAGE 僅提供格式描述，未含 url、signatureCipher 或 cipher，繼續嘗試其他 Client。");
+  }
+
+  const apiKey = configValue(html, "INNERTUBE_API_KEY");
+  const visitorData = stableVisitorData(configValue(html, "VISITOR_DATA"));
+  const dataSyncId = configValue(html, "DATASYNC_ID");
+  const sabrUrl = watchPlayer?.streamingData?.serverAbrStreamingUrl || "";
+  steps.push(`【YOUTUBE CONTEXT】Visitor Data：${visitorData ? "存在" : "不存在"}；Data Sync ID：${dataSyncId ? "存在" : "不存在"}。`);
+  steps.push(`【PO TOKEN】PLAYER：未提供；GVS：未提供；SUBS：未提供。本版只記錄需求，不使用固定 Token。`);
+  if (sabrUrl) steps.push("【SABR】播放器已提供 serverAbrStreamingUrl；若傳統格式沒有媒體位址，判定為 SABR-only 候選。");
+
+  if (!apiKey) {
+    steps.push("【FALLBACK】找不到 INNERTUBE_API_KEY，無法執行多 Client 輪詢。");
+    return output;
+  }
+
+  const existing = addressableFormats(watchPlayer);
+  const hasVideoOnly = existing.some(format => String(format.mimeType || "").startsWith("video/") && !format.audioQuality);
+  const hasAudioOnly = existing.some(format => String(format.mimeType || "").startsWith("audio/") || (!String(format.mimeType || "").startsWith("video/") && format.audioQuality));
+
+  if (addressCount && hasVideoOnly && hasAudioOnly) {
+    steps.push("【來源】WATCH_PAGE 已同時提供分離視訊與音訊，略過其他 Client。");
+    return output;
+  }
+
+  steps.push(mode === "quick"
+    ? "【快速解析】先使用 ANDROID 尋找可直接下載的影音合一格式。"
+    : mode === "all"
+      ? "【單一工作階段】先使用 ANDROID 保留基本格式，再搜尋 WEB_SAFARI HLS 與全部一般 Client；ANDROID_VR 為備援 1，VISIONOS 為最後備援。"
+      : "【高畫質搜尋】保留既有結果，繼續蒐集分離視訊與分離音訊格式。");
+  let authCount = state.status === "LOGIN_REQUIRED" ? 1 : 0;
+  const challengedPriorityClients = new Set();
+  const profiles = mode === "quick"
+    ? PLAYER_CLIENTS.filter(profile => profile.label === "ANDROID")
+    : mode === "all"
+      ? orderedAllModeProfiles()
+      : PLAYER_CLIENTS.filter(profile => profile.label !== "ANDROID");
+
+  for (let profileIndex = 0; profileIndex < profiles.length; profileIndex++) {
+    const profile = profiles[profileIndex];
+
+    // 額度控管：一般 Client 必須為「備援 Client 與抽樣驗證」保留額度；備援 Client 只需 1 次。
+    const isBackupClient = YT_BACKUP_CLIENTS.has(profile.label);
+    const backupsAhead = profiles.slice(profileIndex + 1).filter(item => YT_BACKUP_CLIENTS.has(item.label)).length;
+    const requiredBudget = isBackupClient ? 1 : 1 + backupsAhead + YT_POLL_RESERVE;
+    if (budget.remaining() < requiredBudget) {
+      if (isBackupClient || backupsAhead === 0) {
+        steps.push(`【請求額度】剩餘「${budget.remaining()}」次，無法再呼叫 ${profile.label}，停止輪詢（已用 ${budget.summary()}）。`);
+        break;
+      }
+      steps.push(`【請求額度】剩餘「${budget.remaining()}」次，略過 ${profile.label}，保留額度給備援 Client 與媒體驗證。`);
+      continue;
+    }
+    budget.take();
+
+    try {
+      if (profileIndex > 0) {
+        steps.push(`【請求節流】等待 ${CLIENT_REQUEST_INTERVAL_MS} 毫秒後再呼叫 ${profile.label}。`);
+        await waitFor(CLIENT_REQUEST_INTERVAL_MS);
+      }
+      const player = await innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie);
+      state = playState(player);
+      rawCount = rawFormats(player).length;
+      addressCount = addressableFormats(player).length;
+      if (state.status === "LOGIN_REQUIRED") {
+        authCount++;
+        if (["ANDROID_VR", "WEB_SAFARI", "IOS"].includes(profile.label)) challengedPriorityClients.add(profile.label);
+      }
+
+      const clientSabr = Boolean(player?.streamingData?.serverAbrStreamingUrl);
+      const clientHls = Boolean(player?.streamingData?.hlsManifestUrl);
+      const clientDash = Boolean(player?.streamingData?.dashManifestUrl);
+      steps.push(`【${profile.label}】狀態：${state.status}；原始格式：「${rawCount}」個；含網址或密文：「${addressCount}」個；HLS：${clientHls ? "存在" : "無"}；DASH：${clientDash ? "存在" : "無"}；SABR：${clientSabr ? "存在" : "無"}；原因：${state.reason}。`);
+      output.push({ label: profile.label, player });
+
+      if (mode === "all" && profile.label === "WEB_SAFARI" && clientHls) {
+        steps.push("【WEB_SAFARI HLS】已取得 HLS Manifest，優先採用不依賴 ANDROID_VR 或 VISIONOS SABR 的高畫質路徑。");
+        break;
+      }
+
+      if (mode === "quick" && addressCount) {
+        steps.push(`【快速解析】${profile.label} 已取得「${addressCount}」個可解析格式，先回傳基本結果。`);
+        break;
+      }
+      if (mode === "all" && profile.label === "ANDROID" && addressCount) {
+        steps.push(`【基本格式保留】ANDROID 已取得「${addressCount}」個可解析格式；繼續同一工作階段的高畫質搜尋。`);
+      }
+
+      const all = output.flatMap(source => addressableFormats(source.player));
+      const videoOnly = all.some(format => String(format.mimeType || "").startsWith("video/") && !format.audioQuality);
+      const audioOnly = all.some(format => String(format.mimeType || "").startsWith("audio/") || (!String(format.mimeType || "").startsWith("video/") && format.audioQuality));
+      const muxed = all.some(format => String(format.mimeType || "").startsWith("video/") && Boolean(format.audioQuality));
+
+      if (profile.label === "VISIONOS" && hasSabrSeparatedFormats(player)) {
+        steps.push("【備援 2／VISIONOS SABR】一般來源與 ANDROID_VR 均未成功；已取得完整 SABR 描述，採用最後備援並結束搜尋。");
+        break;
+      }
+      if (videoOnly && audioOnly) {
+        const p = await probeYoutubeFormats(player, profile.label, steps, budget);
+        if (p.videoOnly && p.audioOnly) {
+          const category = profile.label === "ANDROID_VR" ? "【備援 1／ANDROID_VR】" : "【高畫質】";
+          steps.push(`${category}${profile.label} 的分離視訊與音訊已通過實載驗證，停止其餘 Client 輪詢。`);
+          break;
+        }
+        if (p.skipped) {
+          steps.push(`【請求額度】額度不足，無法完成 ${profile.label} 的實載驗證；保留其格式並停止輪詢（已用 ${budget.summary()}）。`);
+          break;
+        }
+        steps.push(`【高畫質續搜】${profile.label} 未通過實載驗證，繼續下一個 Client。`);
+      }
+
+      if (mode !== "all" && muxed && authCount >= 4) {
+        steps.push("【快速停止】已有影音合一格式，且多個來源要求登入，停止其餘 Client 輪詢。");
+        break;
+      }
+
+      if (mode !== "all" && authCount >= 4 && !all.length) {
+        steps.push(`【快速停止】已有「${authCount}」個來源要求登入，判定為 AUTH_REQUIRED。`);
+        break;
+      }
+
+      if (mode === "all" && state.status === "LOGIN_REQUIRED") {
+        steps.push(`【登入限制】${profile.label} 要求登入；mode=all 繼續下一個匿名 Client。`);
+      }
+      if (mode === "all" && profile.label === "ANDROID_VR" && state.status === "LOGIN_REQUIRED" && !addressCount) {
+        steps.push("【登入限制續跑】ANDROID_VR 未取得格式，繼續 WEB_EMBEDDED、IOS 與 TV 等備援 Client，不在此提前熔斷。");
+      }
+    } catch (error) {
+      steps.push(`【${profile.label}】請求失敗：${error.message}。`);
+      if (budget.noteError(error)) {
+        steps.push("【請求額度】Cloudflare 回報外部請求額度已用盡，停止其餘 Client 輪詢；已取得的格式仍會保留。");
+        break;
+      }
+      if (String(error.message).includes("HTTP 429")) {
+        steps.push("【快速停止】YouTube 已回傳 HTTP 429，停止其餘 Client 輪詢。");
+        break;
+      }
+    }
+  }
+
+  if (mode === "all") {
+    const completedFormats = output.flatMap(source => addressableFormats(source.player));
+    const completedVideoOnly = completedFormats.filter(format => String(format.mimeType || "").startsWith("video/") && !format.audioQuality).length;
+    const completedAudioOnly = completedFormats.filter(format => String(format.mimeType || "").startsWith("audio/") || (!String(format.mimeType || "").startsWith("video/") && format.audioQuality)).length;
+    const completedMuxed = completedFormats.filter(format => String(format.mimeType || "").startsWith("video/") && Boolean(format.audioQuality)).length;
+    steps.push(`【完整節流矩陣摘要】已測試「${output.length}」個來源；影音合一：「${completedMuxed}」；僅視訊：「${completedVideoOnly}」；僅音訊：「${completedAudioOnly}」；登入限制：「${authCount}」。`);
+  }
+  return output;
+}
+
+function playerJsUrl(html) {
+  const value = configValue(html, "PLAYER_JS_URL") || configValue(html, "jsUrl");
+  if (!value) return "";
+  if (value.startsWith("//")) return `https:${value}`;
+  if (/^https?:\/\//.test(value)) return value;
+  return `https://www.youtube.com${value.startsWith("/") ? "" : "/"}${value}`;
+}
+
+function balancedBlock(source, braceStart) {
+  let depth = 0, quote = "", escaped = false;
+  for (let index = braceStart; index < source.length; index++) {
+    const char = source[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === quote) quote = "";
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") { quote = char; continue; }
+    if (char === "{") depth++;
+    else if (char === "}" && --depth === 0) return source.slice(braceStart, index + 1);
+  }
+  return "";
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function locateNamedFunction(playerJs, functionName) {
+  if (!functionName) return "";
+  const name = escapeRegex(functionName);
+  const patterns = [
+    new RegExp(`function\\s+${name}\\s*\\([^)]*\\)\\s*\\{`),
+    new RegExp(`${name}\\s*=\\s*function\\s*\\([^)]*\\)\\s*\\{`),
+    new RegExp(`${name}\\s*:\\s*function\\s*\\([^)]*\\)\\s*\\{`)
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(playerJs);
+    if (!match) continue;
+    const body = balancedBlock(playerJs, playerJs.indexOf("{", match.index));
+    if (body) return body;
+  }
+  return "";
+}
+
+function detectSignatureFunctionName(playerJs) {
+  const patterns = [
+    /\.sig\|\|([\w$]+)\(/,
+    /["']signature["']\s*,\s*([\w$]+)\(/,
+    /\.set\([^,]+,\s*encodeURIComponent\(([\w$]+)\(/,
+    /\bc&&\(c=([\w$]+)\(decodeURIComponent\(c\)\)\)/
+  ];
+  for (const pattern of patterns) {
+    const match = playerJs.match(pattern);
+    if (match) return match[1];
+  }
+  return "";
+}
+
+function detectNFunctionName(playerJs) {
+  const patterns = [
+    /\.get\(["']n["']\)\)&&\([\w$]+=([\w$]+)\([\w$]+\)/,
+    /\bn=([\w$]+)\(n\)/,
+    /\.set\(["']n["'],\s*([\w$]+)\(/
+  ];
+  for (const pattern of patterns) {
+    const match = playerJs.match(pattern);
+    if (match) return match[1];
+  }
+  return "";
+}
+
+function locateHelper(playerJs, functionBody) {
+  const call = functionBody.match(/;([\w$]+)\.([\w$]+)\([\w$]+(?:,\d+)?\)/);
+  if (!call) return null;
+  const name = call[1];
+  const match = new RegExp(`(?:var\\s+)?${escapeRegex(name)}\\s*=\\s*\\{`).exec(playerJs);
+  if (!match) return null;
+  const source = balancedBlock(playerJs, playerJs.indexOf("{", match.index));
+  return source ? { name, source } : null;
+}
+
+function identifyHelperMethods(helper) {
+  const methods = {};
+  if (!helper) return methods;
+  const pattern = /([\w$]+)\s*:\s*function\s*\([^)]*\)\s*\{/g;
+  let match;
+  while ((match = pattern.exec(helper.source))) {
+    const body = balancedBlock(helper.source, helper.source.indexOf("{", match.index));
+    if (/\.reverse\(/.test(body)) methods[match[1]] = "reverse";
+    else if (/\.splice\(0,/.test(body)) methods[match[1]] = "splice";
+    else if (/\.slice\(/.test(body)) methods[match[1]] = "slice";
+    else if (/\[0\].*%.*\.length|var\s+\w+\s*=\s*\w+\[0\]/.test(body)) methods[match[1]] = "swap";
+  }
+  return methods;
+}
+
+function compileTransform(playerJs, functionName) {
+  const body = locateNamedFunction(playerJs, functionName);
+  if (!body || !/\.split\(["']["']\)/.test(body)) return null;
+  const helper = locateHelper(playerJs, body);
+  if (!helper) return null;
+  const methods = identifyHelperMethods(helper);
+  const operations = [];
+  const calls = new RegExp(`${escapeRegex(helper.name)}\\.([\\w$]+)\\([\\w$]+(?:,(\\d+))?\\)`, "g");
+  let match;
+  while ((match = calls.exec(body))) {
+    const kind = methods[match[1]];
+    if (kind) operations.push({ kind, value: Number(match[2] || 0) });
+  }
+  if (!operations.length) return null;
+  return input => {
+    let chars = String(input).split("");
+    for (const operation of operations) {
+      if (operation.kind === "reverse") chars.reverse();
+      else if (operation.kind === "splice") chars.splice(0, operation.value);
+      else if (operation.kind === "slice") chars = chars.slice(operation.value);
+      else if (operation.kind === "swap" && chars.length) {
+        const target = operation.value % chars.length;
+        [chars[0], chars[target]] = [chars[target], chars[0]];
+      }
+    }
+    return chars.join("");
+  };
+}
+
+async function loadPlayerRules(html, steps, budget = createSubrequestBudget()) {
+  const jsUrl = playerJsUrl(html);
+  if (!jsUrl) {
+    steps.push("【PLAYER_JS】找不到播放器 JavaScript 網址。");
+    return { signature: null, n: null };
+  }
+  if (!budget.take()) {
+    steps.push("【請求額度】外部請求額度不足，略過播放器 JavaScript 下載。");
+    return { signature: null, n: null };
+  }
+  const response = await fetch(jsUrl, { cache: "no-store" });
+  if (!response.ok) {
+    steps.push(`【PLAYER_JS】下載失敗：HTTP ${response.status}。`);
+    return { signature: null, n: null };
+  }
+  const playerJs = await response.text();
+  const signature = compileTransform(playerJs, detectSignatureFunctionName(playerJs));
+  const n = compileTransform(playerJs, detectNFunctionName(playerJs));
+  steps.push(`【PLAYER_JS】已取得播放器程式；Signature：${signature ? "可用" : "未定位"}；N：${n ? "可用" : "未定位"}。`);
+  return { signature, n };
+}
+
+function resolveFormatUrl(format, rules, counters) {
+  let value = format.url || "";
+  if (!value && (format.signatureCipher || format.cipher)) {
+    const params = new URLSearchParams(format.signatureCipher || format.cipher);
+    value = params.get("url") || "";
+    if (!value) return null;
+    const key = params.get("sp") || "signature";
+    const plain = params.get("sig") || params.get("signature");
+    const encrypted = params.get("s");
+    const target = new URL(value);
+    if (plain) {
+      target.searchParams.set(key, plain);
+      counters.signature++;
+    } else if (encrypted && rules.signature) {
+      target.searchParams.set(key, rules.signature(encrypted));
+      counters.signature++;
+    } else if (encrypted) {
+      counters.signatureFailed++;
+      return null;
+    }
+    value = target.href;
+  }
+  if (!value) return null;
+  const target = new URL(value);
+  const nValue = target.searchParams.get("n");
+  if (nValue && rules.n) {
+    target.searchParams.set("n", rules.n(nValue));
+    counters.n++;
+  } else if (nValue) {
+    counters.nFailed++;
+  }
+  return target.href;
+}
+
+async function fetchYoutubeWatchPage(id, steps, youtubeCookie = "", budget = createSubrequestBudget()) {
+  const MAX_WATCH_CYCLES = 5;
+  const watchRetryDelay = cycle => cycle <= 2 ? 1000 : cycle <= 4 ? 2000 : 3000;
+  let lastStatus = 0;
+  let lastHtml = "";
+
+  watchLoop:
+  for (let cycle = 1; cycle <= MAX_WATCH_CYCLES; cycle++) {
+    const nonce = `${Date.now()}-${cycle}`;
+    const targets = [
+      `https://www.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW&gl=TW&owo_retry=${nonce}`,
+      `https://m.youtube.com/watch?v=${encodeURIComponent(id)}&hl=zh-TW&gl=TW&owo_retry=${nonce}`,
+      `https://www.youtube.com/embed/${encodeURIComponent(id)}?hl=zh-TW&gl=TW&owo_retry=${nonce}`
+    ];
+
+    for (let index = 0; index < targets.length; index++) {
+      if (!budget.take()) {
+        steps.push(`【請求額度】WATCH 重試已用掉外部請求額度（${budget.summary()}），停止重試。`);
+        break watchLoop;
+      }
+      const response = await fetch(targets[index], {
+        headers: {
+          "User-Agent": index === 1
+            ? "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36"
+            : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
+          "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.6",
+          "Cache-Control": "no-cache, no-store, max-age=0",
+          "Pragma": "no-cache",
+          ...(youtubeCookie ? { "Cookie": youtubeCookie } : {})
+        },
+        redirect: "follow",
+        cache: "no-store"
+      });
+      lastStatus = response.status;
+      steps.push(`【WATCH CYCLE ${cycle}/${MAX_WATCH_CYCLES} · FALLBACK ${index + 1}/3】HTTP ${response.status}。`);
+      if (response.ok) {
+        const html = await response.text();
+        lastHtml = html;
+        const player = extractJsonObject(html, "ytInitialPlayerResponse");
+        if (player) {
+          steps.push(`【WATCH 重試】第 ${cycle} 輪第 ${index + 1} 個入口取得完整 ytInitialPlayerResponse。`);
+          return { response, html, player };
+        }
+        steps.push("【WATCH 重試】頁面 HTTP 200，但缺少可解析的 ytInitialPlayerResponse，繼續下一個入口。");
+      }
+      if (index < targets.length - 1) await waitFor(350);
+    }
+
+    if (cycle < MAX_WATCH_CYCLES) {
+      const delay = watchRetryDelay(cycle);
+      steps.push(`【WATCH 重試】本輪未取得完整 Player Response，等待 ${delay} 毫秒後重新輪詢三個入口。`);
+      await waitFor(delay);
+    }
+  }
+
+  return {
+    response: new Response(null, { status: lastStatus || 502 }),
+    html: lastHtml,
+    player: null
+  };
+}
+
+function hlsAttributes(line) {
+  const text = line.slice(line.indexOf(":") + 1);
+  const result = {};
+  const pattern = /([A-Z0-9-]+)=("[^"]*"|[^,]*)/g;
+  let match;
+  while ((match = pattern.exec(text))) result[match[1]] = match[2].replace(/^"|"$/g, "");
+  return result;
+}
+async function parseHlsMasterFormats(manifestUrl, steps, budget = createSubrequestBudget()) {
+  if (!manifestUrl) return [];
+  if (!budget.take()) {
+    steps.push("【請求額度】外部請求額度不足，略過 WEB_SAFARI HLS Master Manifest。");
+    return [];
+  }
+  let response;
+  try { response = await fetch(manifestUrl, { headers: { "User-Agent": youtubeMediaUserAgent("WEB_SAFARI"), "Accept": "application/vnd.apple.mpegurl,*/*" }, cache: "no-store" }); }
+  catch (error) { steps.push(`【WEB_SAFARI HLS】Master Manifest 連線失敗：${error.message}。`); return []; }
+  if (!response.ok) { steps.push(`【WEB_SAFARI HLS】Master Manifest 回傳 HTTP ${response.status}。`); return []; }
+  const text = await response.text();
+  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const formats = [];
+  for (let index = 0; index < lines.length; index++) {
+    if (!lines[index].startsWith("#EXT-X-STREAM-INF:")) continue;
+    const attrs = hlsAttributes(lines[index]);
+    const next = lines.slice(index + 1).find(line => !line.startsWith("#"));
+    if (!next) continue;
+    const resolution = String(attrs.RESOLUTION || "").match(/(\d+)x(\d+)/);
+    const codecs = String(attrs.CODECS || "");
+    const height = Number(resolution?.[2] || 0);
+    const width = Number(resolution?.[1] || 0);
+    const fps = Number(attrs["FRAME-RATE"] || 0);
+    const bitrate = Number(attrs["AVERAGE-BANDWIDTH"] || attrs.BANDWIDTH || 0);
+    formats.push({
+      itag: `hls-${height || formats.length + 1}-${bitrate}`,
+      quality: height ? `${height}p` : "HLS",
+      kind: "影音合一",
+      container: "ts",
+      mimeType: "video/mp2t",
+      codec: codecs,
+      bitrate,
+      contentLength: "",
+      width, height, fps,
+      source: "WEB_SAFARI",
+      protocol: "hls",
+      generatedAt: Date.now(),
+      url: new URL(next, manifestUrl).href
+    });
+  }
+  steps.push(`【WEB_SAFARI HLS】Master Manifest 取得「${formats.length}」個 HLS Variant。`);
+  return formats.sort((a,b)=>b.height-a.height||b.bitrate-a.bitrate);
+}
+function allowedHlsUrl(value) {
+  try { const u=new URL(value); return u.protocol==="https:" && (u.hostname.endsWith(".googlevideo.com") || u.hostname.endsWith(".youtube.com") || u.hostname==="youtube.com"); } catch { return false; }
+}
+async function youtubeHlsPlaylist(url) {
+  if (!allowedHlsUrl(url)) return json({ error:"HLS 網址未列入允許清單。", code:"HLS_DOMAIN_DENIED", version:VERSION },403);
+  const response=await fetch(url,{headers:{"User-Agent":youtubeMediaUserAgent("WEB_SAFARI"),"Accept":"application/vnd.apple.mpegurl,*/*"},cache:"no-store",redirect:"follow"});
+  if(!response.ok)return json({error:`HLS Media Playlist 回傳 HTTP ${response.status}。`,code:"HLS_PLAYLIST_FAILED",version:VERSION},422);
+  const text=await response.text();
+  const lines=text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+  const segments=[];let initUrl="";let encrypted=false;let duration=0;
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
+    if(line.startsWith("#EXT-X-KEY:")&&!/METHOD=NONE/.test(line)) encrypted=true;
+    if(line.startsWith("#EXT-X-MAP:")){const attrs=hlsAttributes(line);if(attrs.URI)initUrl=new URL(attrs.URI,url).href;}
+    if(line.startsWith("#EXTINF:")){duration+=Number(line.slice(8).split(",")[0]||0);const next=lines.slice(i+1).find(x=>!x.startsWith("#"));if(next)segments.push(new URL(next,url).href);}
+  }
+  if(encrypted)return json({error:"此 HLS Playlist 使用加密 Segment，目前不加入下載。",code:"HLS_ENCRYPTED",version:VERSION},422);
+  if(!segments.length)return json({error:"HLS Playlist 沒有媒體 Segment。",code:"HLS_SEGMENTS_MISSING",version:VERSION},422);
+  return json({initUrl,segments,duration,version:VERSION});
+}
+async function youtubeHlsSegment(url) {
+  if (!allowedHlsUrl(url)) return json({ error:"HLS Segment 網址未列入允許清單。", code:"HLS_DOMAIN_DENIED", version:VERSION },403);
+  const response=await fetch(url,{headers:{"User-Agent":youtubeMediaUserAgent("WEB_SAFARI"),"Accept":"*/*","Accept-Encoding":"identity"},cache:"no-store",redirect:"follow"});
+  if(!response.ok)return json({error:`HLS Segment 回傳 HTTP ${response.status}。`,code:"HLS_SEGMENT_FAILED",version:VERSION},response.status===403?403:422);
+  const headers=new Headers(response.headers);Object.entries(cors()).forEach(([k,v])=>headers.set(k,v));headers.set("Cache-Control","no-store");headers.set("X-OwO-Media-Mode","web-safari-hls");return new Response(response.body,{status:200,headers});
+}
+
+async function youtube(id, mode = "quick", youtubeCookie = "", subrequestLimit = YT_SUBREQUEST_LIMIT) {
+  if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) return json({ error: "影片 ID 格式錯誤" }, 400);
+  const steps = [];
+  const budget = createSubrequestBudget(subrequestLimit);
+  steps.push(`【請求額度】本次解析可用外部請求上限「${budget.limit}」次（保留安全餘額「${YT_SUBREQUEST_SAFETY}」次）。`);
+  const watchResult = await fetchYoutubeWatchPage(id, steps, youtubeCookie, budget);
+  const response = watchResult.response;
+  if (!response.ok || !watchResult.html) {
+    return json({
+      error: `YouTube 頁面入口全部受限，最後回傳 HTTP ${response.status}`,
+      code: response.status === 429 ? "YOUTUBE_RATE_LIMITED" : "YOUTUBE_PAGE_UNAVAILABLE",
+      retryable: response.status === 429,
+      version: VERSION,
+      steps
+    }, response.status === 429 ? 429 : 502);
+  }
+  const html = watchResult.html;
+  steps.push("【解析】已取得可用的 YouTube 頁面 HTML。");
+  const watchPlayer = watchResult.player || extractJsonObject(html, "ytInitialPlayerResponse");
+  if (!watchPlayer) {
+    const message = "WATCH 重試已達上限：共 5 輪、每輪 3 個入口，仍未取得完整的 ytInitialPlayerResponse。";
+    steps.push(`【WATCH 重試失敗】${message}`);
+    return json({ error: message, code: "YOUTUBE_PLAYER_RESPONSE_MISSING", retryable: true, version: VERSION, steps }, 422);
+  }
+  steps.push("【解析】已取得 ytInitialPlayerResponse。");
+
+  if (youtubeCookie) steps.push("【YOUTUBE SESSION】已套用目前請求的登入工作階段（內容已隱藏）。");
+  const sources = await collectSources(html, watchPlayer, id, steps, mode, youtubeCookie, budget);
+  const selected = sources.find(source => addressableFormats(source.player).length) || sources[0];
+  const details = selected.player.videoDetails || watchPlayer.videoDetails || {};
+  const rawMap = new Map();
+  for (const source of sources) {
+    for (const format of addressableFormats(source.player)) {
+      const key = `${format.itag || ""}|${format.mimeType || ""}|${format.qualityLabel || format.audioQuality || ""}`;
+      if (!rawMap.has(key)) rawMap.set(key, { ...format, _source: source.label });
+    }
+  }
+  const raw = [...rawMap.values()];
+  if (!raw.length) {
+    const statusCounts = { LOGIN_REQUIRED: 0, ERROR: 0, UNPLAYABLE: 0, OTHER: 0 };
+    const testedLabels = new Set();
+    for (const source of sources) {
+      testedLabels.add(source.label);
+      const status = playState(source.player).status;
+      if (Object.prototype.hasOwnProperty.call(statusCounts, status)) statusCounts[status]++;
+      else statusCounts.OTHER++;
+    }
+    for (const step of steps) {
+      const failed = String(step).match(/^【([^】]+)】請求失敗：/);
+      if (!failed || testedLabels.has(failed[1])) continue;
+      testedLabels.add(failed[1]);
+      statusCounts.ERROR++;
+    }
+    const testedCount = testedLabels.size;
+    const hasLoginRequired = statusCounts.LOGIN_REQUIRED > 0;
+    const code = hasLoginRequired ? "AUTH_REQUIRED" : "NO_MEDIA_ADDRESS";
+    const note = hasLoginRequired
+      ? "所有 YouTube 解析來源均未取得可用的媒體位址，部分來源要求登入。"
+      : "所有 YouTube 解析來源均未取得可用的媒體位址。";
+    steps.push(`【解析失敗】已測試 ${testedCount} 個來源，均未取得可用的媒體位址。`);
+    const statusSummary = [
+      `要求登入：${statusCounts.LOGIN_REQUIRED}`,
+      `請求錯誤：${statusCounts.ERROR}`,
+      `無法播放：${statusCounts.UNPLAYABLE}`,
+      ...(statusCounts.OTHER ? [`其他：${statusCounts.OTHER}`] : [])
+    ].join("；");
+    steps.push(`【狀態摘要】${statusSummary}。`);
+    steps.push(`【請求額度】本次解析共使用外部請求 ${budget.summary()} 次${budget.exhausted ? "（曾觸及 Cloudflare 上限）" : ""}。`);
+    return json({ id, phase: mode, subrequests: { used: budget.used, limit: budget.limit }, title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "", formats: [], steps, code, retryable: false, version: VERSION, note });
+  }
+
+  steps.push(`【來源】彙整 ${sources.map(source => source.label).join("、")}，取得「${raw.length}」個不重複的含網址或密文格式。`);
+  const needsRules = raw.some(format => format.signatureCipher || format.cipher || (() => {
+    try { return new URL(format.url || "").searchParams.has("n"); } catch { return false; }
+  })());
+  const rules = needsRules ? await loadPlayerRules(html, steps, budget) : { signature: null, n: null };
+  const counters = { signature: 0, signatureFailed: 0, n: 0, nFailed: 0 };
+  const candidateFormats = raw
+    .map(format => normalize(format, resolveFormatUrl(format, rules, counters)))
+    .filter(Boolean)
+    .sort((a, b) => b.bitrate - a.bitrate);
+  const safariHlsSource = sources.find(source => source.label === "WEB_SAFARI" && source.player?.streamingData?.hlsManifestUrl);
+  // 若有 HLS Master Manifest 需要下載，先替它保留 1 次額度，再把其餘額度用於補驗證。
+  let formats = await verifyYoutubeFormats(candidateFormats, steps, budget, safariHlsSource ? 1 : 0);
+  if (safariHlsSource) {
+    const hlsFormats = await parseHlsMasterFormats(safariHlsSource.player.streamingData.hlsManifestUrl, steps, budget);
+    formats = [...formats, ...hlsFormats];
+  }
+  const visionSabrSource = safariHlsSource ? null : sources.find(source => source.label === "VISIONOS" && hasSabrSeparatedFormats(source.player));
+  if (visionSabrSource) {
+    const sabrFormats = rawFormats(visionSabrSource.player)
+      .map(format => normalizeSabrFormat(format, "VISIONOS"))
+      .filter(format => format.kind === "僅視訊" || format.kind === "僅音訊");
+    const merged = new Map(formats.map(format => [`${format.itag}|${format.kind}|${format.codec}`, format]));
+    for (const format of sabrFormats) merged.set(`${format.itag}|${format.kind}|${format.codec}`, format);
+    formats = [...merged.values()].sort((a, b) => b.bitrate - a.bitrate);
+    steps.push(`【VISIONOS SABR】加入「${sabrFormats.length}」個 SABR 高畫質格式；正式下載將使用 UMP/SABR，不使用傳統 Range。`);
+  }
+  steps.push(`【網址】Signature 成功：「${counters.signature}」個；失敗：「${counters.signatureFailed}」個。`);
+  steps.push(`【網址】N 參數成功：「${counters.n}」個；未處理：「${counters.nFailed}」個。`);
+  steps.push(`【網址】取得「${candidateFormats.length}」個可直接使用的候選網址，開始實際媒體驗證。`);
+  const mediaSessionId = crypto.randomUUID();
+  const refreshApiKey = configValue(html, "INNERTUBE_API_KEY");
+  const refreshVisitorData = stableVisitorData(configValue(html, "VISITOR_DATA"));
+  const sessionFormats = formats.map(format => ({ ...format, sessionId: mediaSessionId, refreshApiKey, refreshVisitorData }));
+  if (visionSabrSource) await cacheYoutubeSabrSession(id, mediaSessionId, visionSabrSource.player, steps);
+  await cacheYoutubeFormats(id,sessionFormats,steps,mediaSessionId);
+  steps.push(`【請求額度】本次解析共使用外部請求 ${budget.summary()} 次${budget.exhausted ? "（曾觸及 Cloudflare 上限）" : ""}。`);
+  return json({ id, phase: mode, mediaSessionId, subrequests: { used: budget.used, limit: budget.limit }, source: sources.filter(source => addressableFormats(source.player).length).map(source => source.label).join("+") || selected.label, version: VERSION, code: formats.length ? "OK" : "SIGNATURE_REQUIRED", title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "",
+    lengthSeconds: details.lengthSeconds || "", formats: sessionFormats, steps,
+    note: formats.length ? "" : (candidateFormats.length ? "播放器有回傳媒體網址，但所有候選均未通過實際媒體驗證。" : "播放器已回傳格式，但格式都只有加密 signatureCipher。此執行環境需要更新播放器規則解析器。") });
+}
+
+
+/* 最終媒體驗證。
+ * 1) 沿用輪詢階段的抽樣結果（同網址不重複請求）。
+ * 2) 以剩餘額度依「來源＋種類」輪流補驗證，優先涵蓋每個群組。
+ * 3) 額度不足而未驗證的格式：只要同群組沒有「全數失敗」就保留，避免把額度問題誤判為網址無效。 */
+async function verifyYoutubeFormats(formats, steps, budget = createSubrequestBudget(), keepBudget = 0) {
+  if (!formats.length) return [];
+  const groupKey = format => `${format.source || ""}|${format.kind || ""}`;
+  const results = new Map();
+  const pending = [];
+
+  for (const format of formats) {
+    const cached = budget.probe.get(format.url);
+    if (cached) results.set(format, cached);
+    else pending.push(format);
+  }
+  const reused = results.size;
+
+  // 依群組輪流排序，避免高位元率的同一種格式吃光所有補驗證額度。
+  const buckets = new Map();
+  for (const format of pending) {
+    const key = groupKey(format);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(format);
+  }
+  const interleaved = [];
+  for (let round = 0; interleaved.length < pending.length; round++) {
+    for (const list of buckets.values()) if (round < list.length) interleaved.push(list[round]);
+  }
+
+  const allowed = Math.min(YT_VERIFY_MAX_EXTRA, Math.max(0, budget.remaining() - Math.max(0, keepBudget)));
+  const queue = interleaved.slice(0, allowed);
+  const unchecked = interleaved.slice(allowed);
+
+  async function worker() {
+    while (queue.length) {
+      const format = queue.shift();
+      const result = await probeMediaUrl(format.url, format.source, budget);
+      if (result.skipped) unchecked.push(format);
+      else results.set(format, result);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(3, queue.length) }, () => worker()));
+
+  const passedGroups = new Set();
+  const failedGroups = new Set();
+  let rejected403 = 0, otherRejected = 0;
+  const errorCounts = new Map();
+  for (const [format, result] of results) {
+    if (result.ok) { passedGroups.add(groupKey(format)); continue; }
+    failedGroups.add(groupKey(format));
+    if (result.status === 403) rejected403++;
+    else {
+      otherRejected++;
+      const reason = result.error || `HTTP ${result.status}`;
+      errorCounts.set(reason, (errorCounts.get(reason) || 0) + 1);
+    }
+  }
+
+  const verified = [];
+  for (const [format, result] of results) {
+    if (!result.ok) continue;
+    const contentLength = Number(format.contentLength || 0) || result.contentLength || 0;
+    verified.push({ ...format, contentLength: contentLength || "", verified: true, verifiedAt: Date.now(), verificationStatus: result.status });
+  }
+
+  let keptUnchecked = 0;
+  for (const format of unchecked) {
+    const key = groupKey(format);
+    if (failedGroups.has(key) && !passedGroups.has(key)) continue;
+    const contentLength = Number(format.contentLength || 0) || clenFromUrl(format.url) || 0;
+    verified.push({ ...format, contentLength: contentLength || "", verified: false, verificationStatus: "unchecked-budget" });
+    keptUnchecked++;
+  }
+
+  verified.sort((a, b) => Number(b.bitrate || 0) - Number(a.bitrate || 0));
+  const passedChecked = verified.filter(format => format.verified).length;
+  steps.push(`【媒體實載驗證 256 KiB】候選「${formats.length}」個；沿用抽樣結果「${reused}」個；本階段新增請求「${results.size - reused}」次；HTTP 200/206 通過「${passedChecked}」個；HTTP 403 淘汰「${rejected403}」個；其他失敗「${otherRejected}」個。`);
+  if (unchecked.length) {
+    steps.push(`【媒體實載驗證】為節省外部請求額度，「${unchecked.length}」個格式採同群組抽樣判定、未逐一實測；已保留「${keptUnchecked}」個（標記為未實測）。`);
+  }
+  if (errorCounts.size) {
+    steps.push(`【媒體實載驗證】失敗原因：${[...errorCounts].map(([reason, count]) => `${reason}×${count}`).join("；")}。`);
+  }
+  if (!verified.length && formats.length) {
+    steps.push("【媒體預先驗證】Player API 雖提供網址，但沒有任何候選通過 Google Video Server 實際存取驗證，因此不顯示無效下載選項。");
+  }
+  return verified;
+}
+
+function decodeHtml(value) {
+  return String(value || "")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
+      try { return String.fromCodePoint(parseInt(hex, 16)); } catch { return _; }
+    })
+    .replace(/&#([0-9]+);/g, (_, decimal) => {
+      try { return String.fromCodePoint(parseInt(decimal, 10)); } catch { return _; }
+    })
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;|&#039;|&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+}
+
+function decodeFacebookValue(value) {
+  let output = decodeHtml(value);
+  try { output = JSON.parse(`"${output.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`); } catch {}
+  return decodeHtml(output)
+    .replace(/\\u0025/g, "%")
+    .replace(/\\u0026/g, "&")
+    .replace(/\\u003D/g, "=")
+    .replace(/\\u003F/g, "?")
+    .replace(/\\u003C/g, "<")
+    .replace(/\\u003E/g, ">")
+    .replace(/\\\//g, "/");
+}
+
+function metaContent(html, property) {
+  const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patterns = [
+    new RegExp(`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["']`, "i"),
+    new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${escaped}["']`, "i")
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) return decodeHtml(match[1]);
+  }
+  return "";
+}
+
+function cleanFacebookTitle(value) {
+  let title = decodeHtml(decodeFacebookValue(value))
+    .replace(/\s*\|\s*Facebook\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!title) return "Facebook 影片";
+  const firstSentence = title.match(/^(.{1,100}?[。！？!?])(?:\s|$)/);
+  if (firstSentence) title = firstSentence[1];
+  else if (title.length > 100) title = `${title.slice(0, 100).trim()}…`;
+  return title;
+}
+
+function inferFacebookHeight(url) {
+  const decoded = decodeURIComponent(url);
+  const match = decoded.match(/(?:height|_nc_ohc|dimensions?)[=_-](\d{3,4})/i) || decoded.match(/(2160|1440|1080|720|540|480|360)p/i);
+  return match ? Number(match[1]) : 0;
+}
+
+function parseDashManifest(value) {
+  const manifest = decodeFacebookValue(value)
+    .replace(/\\n/g, "")
+    .replace(/\\t/g, "")
+    .replace(/\\"/g, '"');
+  const candidates = [];
+  const representationPattern = /<Representation\b([^>]*)>([\s\S]*?)<\/Representation>/gi;
+  let match;
+  while ((match = representationPattern.exec(manifest))) {
+    const attributes = match[1];
+    const body = match[2];
+    const baseUrlMatch = body.match(/<BaseURL>([\s\S]*?)<\/BaseURL>/i);
+    if (!baseUrlMatch) continue;
+    const url = decodeHtml(baseUrlMatch[1].trim());
+    if (!/^https:\/\//i.test(url)) continue;
+    const mime = (attributes.match(/mimeType="([^"]+)"/i) || [])[1] || "";
+    const height = Number((attributes.match(/height="(\d+)"/i) || [])[1] || 0);
+    const bandwidth = Number((attributes.match(/bandwidth="(\d+)"/i) || [])[1] || 0);
+    const codecs = (attributes.match(/codecs="([^"]+)"/i) || [])[1] || "";
+    candidates.push({
+      quality: height ? `${height}p` : mime.startsWith("audio/") ? "音訊" : "HD",
+      height,
+      bitrate: bandwidth,
+      kind: mime.startsWith("audio/") ? "僅音訊" : "僅視訊",
+      mimeType: mime || (height ? "video/mp4" : "audio/mp4"),
+      codec: codecs,
+      url
+    });
+  }
+  return candidates;
+}
+
+const FACEBOOK_VIDEO_FIELD_QUALITY = {
+  browser_native_hd_url: "HD", playable_url_quality_hd: "HD", hd_src: "HD", hdSrc: "HD",
+  hd_src_no_ratelimit: "HD", video_hd_url: "HD", hdUrl: "HD",
+  browser_native_sd_url: "SD", sd_src: "SD", sdSrc: "SD", sd_src_no_ratelimit: "SD", sdUrl: "SD",
+  playable_url: "原始畫質", progressive_url: "原始畫質", video_url: "原始畫質", videoUrl: "原始畫質"
+};
+function collectFacebookDeepFields(source) {
+  const candidates = [];
+  for (const [field, quality] of Object.entries(FACEBOOK_VIDEO_FIELD_QUALITY)) {
+    const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const patterns = [
+      new RegExp(`["']${escaped}["']\\s*:\\s*["']((?:\\\\.|[^"'])+)["']`, "g"),
+      new RegExp(`["']${escaped}["']\\s*:\\s*\\{[^{}]{0,1200}?["']url["']\\s*:\\s*["']((?:\\\\.|[^"'])+)["']`, "g")
+    ];
+    for (const pattern of patterns) {
+      let match;
+      while ((match = pattern.exec(source))) {
+        const url = decodeFacebookValue(match[1]);
+        if (!/^https:\/\//i.test(url) || !/(?:fbcdn\.net|facebook\.com)/i.test(url)) continue;
+        candidates.push({ quality, height: inferFacebookHeight(url), bitrate: quality === "HD" ? 2000000 : quality === "SD" ? 700000 : 0, kind: "影音合一", mimeType: "video/mp4", codec: "", url, field });
+      }
+    }
+  }
+  return candidates;
+}
+function facebookStoryScope(html, pageUrl) {
+  let id = "";
+  try { id = (new URL(pageUrl).pathname.match(/^\/stories\/[^/]+\/([^/?#]+)/i) || [])[1] || ""; } catch {}
+  if (!id) return { html, anchored: false, id: "" };
+  const positions = [];
+  let at = html.indexOf(id);
+  while (at >= 0 && positions.length < 12) { positions.push(at); at = html.indexOf(id, at + id.length); }
+  if (!positions.length) return { html, anchored: false, id };
+  const chunks = positions.map(pos => html.slice(Math.max(0, pos - 180000), Math.min(html.length, pos + 420000)));
+  return { html: chunks.join("\n"), anchored: true, id };
+}
+
+function collectFacebookUrls(html) {
+  const candidates = [...collectFacebookDeepFields(html)];
+  const definitions = [
+    { quality: "HD", patterns: [
+      /"browser_native_hd_url"\s*:\s*"([^"]+)"/g,
+      /"browser_native_hd_url"\s*:\s*\{[^}]*"url"\s*:\s*"([^"]+)"/g,
+      /"hd_src"\s*:\s*"([^"]+)"/g,
+      /"hd_src_no_ratelimit"\s*:\s*"([^"]+)"/g,
+      /"playable_url_quality_hd"\s*:\s*"([^"]+)"/g,
+      /"playable_url_quality_hd"\s*:\s*\{[^}]*"url"\s*:\s*"([^"]+)"/g,
+      /"video_hd_url"\s*:\s*"([^"]+)"/g,
+      /"hdUrl"\s*:\s*"([^"]+)"/g
+    ] },
+    { quality: "SD", patterns: [
+      /"browser_native_sd_url"\s*:\s*"([^"]+)"/g,
+      /"browser_native_sd_url"\s*:\s*\{[^}]*"url"\s*:\s*"([^"]+)"/g,
+      /"sd_src"\s*:\s*"([^"]+)"/g,
+      /"sd_src_no_ratelimit"\s*:\s*"([^"]+)"/g,
+      /"playable_url"\s*:\s*"([^"]+)"/g,
+      /"playable_url"\s*:\s*\{[^}]*"url"\s*:\s*"([^"]+)"/g,
+      /"video_url"\s*:\s*"([^"]+)"/g,
+      /"sdUrl"\s*:\s*"([^"]+)"/g
+    ] }
+  ];
+  for (const definition of definitions) {
+    for (const pattern of definition.patterns) {
+      let match;
+      while ((match = pattern.exec(html))) {
+        const url = decodeFacebookValue(match[1]);
+        if (/^https:\/\//i.test(url)) {
+          const genericQuality = /"(?:playable_url|progressive_url|video_url|videoUrl)"/.test(match[0]);
+          const quality = genericQuality ? "原始畫質" : definition.quality;
+          candidates.push({
+            quality,
+            height: inferFacebookHeight(url),
+            bitrate: quality === "HD" ? 2000000 : quality === "SD" ? 700000 : 0,
+            kind: "影音合一",
+            mimeType: "video/mp4",
+            codec: "",
+            url
+          });
+        }
+      }
+    }
+  }
+
+  const dashPatterns = [
+    /"dash_manifest"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"dashManifest"\s*:\s*"((?:\\.|[^"])*)"/g
+  ];
+  for (const pattern of dashPatterns) {
+    let match;
+    while ((match = pattern.exec(html))) candidates.push(...parseDashManifest(match[1]));
+  }
+
+  const ogVideo = metaContent(html, "og:video") || metaContent(html, "og:video:url") || metaContent(html, "og:video:secure_url");
+  if (/^https:\/\//i.test(ogVideo)) {
+    candidates.push({ quality: "原始畫質", height: 0, bitrate: 0, kind: "影音合一", mimeType: "video/mp4", codec: "", url: ogVideo });
+  }
+
+  const unique = new Map();
+  for (const candidate of candidates) {
+    const key = `${candidate.kind}|${candidate.height || candidate.quality}|${candidate.url}`;
+    if (!unique.has(key)) unique.set(key, candidate);
+  }
+  return [...unique.values()];
+}
+
+function validateFacebookPageUrl(value) {
+  const url = new URL(value);
+  if (url.protocol !== "https:" || !FACEBOOK_PAGE_HOSTS.includes(url.hostname.toLowerCase())) {
+    throw new Error("僅接受 Facebook 或 fb.watch 的 HTTPS 網址。");
+  }
+  return url;
+}
+
+
+function isFacebookSharePath(url) {
+  if (url.hostname.toLowerCase() === "fb.watch") return true;
+  return /^\/share\/(?:r\/|v\/|reel\/)?[^/?#]+\/?$/i.test(url.pathname);
+}
+
+function isFacebookAuthPath(url) {
+  return /^\/(?:login|checkpoint|recover|reg|privacy\/consent)(?:\/|$)/i.test(url.pathname);
+}
+
+function isFacebookStoryPath(url) {
+  return /^\/stories\/[^/]+\/[^/?#]+/i.test(url.pathname);
+}
+
+function cleanFacebookStoryUrl(input) {
+  const url = new URL(input.href);
+  ["mibextid", "source", "refsrc", "ref", "sfnsn"].forEach(key => url.searchParams.delete(key));
+  url.searchParams.set("view_single", "1");
+  url.hash = "";
+  return url;
+}
+
+function isUsableFacebookVideoUrl(url) {
+  return !isFacebookSharePath(url) && !isFacebookAuthPath(url);
+}
+
+function cleanFacebookShareUrl(input) {
+  const url = new URL(input.href);
+  ["mibextid", "sfnsn", "d", "rdid", "share_url", "refsrc", "ref"].forEach(key => url.searchParams.delete(key));
+  url.hash = "";
+  return url;
+}
+
+function absoluteFacebookUrl(value, baseUrl) {
+  if (!value) return "";
+  const decoded = decodeFacebookValue(value);
+  try {
+    const url = new URL(decoded, baseUrl);
+    return FACEBOOK_PAGE_HOSTS.includes(url.hostname.toLowerCase()) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function canonicalFacebookUrl(html, baseUrl) {
+  const candidates = [
+    metaContent(html, "og:url"),
+    metaContent(html, "al:android:url"),
+    metaContent(html, "al:ios:url"),
+    metaContent(html, "twitter:url"),
+    (html.match(/<meta[^>]+http-equiv=["']refresh["'][^>]+content=["'][^"']*url=([^"']+)["']/i) || [])[1] || "",
+    (html.match(/(?:window\.location(?:\.href)?|location\.replace)\s*(?:=|\()\s*["']([^"']+)["']/i) || [])[1] || "",
+    (html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i) || [])[1] || "",
+    (html.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["']/i) || [])[1] || "",
+    (html.match(/"url"\s*:\s*"(https?:\\?\/\\?\/(?:www\.)?facebook\.com\\?\/(?:reel|watch|[^"\\]+\/videos)\\?\/[^"\\]+)"/i) || [])[1] || ""
+  ];
+  const base = new URL(baseUrl);
+  for (const candidate of candidates) {
+    const result = absoluteFacebookUrl(candidate, baseUrl);
+    if (!result) continue;
+    const resolved = new URL(result);
+    if (resolved.href === base.href || isFacebookSharePath(resolved) || isFacebookAuthPath(resolved)) continue;
+    return resolved.href;
+  }
+  return "";
+}
+
+async function fetchFacebookPage(url, options = {}) {
+  const mobile = Boolean(options.mobile);
+  const target = new URL(url.href);
+  if (mobile && target.hostname !== "fb.watch") target.hostname = "m.facebook.com";
+  const headers = new Headers({
+    "User-Agent": mobile
+      ? "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36"
+      : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
+    "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.7",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Upgrade-Insecure-Requests": "1"
+  });
+  if (options.cookie) headers.set("Cookie", options.cookie);
+  return fetch(target, {
+    method: "GET",
+    headers,
+    redirect: options.redirect || "manual",
+    cache: "no-store"
+  });
+}
+
+async function resolveFacebookShareUrl(inputUrl, steps, cookie = "") {
+  const original = cleanFacebookShareUrl(inputUrl);
+  const genericShare = /^\/share\/[^/]+\/?$/i.test(original.pathname);
+  steps.push(`【FACEBOOK】已辨識${genericShare ? "通用" : "分類"}分享網址：${original.pathname}`);
+  steps.push("【FACEBOOK】已移除分享追蹤參數。");
+
+  function validResolvedUrl(value) {
+    if (!value) return null;
+    try {
+      const url = cleanFacebookShareUrl(new URL(value, original.href));
+      if (!FACEBOOK_PAGE_HOSTS.includes(url.hostname.toLowerCase())) return null;
+      if (isFacebookAuthPath(url) || isFacebookSharePath(url)) return null;
+      return url;
+    } catch {
+      return null;
+    }
+  }
+
+  async function inspectResponse(response, label, requestUrl) {
+    steps.push(`【FACEBOOK】${label}回傳 HTTP ${response.status}。`);
+    const location = response.headers.get("Location");
+    if (location) {
+      const locationUrl = absoluteFacebookUrl(location, requestUrl.href);
+      const resolved = validResolvedUrl(locationUrl);
+      if (resolved) {
+        steps.push(`【FACEBOOK】${label}已取得固定網址：${resolved.pathname}`);
+        return resolved;
+      }
+      if (locationUrl) {
+        const rejected = new URL(locationUrl);
+        if (isFacebookAuthPath(rejected)) {
+          steps.push(`【FACEBOOK】${label}指向登入頁，忽略該位置並繼續匿名備援。`);
+        } else if (isFacebookSharePath(rejected)) {
+          steps.push(`【FACEBOOK】${label}仍指向分享中介頁，繼續匿名備援。`);
+        }
+      }
+    }
+
+    const html = await response.text().catch(() => "");
+    if (!html) return null;
+    const canonical = canonicalFacebookUrl(html, requestUrl.href);
+    const resolved = validResolvedUrl(canonical);
+    if (resolved) {
+      steps.push(`【FACEBOOK】${label}已從頁面資料取得固定網址：${resolved.pathname}`);
+      return resolved;
+    }
+    return null;
+  }
+
+  const variants = [];
+  const seen = new Set();
+  function addVariant(hostname, mobile, redirect, label) {
+    const url = new URL(original.href);
+    url.hostname = hostname;
+    const key = `${url.href}|${mobile}|${redirect}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    variants.push({ url, mobile, redirect, label });
+  }
+
+  addVariant(original.hostname, original.hostname === "m.facebook.com", "manual", "原始分享網址");
+  addVariant("m.facebook.com", true, "manual", "行動版手動轉址");
+  addVariant("www.facebook.com", false, "manual", "桌面版手動轉址");
+  addVariant("m.facebook.com", true, "follow", "行動版自動轉址");
+  addVariant("www.facebook.com", false, "follow", "桌面版自動轉址");
+
+  for (const variant of variants) {
+    try {
+      const response = await fetchFacebookPage(variant.url, {
+        mobile: variant.mobile,
+        redirect: variant.redirect,
+        cookie
+      });
+
+      if (variant.redirect === "follow") {
+        const finalUrl = validResolvedUrl(response.url);
+        if (finalUrl) {
+          steps.push(`【FACEBOOK】${variant.label}回傳 HTTP ${response.status}。`);
+          steps.push(`【FACEBOOK】${variant.label}已取得固定網址：${finalUrl.pathname}`);
+          return finalUrl;
+        }
+        if (isFacebookAuthPath(new URL(response.url))) {
+          steps.push(`【FACEBOOK】${variant.label}回傳 HTTP ${response.status}，最終仍進入登入頁。`);
+        }
+      }
+
+      const resolved = await inspectResponse(response, variant.label, variant.url);
+      if (resolved) return resolved;
+    } catch (error) {
+      steps.push(`【FACEBOOK】${variant.label}失敗：${error.message}。`);
+    }
+  }
+
+  steps.push("【FACEBOOK】匿名分享入口均未取得固定網址，保留原分享網址交由後續頁面解析或登入工作階段備援。");
+  return original;
+}
+
+function requestFacebookCookie(request, env) {
+  const supplied = String(request.headers.get("X-FB-Session") || "").trim();
+  const secret = String(env && env.FB_COOKIE || "").trim();
+  return supplied || secret;
+}
+async function facebookResolve(value, env, request) {
+  let pageUrl;
+  try { pageUrl = validateFacebookPageUrl(value); }
+  catch (error) { return json({ error: error.message, code: "INVALID_FACEBOOK_URL", version: VERSION }, 400); }
+
+  const steps = [];
+  const cookie = requestFacebookCookie(request, env);
+  const storyMode = isFacebookStoryPath(pageUrl);
+  if (storyMode) {
+    pageUrl = cleanFacebookStoryUrl(pageUrl);
+    steps.push("【FACEBOOK STORY】已辨識限時動態網址，改用登入工作階段專用流程。");
+  }
+  const originalUrl = new URL(pageUrl.href);
+
+  async function resolveAndFetch(activeCookie, label) {
+    let target = new URL(originalUrl.href);
+    if (isFacebookSharePath(target)) {
+      target = await resolveFacebookShareUrl(target, steps, activeCookie);
+    }
+    let result = await fetchFacebookPage(target, { mobile: true, redirect: "follow", cookie: activeCookie });
+    steps.push(`【FACEBOOK】${label}影片頁面回傳 HTTP ${result.status}。`);
+    let resultUrl = new URL(result.url);
+    if ((!result.ok || isFacebookAuthPath(resultUrl)) && target.hostname !== "www.facebook.com") {
+      const desktopUrl = new URL(target.href);
+      desktopUrl.hostname = "www.facebook.com";
+      result = await fetchFacebookPage(desktopUrl, { redirect: "follow", cookie: activeCookie });
+      resultUrl = new URL(result.url);
+      steps.push(`【FACEBOOK】${label}桌面版備援回傳 HTTP ${result.status}。`);
+    }
+    return { response: result, finalUrl: resultUrl };
+  }
+
+  if (storyMode && !cookie) {
+    return json({
+      error: "Facebook 限時動態需要登入工作階段；目前 Worker 尚未設定 FB_COOKIE Secret。",
+      code: "FB_STORY_SESSION_REQUIRED",
+      retryable: false,
+      version: VERSION,
+      steps
+    }, 401);
+  }
+
+  let attempt = storyMode
+    ? await resolveAndFetch(cookie, "限時動態登入工作階段")
+    : await resolveAndFetch("", "訪客");
+  let response = attempt.response;
+  let finalUrlObject = attempt.finalUrl;
+
+  if (!storyMode && (!response.ok || isFacebookAuthPath(finalUrlObject)) && cookie) {
+    steps.push("【FACEBOOK】訪客模式未取得影片頁面，開始使用 FB_COOKIE Secret 重試。");
+    attempt = await resolveAndFetch(cookie, "登入工作階段");
+    response = attempt.response;
+    finalUrlObject = attempt.finalUrl;
+  }
+
+  if (isFacebookAuthPath(finalUrlObject)) {
+    return json({ error: cookie ? "FB_COOKIE 工作階段已失效或沒有影片觀看權限。" : "Facebook 將網址導向登入頁；尚未設定 FB_COOKIE Secret。", code: cookie ? "FB_SESSION_EXPIRED" : "FB_SESSION_REQUIRED", retryable: false, version: VERSION, steps }, 401);
+  }
+  if (!response.ok) return json({ error: `Facebook 影片頁面回傳 HTTP ${response.status}。`, code: "FACEBOOK_PAGE_ERROR", version: VERSION, steps }, 502);
+
+  const finalUrl = finalUrlObject.href;
+  let html = await response.text();
+  steps.push(`【FACEBOOK】已取得影片頁面 HTML，共「${html.length}」個字元。`);
+  const storyScope = storyMode ? facebookStoryScope(html, finalUrl) : { html, anchored: false, id: "" };
+  if (storyMode) steps.push(`【FACEBOOK STORY】Story ID：${storyScope.id || "未取得"}；資料錨點：${storyScope.anchored ? "找到" : "未找到，使用完整頁面"}。`);
+  let found = collectFacebookUrls(storyScope.html);
+
+  const hasHighQuality = found.some(item => item.kind === "僅視訊" || Number(item.height || 0) >= 720 || item.quality === "HD");
+  if (!hasHighQuality && cookie) {
+    steps.push("【FACEBOOK】訪客頁面尚未取得明確高畫質，使用 FB_COOKIE 再搜尋 HD 與 DASH 格式。");
+    const authenticated = await fetchFacebookPage(new URL(finalUrl), { mobile: false, redirect: "follow", cookie });
+    steps.push(`【FACEBOOK】登入工作階段高畫質頁面回傳 HTTP ${authenticated.status}。`);
+    if (authenticated.ok && !isFacebookAuthPath(new URL(authenticated.url))) {
+      const authenticatedHtml = await authenticated.text();
+      steps.push(`【FACEBOOK】已取得登入工作階段 HTML，共「${authenticatedHtml.length}」個字元。`);
+      const authenticatedScope = storyMode ? facebookStoryScope(authenticatedHtml, authenticated.url) : { html: authenticatedHtml };
+      const merged = new Map();
+      for (const item of [...found, ...collectFacebookUrls(authenticatedScope.html)]) {
+        merged.set(`${item.kind}|${item.height || item.quality}|${item.url}`, item);
+      }
+      found = [...merged.values()];
+      html = `${html}
+${authenticatedHtml}`;
+    }
+  }
+
+  const fieldCount = found.filter(item => item.field).length;
+  if (storyMode) steps.push(`【FACEBOOK STORY】深層欄位解析取得「${fieldCount}」個候選來源。`);
+  const muxedCount = found.filter(item => item.kind === "影音合一").length;
+  const videoCount = found.filter(item => item.kind === "僅視訊").length;
+  const audioCount = found.filter(item => item.kind === "僅音訊").length;
+  steps.push(`${storyMode ? "【FACEBOOK STORY】" : "【FACEBOOK】"}找到「${found.length}」個媒體格式：影音合一「${muxedCount}」個、僅視訊「${videoCount}」個、僅音訊「${audioCount}」個。`);
+
+  const formats = found.map((item, index) => ({
+    itag: `fb-${String(item.kind || "media").replace(/[^a-z0-9]/gi, "").toLowerCase()}-${item.height || String(item.quality).toLowerCase()}-${index + 1}`,
+    quality: item.height ? `${item.height}p` : (item.quality || "未知畫質"),
+    kind: item.kind || "影音合一",
+    container: String(item.mimeType || "video/mp4").includes("webm") ? "webm" : "mp4",
+    mimeType: item.mimeType || "video/mp4",
+    codec: item.codec || "",
+    bitrate: item.bitrate || 0,
+    contentLength: "",
+    source: "FACEBOOK",
+    url: item.url
+  })).sort((a, b) => {
+    const heightA = Number((String(a.quality).match(/\d+/) || [0])[0]);
+    const heightB = Number((String(b.quality).match(/\d+/) || [0])[0]);
+    return heightB - heightA || b.bitrate - a.bitrate;
+  });
+
+  const rawTitle = metaContent(html, "og:title") || metaContent(html, "twitter:title") || "Facebook 影片";
+  const title = cleanFacebookTitle(rawTitle);
+  const thumbnail = metaContent(html, "og:image") || metaContent(html, "twitter:image");
+  const idMatch = finalUrl.match(/(?:videos|reel)\/(\d+)/) || finalUrl.match(/[?&]v=(\d+)/);
+  const id = idMatch ? idMatch[1] : `fb-${Date.now()}`;
+
+  if (!formats.length) {
+    return json({
+      platform: "facebook", id, canonicalUrl: finalUrl, title, thumbnail, formats: [], steps,
+      code: "FACEBOOK_MEDIA_NOT_FOUND", retryable: false, version: VERSION,
+      note: storyMode
+        ? "限時動態頁面已載入，但沒有找到可下載的影片媒體。內容可能是圖片、已過期，或目前登入帳戶沒有觀看權限。"
+        : "頁面中沒有找到公開 HD／SD 媒體網址。影片可能需要登入、不是公開內容，或 Facebook 已調整頁面資料格式。"
+    });
+  }
+
+  return json({ platform: "facebook", contentType: storyMode ? "story" : "video", id, canonicalUrl: finalUrl, source: "FACEBOOK", version: VERSION, code: "OK", title, thumbnail, lengthSeconds: "", formats, steps, note: "" });
+}
+
+async function facebookMedia(request, target, env) {
+  let url;
+  try { url = new URL(target); }
+  catch { return json({ error: "Facebook 媒體網址無效。", code: "INVALID_FACEBOOK_MEDIA_URL", version: VERSION }, 400); }
+
+  if (url.protocol !== "https:" || !FACEBOOK_MEDIA_SUFFIXES.some(suffix => url.hostname === suffix.slice(1) || url.hostname.endsWith(suffix))) {
+    return json({ error: "此 Facebook 媒體網域未列入允許清單。", code: "FACEBOOK_MEDIA_DOMAIN_DENIED", version: VERSION }, 403);
+  }
+
+  const headers = new Headers({
+    "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36",
+    "Referer": "https://www.facebook.com/",
+    "Accept": "*/*",
+    "Accept-Encoding": "identity"
+  });
+  const cookie = requestFacebookCookie(request, env);
+  if (cookie) headers.set("Cookie", cookie);
+  const range = request.headers.get("Range");
+  if (range) headers.set("Range", range);
+
+  const upstream = await fetch(url, { method: request.method, headers, redirect: "follow", cache: "no-store" });
+  const output = new Headers(upstream.headers);
+  Object.entries(cors()).forEach(([key, value]) => output.set(key, value));
+  output.set("Cache-Control", "no-store");
+  output.set("X-OwO-Version", VERSION);
+  output.set("Content-Disposition", 'attachment; filename="facebook-video.mp4"');
+  return new Response(upstream.body, { status: upstream.status, headers: output });
+}
+
+
+function requestMetaCookie(request, env, platform) {
+  const header = platform === "instagram" ? "X-IG-Session" : "X-TH-Session";
+  const secretName = platform === "instagram" ? "IG_COOKIE" : "TH_COOKIE";
+  const supplied = String(request.headers.get(header) || "").trim();
+  const secret = String(env && env[secretName] || "").trim();
+  const instagramFallback = platform === "threads" ? String(request.headers.get("X-IG-Session") || env && env.IG_COOKIE || "").trim() : "";
+  return supplied || secret || instagramFallback;
+}
+
+function normalizeSocialUrl(value, platform) {
+  const url = new URL(value);
+  const hosts = platform === "instagram" ? INSTAGRAM_PAGE_HOSTS : THREADS_PAGE_HOSTS;
+  if (url.protocol !== "https:" || !hosts.includes(url.hostname.toLowerCase())) throw new Error(`僅接受 ${platform === "instagram" ? "Instagram" : "Threads"} 的 HTTPS 網址。`);
+  url.hash = "";
+  ["igsh", "igshid", "utm_source", "utm_medium", "utm_campaign", "xmt", "share_id", "fbclid"].forEach(key => url.searchParams.delete(key));
+  if (platform === "instagram") {
+    url.hostname = "www.instagram.com";
+    const reel = url.pathname.match(/^\/(?:reels?|reel)\/([^/?#]+)/i);
+    const post = url.pathname.match(/^\/(?:p|tv)\/([^/?#]+)/i);
+    const story = url.pathname.match(/^\/stories\/([^/?#]+)\/([^/?#]+)/i);
+    const highlight = url.pathname.match(/^\/stories\/highlights\/([^/?#]+)/i);
+    if (reel) url.pathname = `/reel/${reel[1]}/`;
+    else if (post) url.pathname = `/p/${post[1]}/`;
+    else if (story) url.pathname = `/stories/${story[1]}/${story[2]}/`;
+    else if (highlight) url.pathname = `/stories/highlights/${highlight[1]}/`;
+  } else {
+    url.hostname = "www.threads.com";
+    const full = url.pathname.match(/^\/@([^/]+)\/post\/([^/?#]+)/i);
+    const short = url.pathname.match(/^\/t\/([^/?#]+)/i);
+    const share = url.pathname.match(/^\/share\/([^/?#]+)/i);
+    if (full) url.pathname = `/@${full[1]}/post/${full[2]}/`;
+    else if (short) url.pathname = `/t/${short[1]}/`;
+    else if (share) url.pathname = `/share/${share[1]}/`;
+  }
+  return url;
+}
+
+function socialContentType(url, platform) {
+  if (platform === "instagram") {
+    if (/^\/stories\/highlights\//i.test(url.pathname)) return "highlight";
+    if (/^\/stories\//i.test(url.pathname)) return "story";
+    if (/^\/reel\//i.test(url.pathname)) return "reel";
+    if (/^\/p\//i.test(url.pathname)) return "post";
+    return "unknown";
+  }
+  if (/^\/share\/[^/?#]+\/?$/i.test(url.pathname)) return "share";
+  return /^\/(?:@[^/]+\/post|t)\//i.test(url.pathname) ? "post" : "unknown";
+}
+
+function decodeSocialMediaUrl(value) {
+  let out = String(value || "");
+  for (let i = 0; i < 4; i++) {
+    const before = out;
+    out = decodeFacebookValue(out).replace(/\\u0026/gi, "&").replace(/\\u003d/gi, "=").replace(/\\u002f/gi, "/").replace(/&amp;/gi, "&");
+    if (out === before) break;
+  }
+  return out;
+}
+function socialMediaKey(value) {
+  try { const u = new URL(value); return `${u.hostname.toLowerCase()}${u.pathname}`; } catch { return value; }
+}
+function jsonLdVideos(html) {
+  const urls = []; let m;
+  const re = new RegExp(`<script[^>]+type=["']application/ld\\+json["'][^>]*>([\\s\\S]*?)</script>`, "gi");
+  while ((m = re.exec(html))) {
+    try {
+      const q = [JSON.parse(decodeHtml(m[1]))];
+      while (q.length) { const v=q.shift(); if (!v || typeof v!=="object") continue;
+        for (const [k,x] of Object.entries(v)) { if (typeof x==="string" && /^(?:https:).*?(?:\\.mp4|cdninstagram|fbcdn)/i.test(x)) urls.push(x); else if (x && typeof x==="object") q.push(...(Array.isArray(x)?x:[x])); }
+      }
+    } catch {}
+  }
+  return urls;
+}
+function collectMetaSocialMedia(html, platform) {
+  const candidates = [];
+  const add = (url, quality = "原始畫質", kind = "影音合一", mimeType = "video/mp4", bitrate = 0) => {
+    const decoded = decodeSocialMediaUrl(url);
+    if (/^https:\/\//i.test(decoded)) candidates.push({ url: decoded, quality, kind, mimeType, bitrate });
+  };
+
+  [metaContent(html, "og:video"), metaContent(html, "og:video:url"), metaContent(html, "og:video:secure_url"), metaContent(html, "twitter:player:stream")].filter(Boolean).forEach(url => add(url));
+  jsonLdVideos(html).forEach(url => add(url));
+
+  const videoPatterns = [
+    /"video_url"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"videoUrl"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"contentUrl"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"content_url"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"playable_url"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"playable_url_quality_hd"\s*:\s*"((?:\\.|[^"])*)"/g,
+    /"src"\s*:\s*"((?:\\.|[^"])*?(?:cdninstagram|fbcdn)[^"]*?\.mp4(?:[^"\\]*|\\.)*)"/g
+  ];
+  for (const pattern of videoPatterns) {
+    let match;
+    while ((match = pattern.exec(html))) add(match[1], /quality_hd|1080|720/i.test(match[0]) ? "HD" : "原始畫質");
+  }
+
+  const versionObjects = /"video_versions"\s*:\s*\[([\s\S]*?)\]/g;
+  let versions;
+  while ((versions = versionObjects.exec(html))) {
+    const itemPattern = /\{([\s\S]*?)\}/g;
+    let item;
+    while ((item = itemPattern.exec(versions[1]))) {
+      const url = (item[1].match(/"url"\s*:\s*"((?:\\.|[^"])*)"/) || [])[1];
+      const width = Number((item[1].match(/"width"\s*:\s*(\d+)/) || [])[1] || 0);
+      const height = Number((item[1].match(/"height"\s*:\s*(\d+)/) || [])[1] || 0);
+      if (url) add(url, height ? `${height}p` : width ? `${width}px` : "原始畫質", "影音合一", "video/mp4", height * width);
+    }
+  }
+
+  const images = [metaContent(html, "og:image"), metaContent(html, "twitter:image")].filter(Boolean);
+  const unique = new Map();
+  for (const item of candidates) {
+    const key = socialMediaKey(item.url);
+    if (!unique.has(key)) unique.set(key, item);
+  }
+  return { media: [...unique.values()], images };
+}
+
+function socialLoginPage(url, html, platform) {
+  if (/\/(?:accounts\/login|login|challenge|checkpoint)(?:\/|$)/i.test(url.pathname)) return true;
+  const markers = platform === "instagram"
+    ? ["Log in • Instagram", "loginForm", "accounts/login"]
+    : ["Log in • Threads", "LoginForm", "login"];
+  return markers.filter(marker => html.includes(marker)).length >= 2;
+}
+
+async function fetchSocialPage(url, platform, cookie = "") {
+  const referer = platform === "instagram" ? "https://www.instagram.com/" : "https://www.threads.com/";
+  const headers = new Headers({
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1",
+    "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.7",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Referer": referer,
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache"
+  });
+  if (cookie) headers.set("Cookie", cookie);
+  return fetch(url, { headers, redirect: "follow", cache: "no-store" });
+}
+
+
+function instagramShortcode(url) {
+  return (url.pathname.match(/^\/(?:reel|p|tv)\/([^/?#]+)/i) || [])[1] || "";
+}
+
+function instagramCsrfFromPage(html, response, cookie = "") {
+  const cookieMatch = String(cookie).match(/(?:^|;\s*)csrftoken=([^;]+)/i);
+  if (cookieMatch) return decodeURIComponent(cookieMatch[1]);
+  const htmlPatterns = [
+    /"csrf_token"\s*:\s*"([^"]+)"/i,
+    /"csrfToken"\s*:\s*"([^"]+)"/i,
+    /csrftoken=([^;"'\\]+)/i
+  ];
+  for (const pattern of htmlPatterns) {
+    const found = html.match(pattern);
+    if (found) return decodeSocialMediaUrl(found[1]);
+  }
+  const setCookie = response && response.headers ? String(response.headers.get("set-cookie") || "") : "";
+  const headerMatch = setCookie.match(/csrftoken=([^;]+)/i);
+  return headerMatch ? decodeURIComponent(headerMatch[1]) : "";
+}
+
+function instagramMediaFromApi(value) {
+  const candidates = [];
+  const images = [];
+  const visited = new Set();
+  const queue = [value];
+  const addVideo = (url, width = 0, height = 0) => {
+    const decoded = decodeSocialMediaUrl(url);
+    if (!/^https:\/\//i.test(decoded) || !/(?:cdninstagram|fbcdn)/i.test(decoded)) return;
+    candidates.push({
+      url: decoded,
+      quality: height ? `${height}p` : width ? `${width}px` : "原始畫質",
+      kind: "影音合一",
+      mimeType: "video/mp4",
+      bitrate: Number(width || 0) * Number(height || 0)
+    });
+  };
+  while (queue.length) {
+    const item = queue.shift();
+    if (!item || typeof item !== "object" || visited.has(item)) continue;
+    visited.add(item);
+    if (typeof item.video_url === "string") addVideo(item.video_url, item.original_width || item.width, item.original_height || item.height);
+    if (typeof item.videoUrl === "string") addVideo(item.videoUrl, item.width, item.height);
+    if (typeof item.contentUrl === "string" && /(?:\.mp4|cdninstagram|fbcdn)/i.test(item.contentUrl)) addVideo(item.contentUrl, item.width, item.height);
+    if (Array.isArray(item.video_versions)) {
+      for (const version of item.video_versions) addVideo(version && version.url, version && version.width, version && version.height);
+    }
+    const imageUrl = item.image_versions2 && item.image_versions2.candidates && item.image_versions2.candidates[0] && item.image_versions2.candidates[0].url;
+    if (imageUrl) images.push(decodeSocialMediaUrl(imageUrl));
+    for (const child of Object.values(item)) {
+      if (child && typeof child === "object") queue.push(...(Array.isArray(child) ? child : [child]));
+    }
+  }
+  const unique = new Map();
+  for (const candidate of candidates) {
+    const key = socialMediaKey(candidate.url);
+    const old = unique.get(key);
+    if (!old || candidate.bitrate > old.bitrate) unique.set(key, candidate);
+  }
+  return { media: [...unique.values()], images: [...new Set(images)] };
+}
+
+async function fetchInstagramGraphql(url, pageHtml, pageResponse, cookie, steps) {
+  const shortcode = instagramShortcode(url);
+  if (!shortcode) return { media: [], images: [] };
+  const csrf = instagramCsrfFromPage(pageHtml, pageResponse, cookie);
+  const variables = {
+    shortcode,
+    fetch_tagged_user_count: null,
+    hoisted_comment_id: null,
+    hoisted_reply_id: null,
+    __relay_internal__pv__PolarisAIGMMediaWebLabelEnabledrelayprovider: false,
+    __relay_internal__pv__PolarisIsLoggedInrelayprovider: Boolean(cookie)
+  };
+  const body = new URLSearchParams({
+    av: "0",
+    __d: "www",
+    __user: "0",
+    __a: "1",
+    __req: "1",
+    __comet_req: "7",
+    fb_api_caller_class: "RelayModern",
+    fb_api_req_friendly_name: "PolarisPostRootQuery",
+    variables: JSON.stringify(variables),
+    server_timestamps: "true",
+    doc_id: "27128499623469141"
+  });
+  const headers = new Headers({
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1",
+    "Accept": "*/*",
+    "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.7",
+    "Content-Type": "application/x-www-form-urlencoded",
+    "Origin": "https://www.instagram.com",
+    "Referer": url.href,
+    "X-IG-App-ID": "936619743392459",
+    "X-FB-Friendly-Name": "PolarisPostRootQuery",
+    "X-ASBD-ID": "129477"
+  });
+  if (csrf) headers.set("X-CSRFToken", csrf);
+  const combinedCookie = [cookie, csrf && !/(?:^|;\s*)csrftoken=/i.test(cookie || "") ? `csrftoken=${csrf}` : ""].filter(Boolean).join("; ");
+  if (combinedCookie) headers.set("Cookie", combinedCookie);
+  try {
+    const response = await fetch("https://www.instagram.com/graphql/query", {
+      method: "POST",
+      headers,
+      body,
+      redirect: "follow",
+      cache: "no-store"
+    });
+    const text = await response.text();
+    steps.push(`【INSTAGRAM GRAPHQL】PolarisPostRootQuery 回傳 HTTP ${response.status}，JSON「${text.length}」個字元。`);
+    if (!response.ok) return { media: [], images: [] };
+    let data;
+    try { data = JSON.parse(text.replace(/^for \(;;\);/, "")); }
+    catch { steps.push(`【INSTAGRAM GRAPHQL】回應不是有效 JSON：${text.slice(0,180).replace(/\s+/g," ")}。`); return { media: [], images: [] }; }
+    if (data.error || data.message || data.require_login) steps.push(`【INSTAGRAM GRAPHQL】狀態：${data.error || data.message || "需要登入"}。`);
+    if (Array.isArray(data.errors)) for (const err of data.errors) steps.push(`【INSTAGRAM GRAPHQL】錯誤：${err.message || err.summary || JSON.stringify(err).slice(0,160)}。`);
+    const parsed = instagramMediaFromApi(data);
+    steps.push(`【INSTAGRAM GRAPHQL】shortcode ${shortcode} 找到「${parsed.media.length}」個目標影片格式。`);
+    return parsed;
+  } catch (error) {
+    steps.push(`【INSTAGRAM GRAPHQL】請求失敗：${error.message}。`);
+    return { media: [], images: [] };
+  }
+}
+
+
+function mergeInstagramResults(...results) {
+  const media = new Map(), images = [];
+  for (const result of results) {
+    for (const item of result?.media || []) { const key=socialMediaKey(item.url); if (!media.has(key) || (item.bitrate||0)>(media.get(key).bitrate||0)) media.set(key,item); }
+    for (const image of result?.images || []) if (image && !images.includes(image)) images.push(image);
+  }
+  return { media:[...media.values()], images };
+}
+function collectInstagramEmbedMedia(html) {
+  const base = collectMetaSocialMedia(html,"instagram");
+  const candidates=[...base.media], images=[...base.images];
+  const add=(raw,w=0,h=0)=>{ const url=decodeSocialMediaUrl(raw); if (/^https:\/\//i.test(url) && /(?:cdninstagram|fbcdn)/i.test(url)) candidates.push({url,quality:h?`${h}p`:w?`${w}px`:"原始畫質",kind:"影音合一",mimeType:"video/mp4",bitrate:Number(w)*Number(h)}); };
+  const variants=[html, decodeHtml(html), html.replace(/\\u0026/gi,"&").replace(/\\u003d/gi,"=").replace(/\\u002f/gi,"/").replace(/\\\//g,"/")];
+  const patterns=[
+    /["']video_url["']\s*:\s*["']([^"']+)["']/gi,
+    /["']videoUrl["']\s*:\s*["']([^"']+)["']/gi,
+    /["']contentUrl["']\s*:\s*["']([^"']+)["']/gi,
+    /(https?:\\?\/\\?\/(?:[^"'<>\\]|\\.)*?(?:cdninstagram|fbcdn)(?:[^"'<>\\]|\\.)*?\.mp4(?:[^"'<>\\]|\\.)*)/gi
+  ];
+  for (const source of variants) for (const pattern of patterns) { pattern.lastIndex=0; let m; while((m=pattern.exec(source))) add(m[1]); }
+  const blocks=[...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)];
+  for (const block of blocks) { const text=decodeHtml(block[1]).trim(); if (!text || !/[{[]/.test(text)) continue; const starts=[]; for(let i=0;i<text.length;i++) if(text[i]==='{'||text[i]==='[') starts.push(i); for(const start of starts.slice(0,30)){ try{const obj=JSON.parse(text.slice(start)); const parsed=instagramMediaFromApi(obj); candidates.push(...parsed.media); images.push(...parsed.images); break;}catch{}} }
+  const map=new Map(); for(const item of candidates){const key=socialMediaKey(item.url);if(!map.has(key)||(item.bitrate||0)>(map.get(key).bitrate||0))map.set(key,item);} return {media:[...map.values()],images:[...new Set(images)]};
+}
+async function fetchInstagramEmbedData(url,cookie,steps){
+  const code=instagramShortcode(url); if(!code)return {media:[],images:[]}; const type=url.pathname.startsWith('/reel/')?'reel':'p';
+  for(const suffix of ['embed/captioned/','embed/']){const target=new URL(`https://www.instagram.com/${type}/${code}/${suffix}`); const response=await fetchSocialPage(target,'instagram',cookie); const html=await response.text(); steps.push(`【INSTAGRAM EMBED】/${type}/${code}/${suffix} 回傳 HTTP ${response.status}，HTML「${html.length}」個字元。`); if(!response.ok)continue; const parsed=collectInstagramEmbedMedia(html); steps.push(`【INSTAGRAM EMBED】深層資料找到「${parsed.media.length}」個目標影片格式。`); if(parsed.media.length)return parsed;} return {media:[],images:[]};
+}
+async function fetchInstagramLegacyJson(url,cookie,steps){
+  const target=new URL(url);target.searchParams.set('__a','1');target.searchParams.set('__d','dis');const headers=new Headers({'User-Agent':'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1','Accept':'application/json,text/plain,*/*','X-IG-App-ID':'936619743392459','X-Requested-With':'XMLHttpRequest','Referer':url.href});if(cookie)headers.set('Cookie',cookie);const response=await fetch(target,{headers,redirect:'follow',cache:'no-store'});const text=await response.text();steps.push(`【INSTAGRAM JSON】__a=1 回傳 HTTP ${response.status}，內容「${text.length}」個字元。`);if(!response.ok)return {media:[],images:[]};try{return instagramMediaFromApi(JSON.parse(text.replace(/^for \\(;;\\);/,'')));}catch{return {media:[],images:[]};}}
+async function resolveInstagramFallback(url,html,response,cookie,steps){const graph=await fetchInstagramGraphql(url,html,response,cookie,steps);if(graph.media.length)return graph;const embed=await fetchInstagramEmbedData(url,cookie,steps);if(embed.media.length)return embed;const legacy=await fetchInstagramLegacyJson(url,cookie,steps);return mergeInstagramResults(graph,embed,legacy);}
+
+
+const IG_CRAWLER_COOLDOWN_MS = 10 * 60 * 1000;
+const IG_SESSION_LOCK_COOLDOWN_MS = 30 * 60 * 1000;
+let instagramCrawlerBlockedUntil = 0;
+let instagramSessionLockedUntil = 0;
+const INSTAGRAM_LINK_CRAWLER_UA = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)";
+const IG_SHORTCODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+function instagramMediaId(shortcode) {
+  if (!shortcode) return "";
+  let id = BigInt(0);
+  for (const char of shortcode) {
+    const value = IG_SHORTCODE_ALPHABET.indexOf(char);
+    if (value < 0) return "";
+    id = id * BigInt(64) + BigInt(value);
+  }
+  return id.toString();
+}
+
+function instagramCookieValue(cookie, name) {
+  const match = String(cookie || "").match(new RegExp(`(?:^|;\s*)${name}=([^;]+)`, "i"));
+  return match ? match[1] : "";
+}
+
+function normalizeInstagramCookie(cookie, csrf = "") {
+  const input = String(cookie || "").trim();
+  if (!input) return "";
+  const order = ["datr", "ig_did", "mid", "csrftoken", "ds_user_id", "rur", "wd", "sessionid"];
+  const pairs = [];
+  for (const name of order) {
+    let value = instagramCookieValue(input, name);
+    if (name === "csrftoken" && !value) value = csrf;
+    if (value) pairs.push(`${name}=${value}`);
+  }
+  return pairs.join("; ");
+}
+
+function largestInstagramRendition(list) {
+  const usable = (Array.isArray(list) ? list : []).filter(item => item && item.url);
+  if (!usable.length) return null;
+  return usable.reduce((best, item) => {
+    const bestArea = Number(best.width || 0) * Number(best.height || 0);
+    const itemArea = Number(item.width || 0) * Number(item.height || 0);
+    return itemArea > bestArea ? item : best;
+  });
+}
+
+function instagramCrawlerUrlAfterKey(html, from, key) {
+  const keyAt = html.indexOf(key, from);
+  if (keyAt < 0 || keyAt - from > 80000) return "";
+  const raw = /"url":"(https:.*?)"/.exec(html.slice(keyAt, keyAt + 9000))?.[1];
+  if (!raw) return "";
+  try { return JSON.parse(`"${raw}"`); } catch { return decodeSocialMediaUrl(raw); }
+}
+
+function parseInstagramCrawlerMedia(html, mediaId) {
+  const anchors = [`"pk":"${mediaId}"`, `"pk":${mediaId}`, `"id":"${mediaId}`];
+  let anchor = -1;
+  for (const marker of anchors) { anchor = html.indexOf(marker); if (anchor >= 0) break; }
+  if (anchor < 0) return { media: [], images: [] };
+  const videoUrl = instagramCrawlerUrlAfterKey(html, anchor, "video_versions");
+  const poster = instagramCrawlerUrlAfterKey(html, anchor, "image_versions2");
+  if (!videoUrl) return { media: [], images: poster ? [poster] : [] };
+  return { media: [{ url: videoUrl, quality: "原始畫質", kind: "影音合一", mimeType: "video/mp4", bitrate: 0 }], images: poster ? [poster] : [] };
+}
+
+async function fetchInstagramCrawlerView(url, steps) {
+  if (Date.now() < instagramCrawlerBlockedUntil) {
+    const seconds = Math.ceil((instagramCrawlerBlockedUntil - Date.now()) / 1000);
+    steps.push(`【INSTAGRAM CRAWLER】仍在 HTTP 429 冷卻期，剩餘約「${seconds}」秒。`);
+    return { media: [], images: [] };
+  }
+  const shortcode = instagramShortcode(url);
+  const mediaId = instagramMediaId(shortcode);
+  if (!shortcode || !mediaId) return { media: [], images: [] };
+  const target = new URL(`/reel/${shortcode}/`, "https://www.instagram.com");
+  const response = await fetch(target, {
+    headers: { "User-Agent": INSTAGRAM_LINK_CRAWLER_UA, "Accept": "text/html,application/xhtml+xml", "Accept-Language": "en-US,en;q=0.9" },
+    redirect: "follow", cache: "no-store"
+  });
+  const html = await response.text();
+  steps.push(`【INSTAGRAM CRAWLER】連結預覽頁面回傳 HTTP ${response.status}，HTML「${html.length}」個字元。`);
+  if (response.status === 429) {
+    instagramCrawlerBlockedUntil = Date.now() + IG_CRAWLER_COOLDOWN_MS;
+    steps.push("【INSTAGRAM CRAWLER】已啟用 10 分鐘冷卻，避免持續觸發速率限制。");
+    return { media: [], images: [] };
+  }
+  if (!response.ok || !html) return { media: [], images: [] };
+  const parsed = parseInstagramCrawlerMedia(html, mediaId);
+  steps.push(`【INSTAGRAM CRAWLER】Media ID ${mediaId}；錨點：${html.includes(`"pk":"${mediaId}"`) || html.includes(`"pk":${mediaId}`) ? "找到" : "未找到"}；video_versions：${html.includes("video_versions") ? "存在" : "不存在"}；目標影片：「${parsed.media.length}」個。`);
+  return parsed;
+}
+
+function instagramSessionRefusal(data, text) {
+  const joined = `${JSON.stringify(data || {})} ${String(text || "")}`.toLowerCase();
+  if (joined.includes("checkpoint_required") || joined.includes("challenge_required") || joined.includes("consent_required")) return "checkpoint";
+  if (joined.includes("login_required") || joined.includes("not logged in") || joined.includes("please wait")) return "login";
+  return "";
+}
+
+async function fetchInstagramMediaInfo(url, cookie, pageHtml, pageResponse, steps) {
+  if (!cookie) { steps.push("【INSTAGRAM MEDIA API】未提供 IG_COOKIE，略過登入工作階段 API。"); return { media: [], images: [] }; }
+  if (Date.now() < instagramSessionLockedUntil) {
+    const seconds = Math.ceil((instagramSessionLockedUntil - Date.now()) / 1000);
+    steps.push(`【INSTAGRAM MEDIA API】工作階段仍在安全冷卻期，剩餘約「${seconds}」秒。`);
+    return { media: [], images: [] };
+  }
+  const shortcode = instagramShortcode(url);
+  const mediaId = instagramMediaId(shortcode);
+  if (!mediaId) return { media: [], images: [] };
+  const harvestedCsrf = instagramCsrfFromPage(pageHtml, pageResponse, cookie);
+  const normalizedCookie = normalizeInstagramCookie(cookie, harvestedCsrf);
+  const csrf = instagramCookieValue(normalizedCookie, "csrftoken") || harvestedCsrf;
+  const headers = new Headers({
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1",
+    "Accept": "*/*", "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.7",
+    "Referer": url.href, "X-IG-App-ID": "936619743392459",
+    "X-ASBD-ID": "129477", "Cookie": normalizedCookie
+  });
+  if (csrf) headers.set("X-CSRFToken", csrf);
+  const response = await fetch(`https://www.instagram.com/api/v1/media/${encodeURIComponent(mediaId)}/info/`, { headers, redirect: "follow", cache: "no-store" });
+  const text = await response.text();
+  steps.push(`【INSTAGRAM MEDIA API】/api/v1/media/${mediaId}/info/ 回傳 HTTP ${response.status}，內容「${text.length}」個字元。`);
+  let data = null;
+  try { data = JSON.parse(text.replace(/^for \(;;\);/, "")); } catch {}
+  const refusal = instagramSessionRefusal(data, text);
+  if (refusal === "checkpoint") {
+    instagramSessionLockedUntil = Date.now() + IG_SESSION_LOCK_COOLDOWN_MS;
+    steps.push("【INSTAGRAM MEDIA API】工作階段要求 checkpoint／challenge，已停止使用 Cookie 30 分鐘以降低帳號風險。");
+    return { media: [], images: [] };
+  }
+  if (!response.ok || !data?.items?.[0]) {
+    const message = data?.message || data?.error_title || data?.status || (refusal === "login" ? "登入工作階段已失效" : "沒有 items[0]");
+    steps.push(`【INSTAGRAM MEDIA API】未取得媒體：${message}。`);
+    return { media: [], images: [] };
+  }
+  const candidates = [];
+  const images = [];
+  const queue = [data.items[0]];
+  while (queue.length) {
+    const item = queue.shift();
+    if (!item || typeof item !== "object") continue;
+    const video = largestInstagramRendition(item.video_versions);
+    if (video?.url) candidates.push({ url: decodeSocialMediaUrl(video.url), quality: video.height ? `${video.height}p` : "原始畫質", kind: "影音合一", mimeType: "video/mp4", bitrate: Number(video.width || 0) * Number(video.height || 0) });
+    const image = largestInstagramRendition(item.image_versions2?.candidates);
+    if (image?.url) images.push(decodeSocialMediaUrl(image.url));
+    if (Array.isArray(item.carousel_media)) queue.push(...item.carousel_media);
+  }
+  const unique = new Map();
+  for (const item of candidates) { const key = socialMediaKey(item.url); const old = unique.get(key); if (!old || item.bitrate > old.bitrate) unique.set(key, item); }
+  steps.push(`【INSTAGRAM MEDIA API】找到「${unique.size}」個影片媒體，包含輪播項目。`);
+  return { media: [...unique.values()], images: [...new Set(images)] };
+}
+
+async function resolveInstagramNative(url, html, response, cookie, steps) {
+  const results = [];
+  const embed = await fetchInstagramEmbedData(url, cookie, steps);
+  results.push(embed);
+  if (embed.media.length) return embed;
+  const crawler = await fetchInstagramCrawlerView(url, steps);
+  results.push(crawler);
+  if (crawler.media.length) return crawler;
+  const mediaInfo = await fetchInstagramMediaInfo(url, cookie, html, response, steps);
+  results.push(mediaInfo);
+  return mergeInstagramResults(...results);
+}
+
+async function resolveThreadsShare(url, cookie, steps) {
+  for (const host of ["www.threads.com", "www.threads.net"]) {
+    try {
+      const target = new URL(url); target.hostname = host;
+      const response = await fetchSocialPage(target, "threads", cookie);
+      const finalUrl = new URL(response.url);
+      steps.push(`【THREADS】分享網址 ${host} 回傳 HTTP ${response.status}，最終路徑：${finalUrl.pathname}`);
+      if (/^\/@[^/]+\/post\/[^/?#]+/i.test(finalUrl.pathname) || /^\/t\/[^/?#]+/i.test(finalUrl.pathname)) { finalUrl.hostname="www.threads.com"; finalUrl.search=""; steps.push(`【THREADS】已轉為貼文永久網址：${finalUrl.pathname}`); return finalUrl; }
+      const html = await response.text();
+      for (const value of [metaContent(html,"og:url"),metaContent(html,"twitter:url"),(html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)/i)||[])[1]]) {
+        try { const u=new URL(decodeSocialMediaUrl(value),target); if (/^\/@[^/]+\/post\/[^/?#]+/i.test(u.pathname)) {u.hostname="www.threads.com";u.search="";steps.push(`【THREADS】已從分享頁取得貼文永久網址：${u.pathname}`);return u;} } catch {}
+      }
+    } catch(e) { steps.push(`【THREADS】分享網址備援失敗：${e.message}。`); }
+  }
+  return url;
+}
+async function resolveSocial(value, platform, request, env) {
+  const label = platform === "instagram" ? "INSTAGRAM" : "THREADS";
+  let url;
+  try { url = normalizeSocialUrl(value, platform); }
+  catch (error) { return json({ error: error.message, code: `${label}_INVALID_URL`, version: VERSION }, 400); }
+  const type = socialContentType(url, platform);
+  if (type === "unknown") return json({ error: `${platform === "instagram" ? "Instagram" : "Threads"} 網址不是可辨識的貼文、Reel、Story、Highlight 或短網址。`, code: `${label}_UNSUPPORTED_URL`, version: VERSION }, 400);
+
+  const steps = [`【${label}】已辨識${type === "reel" ? " Reels" : type === "story" ? " Stories" : type === "highlight" ? " Highlights" : type === "share" ? "分享" : "貼文"}網址：${url.pathname}`];
+  const cookie = requestMetaCookie(request, env, platform);
+  if (platform === "threads" && type === "share") {
+    url = await resolveThreadsShare(url, "", steps);
+    const validPostPath = /^\/@[^/]+\/post\/[^/?#]+/i.test(url.pathname) || /^\/t\/[^/?#]+/i.test(url.pathname);
+    if (!validPostPath) {
+      steps.push("【THREADS】分享網址未解析成有效貼文，停止掃描首頁或錯誤頁面的背景媒體。");
+      return json({
+        platform, contentType: "share", canonicalUrl: "", formats: [], steps, version: VERSION,
+        code: "THREADS_SHARE_INVALID",
+        error: "Threads 分享網址已失效、貼文不存在，或平台未回傳有效的貼文永久網址。"
+      }, 422);
+    }
+  }
+  let response = await fetchSocialPage(url, platform, "");
+  let finalUrl = new URL(response.url);
+  let html = await response.text();
+  steps.push(`【${label}】訪客頁面回傳 HTTP ${response.status}，HTML「${html.length}」個字元。`);
+  if (platform === "threads") {
+    const validFinalPath = /^\/@[^/]+\/post\/[^/?#]+/i.test(finalUrl.pathname) || /^\/t\/[^/?#]+/i.test(finalUrl.pathname);
+    if (!validFinalPath || finalUrl.searchParams.get("error") === "invalid_post") {
+      steps.push("【THREADS】最終頁面不是有效貼文，停止掃描背景媒體。");
+      return json({ platform, contentType: type, canonicalUrl: "", formats: [], steps, version: VERSION, code: "THREADS_INVALID_POST", error: "Threads 貼文不存在、已失效，或分享網址沒有對應到有效貼文。" }, 422);
+    }
+  }
+  let parsed = collectMetaSocialMedia(html, platform);
+  if (platform === "instagram" && ["reel", "post"].includes(type) && !parsed.media.length) {
+    steps.push("【INSTAGRAM】靜態 HTML 沒有目標影片，依序嘗試 Embed、Crawler View 與登入 Media API。");
+    parsed = await resolveInstagramNative(url, html, response, "", steps);
+  }
+
+  const loginRequiredType = type === "story" || type === "highlight";
+  if ((!response.ok || socialLoginPage(finalUrl, html, platform) || !parsed.media.length) && cookie) {
+    steps.push(`【${label}】訪客頁面未取得影片，使用分頁工作階段或 Worker Secret 再解析一次。`);
+    response = await fetchSocialPage(url, platform, cookie);
+    finalUrl = new URL(response.url);
+    html = await response.text();
+    steps.push(`【${label}】登入工作階段頁面回傳 HTTP ${response.status}，HTML「${html.length}」個字元。`);
+    parsed = collectMetaSocialMedia(html, platform);
+    if (platform === "instagram" && ["reel", "post"].includes(type) && !parsed.media.length) {
+      parsed = await resolveInstagramNative(url, html, response, cookie, steps);
+    }
+  }
+
+  if (!parsed.media.length) {
+    const needsSession = loginRequiredType || socialLoginPage(finalUrl, html, platform);
+    return json({
+      platform, contentType: type, canonicalUrl: finalUrl.href, formats: [], steps, version: VERSION,
+      code: needsSession ? `${label}_SESSION_REQUIRED` : `${label}_MEDIA_NOT_FOUND`,
+      error: needsSession && !cookie ? `${platform === "instagram" ? "Instagram" : "Threads"} 此內容需要登入工作階段，請在進階設定貼入對應 Cookie。` : undefined,
+      note: needsSession ? "登入工作階段不存在、已失效或帳戶沒有觀看權限。" : "頁面已載入，但沒有找到影片；內容可能是純文字、圖片、輪播圖片、已刪除或平台頁面格式已更新。"
+    }, needsSession && !cookie ? 401 : 200);
+  }
+
+  const formats = parsed.media.map((item, index) => ({
+    itag: `${platform}-${index + 1}`,
+    quality: item.quality,
+    kind: item.kind,
+    container: item.mimeType.includes("webm") ? "webm" : "mp4",
+    mimeType: item.mimeType,
+    codec: "",
+    bitrate: item.bitrate || 0,
+    contentLength: "",
+    source: label,
+    url: item.url
+  })).sort((a, b) => b.bitrate - a.bitrate);
+  const title = cleanFacebookTitle(metaContent(html, "og:title") || metaContent(html, "twitter:title") || `${platform === "instagram" ? "Instagram" : "Threads"} 影片`);
+  const thumbnail = parsed.images[0] || "";
+  const id = (url.pathname.match(/(?:reel|p|tv|post|t|stories\/[^/]+)\/([^/]+)/i) || [])[1] || `${platform}-${Date.now()}`;
+  steps.push(`【${label}】找到「${formats.length}」個影片格式。`);
+  return json({ platform, contentType: type, id, canonicalUrl: finalUrl.href, source: label, version: VERSION, code: "OK", title, thumbnail, formats, steps, note: "" });
+}
+
+async function metaSocialMedia(request, target, platform, env) {
+  let url;
+  try { url = new URL(target); } catch { return json({ error: "媒體網址無效。", code: "SOCIAL_MEDIA_INVALID_URL", version: VERSION }, 400); }
+  if (url.protocol !== "https:" || !META_MEDIA_SUFFIXES.some(suffix => url.hostname === suffix.slice(1) || url.hostname.endsWith(suffix))) {
+    return json({ error: "此 Instagram／Threads 媒體網域未列入允許清單。", code: "SOCIAL_MEDIA_DOMAIN_DENIED", version: VERSION }, 403);
+  }
+  const cookie = requestMetaCookie(request, env, platform);
+  const referer = platform === "instagram" ? "https://www.instagram.com/" : "https://www.threads.com/";
+  const headers = new Headers({
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1",
+    "Referer": referer,
+    "Accept": "*/*",
+    "Accept-Encoding": "identity"
+  });
+  if (cookie) headers.set("Cookie", cookie);
+  const range = request.headers.get("Range");
+  if (range) headers.set("Range", range);
+  const upstream = await fetch(url, { method: request.method, headers, redirect: "follow", cache: "no-store" });
+  const output = new Headers(upstream.headers);
+  Object.entries(cors()).forEach(([key, value]) => output.set(key, value));
+  output.set("Cache-Control", "no-store");
+  output.set("X-OwO-Version", VERSION);
+  output.set("Content-Disposition", `attachment; filename="${platform}-video.mp4"`);
+  return new Response(upstream.body, { status: upstream.status, headers: output });
+}
+
+const YOUTUBE_MEDIA_CACHE_TTL_SECONDS = 1800;
+const YOUTUBE_FORMAT_FALLBACK_MAX_AGE_SECONDS = 60;
+
+function youtubeMediaCacheRequest(id,itag,sourceLabel,sessionId=""){
+  const safeSource=String(sourceLabel||"ANDROID").replace(/[^A-Za-z0-9_-]/g,"_");const safeSession=String(sessionId||"legacy").replace(/[^A-Za-z0-9_-]/g,"_");
+  const key=`https://owo-media-cache.invalid/youtube/${encodeURIComponent(id)}/${safeSession}/${encodeURIComponent(String(itag))}/${safeSource}`;
+  return new Request(key, { method: "GET" });
+}
+
+function youtubeMediaLatestRequest(id, itag, sourceLabel) {
+  return youtubeMediaCacheRequest(id, itag, sourceLabel, "latest");
+}
+
+const YOUTUBE_SABR_SESSION_TTL_SECONDS = 1200;
+function youtubeSabrSessionRequest(id, sessionId) {
+  return new Request(`https://owo.youtube-sabr.invalid/session/${encodeURIComponent(id)}/${encodeURIComponent(sessionId)}`);
+}
+async function cacheYoutubeSabrSession(id, sessionId, player, steps) {
+  if (typeof caches === "undefined" || !caches.default || !id || !sessionId || !player) return false;
+  const config = sabrConfiguration(player);
+  const formats = toSabrFormats(player);
+  if (!config.streamingUrl || !config.ustreamerConfig || !formats.length) return false;
+  const payload = {
+    id,
+    sessionId,
+    source: "VISIONOS",
+    streamingUrl: config.streamingUrl,
+    ustreamerConfig: config.ustreamerConfig,
+    formats,
+    createdAt: Date.now()
+  };
+  const headers = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": `public, max-age=${YOUTUBE_SABR_SESSION_TTL_SECONDS}` };
+  await caches.default.put(youtubeSabrSessionRequest(id, sessionId), new Response(JSON.stringify(payload), { headers }));
+  steps.push(`【VISIONOS SABR SESSION】Session ${String(sessionId).slice(0, 8)} 已保存完整 SABR Context，有效期約 ${YOUTUBE_SABR_SESSION_TTL_SECONDS} 秒。`);
+  return true;
+}
+async function readYoutubeSabrSession(id, sessionId) {
+  if (typeof caches === "undefined" || !caches.default || !id || !sessionId) return null;
+  const response = await caches.default.match(youtubeSabrSessionRequest(id, sessionId));
+  if (!response) return null;
+  try {
+    const value = await response.json();
+    const ageMs = Date.now() - Number(value.createdAt || 0);
+    if (ageMs > YOUTUBE_SABR_SESSION_TTL_SECONDS * 1000) return null;
+    if (!value.streamingUrl || !value.ustreamerConfig || !Array.isArray(value.formats)) return null;
+    return { ...value, ageMs };
+  } catch { return null; }
+}
+
+async function cacheYoutubeFormats(id,formats,steps,sessionId=""){
+  if (typeof caches === "undefined" || !caches.default || !id) return;
+  let stored = 0;
+  for (const format of formats) {
+    if (!format?.url || !format?.itag || !format?.source) continue;
+    try {
+      const payload = JSON.stringify({
+        url: format.url,
+        source: format.source,
+        quality: format.quality || "",
+        height: Number(format.height || 0),
+        fps: Number(format.fps || 0),
+        codec: format.codec || "",
+        kind: format.kind || "",
+        contentLength: Number(format.contentLength || 0),
+        sessionId,
+        refreshApiKey: format.refreshApiKey || "",
+        refreshVisitorData: format.refreshVisitorData || "",
+        generatedAt: Number(format.generatedAt || Date.now()),
+        storedAt: Date.now()
+      });
+      const headers = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": `public, max-age=${YOUTUBE_MEDIA_CACHE_TTL_SECONDS}` };
+      await caches.default.put(youtubeMediaCacheRequest(id, format.itag, format.source, sessionId), new Response(payload, { headers }));
+      await caches.default.put(youtubeMediaLatestRequest(id, format.itag, format.source), new Response(payload, { headers }));
+      stored++;
+    } catch {}
+  }
+  if (stored) steps.push(`【媒體工作階段】Session ${String(sessionId).slice(0, 8)} 已建立精確索引與格式備援索引，共暫存「${stored}」個格式網址，有效期約 ${YOUTUBE_MEDIA_CACHE_TTL_SECONDS} 秒。`);
+}
+
+async function readYoutubeFormatCache(id, itag, sourceLabel, sessionId = "") {
+  if (typeof caches === "undefined" || !caches.default || !id || !itag) return null;
+  const candidates = [
+    { request: youtubeMediaCacheRequest(id, itag, sourceLabel, sessionId), matchMode: "exact-session" },
+    { request: youtubeMediaLatestRequest(id, itag, sourceLabel), matchMode: "latest-format" }
+  ];
+  for (const candidate of candidates) {
+    try {
+      const response = await caches.default.match(candidate.request);
+      if (!response) continue;
+      const value = await response.json();
+      if (!value?.url) continue;
+      const ageMs = Date.now() - Number(value.storedAt || 0);
+      const maxAgeMs = candidate.matchMode === "latest-format"
+        ? YOUTUBE_FORMAT_FALLBACK_MAX_AGE_SECONDS * 1000
+        : YOUTUBE_MEDIA_CACHE_TTL_SECONDS * 1000;
+      if (ageMs > maxAgeMs) continue;
+      return { ...value, matchMode: candidate.matchMode, ageMs };
+    } catch {}
+  }
+  return null;
+}
+
+async function deleteYoutubeFormatCache(id,itag,sourceLabel,sessionId=""){
+  if (typeof caches === "undefined" || !caches.default || !id || !itag) return;
+  try { await caches.default.delete(youtubeMediaCacheRequest(id,itag,sourceLabel,sessionId)); } catch {}
+}
+
+function matchingFormatScore(format, wanted) {
+  const mime = String(format?.mimeType || "");
+  const codecs = (mime.match(/codecs="([^"]+)"/) || [])[1] || "";
+  const hasVideo = mime.startsWith("video/");
+  const hasAudio = mime.startsWith("audio/") || Boolean(format?.audioQuality);
+  const kind = hasVideo && hasAudio ? "影音合一" : hasVideo ? "僅視訊" : hasAudio ? "僅音訊" : "媒體";
+  if (wanted.kind && kind !== wanted.kind) return -1;
+  let score = 0;
+  const height = Number(format?.height || 0);
+  const fps = Number(format?.fps || 0);
+  if (wanted.height) score -= Math.abs(height - wanted.height) * 100000;
+  if (wanted.fps) score -= Math.abs(fps - wanted.fps) * 1000;
+  if (wanted.codec && codecs.toLowerCase().includes(wanted.codec.toLowerCase().split('.')[0])) score += 10000000;
+  score += Number(format?.bitrate || 0);
+  return score;
+}
+
+function equivalentAddressableFormat(player, wanted) {
+  let best = null;
+  let bestScore = -Infinity;
+  for (const format of addressableFormats(player)) {
+    const score = matchingFormatScore(format, wanted);
+    if (score > bestScore) {
+      best = format;
+      bestScore = score;
+    }
+  }
+  return bestScore >= 0 ? best : null;
+}
+
+function clientProfileByLabel(label) {
+  return PLAYER_CLIENTS.find(profile => profile.label === label) || PLAYER_CLIENTS.find(profile => profile.label === "ANDROID");
+}
+
+async function freshMediaUrlFromContext(id, itag, sourceLabel, steps, wanted = {}, context = {}, youtubeCookie = "") {
+  const apiKey = String(context.apiKey || "");
+  const visitorData = String(context.visitorData || "");
+  if (!apiKey) throw new Error("解析工作階段未提供 Player API Key。");
+  const labels = [...new Set([sourceLabel, "ANDROID_VR", "ANDROID", "IOS", "WEB", "TV"].filter(Boolean))];
+  const failures = [];
+  for (const label of labels) {
+    try {
+      const player = await innertubePlayer(apiKey, visitorData, id, clientProfileByLabel(label), youtubeCookie);
+      let format = addressableFormats(player).find(item => String(item.itag) === String(itag));
+      let equivalent = false;
+      if (!format) { format = equivalentAddressableFormat(player, wanted); equivalent = Boolean(format); }
+      if (!format) { failures.push(`${label}: 無 itag ${itag} 或等效格式`); continue; }
+      const counters = { signature: 0, signatureFailed: 0, n: 0, nFailed: 0 };
+      const url = resolveFormatUrl(format, { signature: null, n: null }, counters);
+      if (!url) { failures.push(`${label}: 格式無可用網址`); continue; }
+      const normalized = normalize({ ...format, _source: label }, url);
+      steps.push(`【直接 Player 刷新】${label} 取得${equivalent ? "等效格式" : "原 itag"}：itag ${format.itag}；${normalized?.quality || "未知畫質"}；${normalized?.container || "未知容器"}；${normalized?.codec || "未知編碼"}。`);
+      return { url, sourceLabel: label, contentLength: Number(normalized?.contentLength || 0), selectedItag: String(format.itag), equivalent };
+    } catch (error) { failures.push(`${label}: ${error.message}`); }
+  }
+  throw new Error(`所有 Player Client 均未取得原 itag 或等效格式（${failures.join("；")}）。`);
+}
+
+async function freshMediaUrl(id,itag,sourceLabel,steps,wanted={},youtubeCookie=""){
+  if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) throw new Error("影片 ID 格式錯誤。");
+  const watchSteps = [];
+  const watchResult = await fetchYoutubeWatchPage(id,watchSteps,youtubeCookie);
+  steps.push(...watchSteps.map(step => `【即時媒體刷新】${step}`));
+  if (!watchResult.response.ok || !watchResult.html || !watchResult.player) {
+    const status = Number(watchResult.response.status || 0);
+    const error = new Error(status === 429
+      ? "即時媒體刷新已完成多入口退避重試，但仍遭 YouTube 限速：HTTP 429。"
+      : "即時媒體刷新未取得完整 ytInitialPlayerResponse。");
+    error.httpStatus = status;
+    throw error;
+  }
+  const html = watchResult.html;
+  const apiKey = configValue(html, "INNERTUBE_API_KEY");
+  const visitorData = stableVisitorData(configValue(html, "VISITOR_DATA"));
+  if (!apiKey) throw new Error("重新解析時找不到 INNERTUBE_API_KEY。");
+
+  const profile = clientProfileByLabel(sourceLabel);
+  let player;
+  if (sourceLabel === "WATCH_PAGE") {
+    player = watchResult.player;
+  } else {
+    player=await innertubePlayer(apiKey,visitorData,id,profile,youtubeCookie);
+  }
+  if (!player) throw new Error("重新解析時沒有取得播放器回應。");
+
+  let format = addressableFormats(player).find(item => String(item.itag) === String(itag));
+  if (!format) {
+    format = equivalentAddressableFormat(player, wanted);
+    if (format) steps.push(`【即時媒體】${sourceLabel} 未再提供 itag ${itag}，已選擇同 Client 的等效 ${format.qualityLabel || format.audioQuality || format.itag} 格式。`);
+  }
+  if (!format && sourceLabel !== "ANDROID") {
+    const android = clientProfileByLabel("ANDROID");
+    const androidPlayer=await innertubePlayer(apiKey,visitorData,id,android,youtubeCookie);
+    format = addressableFormats(androidPlayer).find(item => String(item.itag) === String(itag)) || equivalentAddressableFormat(androidPlayer, wanted);
+    if (format) sourceLabel = "ANDROID";
+  }
+  if (!format) throw new Error(`重新解析後找不到 itag ${itag} 或同畫質等效格式的可下載位址。`);
+
+  const needsRules = Boolean(format.signatureCipher || format.cipher || (() => {
+    try { return new URL(format.url || "").searchParams.has("n"); } catch { return false; }
+  })());
+  const rules = needsRules ? await loadPlayerRules(html, steps) : { signature: null, n: null };
+  const counters = { signature: 0, signatureFailed: 0, n: 0, nFailed: 0 };
+  const url = resolveFormatUrl(format, rules, counters);
+  if (!url) throw new Error(`itag ${itag} 的即時媒體網址解析失敗。`);
+  steps.push(`【即時媒體】已使用 ${sourceLabel} 重新取得 itag ${itag} 的媒體網址。`);
+  return { url, sourceLabel };
+}
+
+function youtubeMediaUserAgent(sourceLabel) {
+  const source = String(sourceLabel || "").toUpperCase();
+  if (source === "ANDROID") return "com.google.android.youtube/21.35.35 (Linux; U; Android 14) gzip";
+  if (source === "ANDROID_VR") return "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 14) gzip";
+  if (source === "ANDROID_CREATOR") return "com.google.android.apps.youtube.creator/24.35.100 (Linux; U; Android 14) gzip";
+  if (source === "ANDROID_MUSIC") return "com.google.android.apps.youtube.music/7.18.52 (Linux; U; Android 14) gzip";
+  if (source === "ANDROID_TESTSUITE") return "com.google.android.youtube/1.9 (Linux; U; Android 14) gzip";
+  if (source === "YTSTUDIO_ANDROID") return "com.google.android.apps.youtube.creator/24.35.100 (Linux; U; Android 14) gzip";
+  if (source === "YTMUSIC_ANDROID") return "com.google.android.apps.youtube.music/7.18.52 (Linux; U; Android 14) gzip";
+  if (source === "IOS" || source === "VISIONOS") return "com.google.ios.youtube/21.35.3 (iPhone16,2; U; CPU iOS 18_6_2 like Mac OS X)";
+  if (source === "WEB_SAFARI") return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15";
+  return "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140.0 Mobile Safari/537.36";
+}
+function requestedByteRange(request){const m=String(request.headers.get("Range")||"").match(/^bytes=(\d+)-(\d+)$/i);if(!m)return null;return{start:Number(m[1]),end:Number(m[2]),header:`bytes=${m[1]}-${m[2]}`,query:`${m[1]}-${m[2]}`}}
+function headersForRange(request,sourceLabel,forward){const h=mediaRequestHeaders(request,sourceLabel);const r=requestedByteRange(request);if(forward&&r)h.set("Range",r.header);return h}
+function mediaRequestHeaders(request, sourceLabel) {
+  const headers = new Headers();
+  const range = request.headers.get("Range");
+  if (range) headers.set("Range", range);
+  headers.set("Accept", "*/*");
+  headers.set("Accept-Encoding", "identity");
+  headers.set("Origin", "https://www.youtube.com");
+  headers.set("Referer", "https://www.youtube.com/");
+  headers.set("User-Agent", youtubeMediaUserAgent(sourceLabel));
+  return headers;
+}
+
+async function freshMediaUrlWithRetry(id,itag,sourceLabel,steps,wanted={},youtubeCookie=""){
+  steps.push(`【即時媒體重試】${sourceLabel} / itag ${itag} 使用單一十五次 WATCH 嘗試刷新工作；不再外層重複啟動完整 WATCH 掃描。`);
+  return freshMediaUrl(id,itag,sourceLabel,steps,wanted,youtubeCookie);
+}
+
+function immediateFormatFingerprint(format, resolvedUrl) {
+  const n=normalize(format,resolvedUrl);
+  return n?{kind:n.kind,height:Number(n.height||0),fps:Number(n.fps||0),codec:String(n.codec||"").toLowerCase(),container:String(n.container||"").toLowerCase(),contentLength:Number(n.contentLength||0)}:null;
+}
+function fingerprintMatches(actual,wanted,total){return actual&&actual.kind===wanted.kind&&actual.height===Number(wanted.height||0)&&actual.fps===Number(wanted.fps||0)&&actual.codec===String(wanted.codec||"").toLowerCase()&&actual.container===String(wanted.container||"").toLowerCase()&&actual.contentLength===Number(total||0);}
+function toSabrFormats(player) {
+  return rawFormats(player).map(format => ({
+    itag: Number(format.itag || 0),
+    lastModified: String(format.lastModified || "0"),
+    xtags: format.xtags || "",
+    width: Number(format.width || 0),
+    height: Number(format.height || 0),
+    contentLength: Number(format.contentLength || 0),
+    mimeType: format.mimeType || "",
+    quality: format.quality || "",
+    qualityLabel: format.qualityLabel || "",
+    averageBitrate: Number(format.averageBitrate || 0),
+    bitrate: Number(format.bitrate || 0),
+    audioQuality: format.audioQuality || "",
+    approxDurationMs: Number(format.approxDurationMs || 0),
+    audioTrackId: format.audioTrack?.id || ""
+  })).filter(format => format.itag && format.bitrate);
+}
+async function youtubeSabrDownload(request, id, selectedItag, track, apiKey, visitorData, sessionId, youtubeCookie = "") {
+  const steps = [];
+  if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) return json({ error: "影片 ID 格式錯誤。", code: "INVALID_VIDEO_ID", version: VERSION, steps }, 400);
+  let session = await readYoutubeSabrSession(id, sessionId);
+  if (session) {
+    steps.push(`【VISIONOS SABR 下載檢查】SABR Session：命中；Session ${String(sessionId).slice(0,8)}；快取約 ${Math.round(session.ageMs/1000)} 秒。`);
+  } else {
+    steps.push(`【VISIONOS SABR 下載檢查】SABR Session：未命中或已過期；Session ${String(sessionId||"none").slice(0,8)}。`);
+    if (!apiKey) return json({ error: "SABR Session 未命中且缺少 Player API Key，請重新解析影片。", code: "SABR_SESSION_EXPIRED", version: VERSION, steps }, 409);
+    const profile = clientProfileByLabel("VISIONOS");
+    let player;
+    try { player = await innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie); }
+    catch (error) { return json({ error: `VISIONOS Player API 失敗：${error.message}`, code: "SABR_PLAYER_FAILED", version: VERSION, steps }, 422); }
+    const config = sabrConfiguration(player);
+    const formats = toSabrFormats(player);
+    steps.push(`【VISIONOS SABR 下載檢查】Player 狀態：${playState(player).status}；原始格式：${rawFormats(player).length} 個；可用 itag：${formats.map(f=>f.itag).join("、")||"無"}。`);
+    steps.push(`【VISIONOS SABR 下載檢查】serverAbrStreamingUrl：${config.streamingUrl?"存在":"缺少"}；videoPlaybackUstreamerConfig：${config.ustreamerConfig?"存在":"缺少"}。`);
+    if (!config.streamingUrl) return json({ error: "VISIONOS Player Response 缺少 serverAbrStreamingUrl。", code: "SABR_STREAMING_URL_MISSING", version: VERSION, steps }, 409);
+    if (!config.ustreamerConfig) return json({ error: "VISIONOS Player Response 缺少 videoPlaybackUstreamerConfig。", code: "SABR_USTREAMER_CONFIG_MISSING", version: VERSION, steps }, 409);
+    session = { id, sessionId, source:"VISIONOS", streamingUrl:config.streamingUrl, ustreamerConfig:config.ustreamerConfig, formats, createdAt:Date.now(), ageMs:0 };
+    if (sessionId) await cacheYoutubeSabrSession(id, sessionId, player, steps);
+  }
+  const formats = session.formats;
+  const wanted = formats.find(format => String(format.itag) === String(selectedItag));
+  const videos = formats.filter(f => String(f.mimeType || "").startsWith("video/"));
+  const audios = formats.filter(f => String(f.mimeType || "").startsWith("audio/") || f.audioQuality);
+  steps.push(`【VISIONOS SABR 下載檢查】要求軌道：${track}；要求 itag：${selectedItag}；可用視訊 itag：${videos.map(f=>f.itag).join("、")||"無"}；可用音訊 itag：${audios.map(f=>f.itag).join("、")||"無"}。`);
+  steps.push("【VISIONOS SABR 下載檢查】serverAbrStreamingUrl：存在；videoPlaybackUstreamerConfig：存在。 ");
+  if (!wanted) return json({ error: `SABR Session 中沒有原選擇的 itag ${selectedItag}。`, code: "SABR_SELECTED_ITAG_MISSING", version: VERSION, steps }, 409);
+  const isVideo = String(wanted.mimeType || "").startsWith("video/");
+  const video = isVideo ? wanted : videos.sort((a,b)=>b.bitrate-a.bitrate)[0];
+  const audio = !isVideo ? wanted : audios.sort((a,b)=>b.bitrate-a.bitrate)[0];
+  if (!video || !audio) return json({ error: "SABR Session 缺少成對的視訊或音訊格式。", code: "SABR_PAIR_MISSING", version: VERSION, steps }, 409);
+  const profile = clientProfileByLabel("VISIONOS");
+  const sabr = new SabrStream({
+    fetch: (input, init = {}) => { const headers=new Headers(init.headers||{}); headers.set("User-Agent",youtubeMediaUserAgent("VISIONOS")); headers.set("Accept-Language","zh-TW,zh;q=0.9,en;q=0.8"); return fetch(input,{...init,headers}); },
+    serverAbrStreamingUrl: session.streamingUrl,
+    videoPlaybackUstreamerConfig: session.ustreamerConfig,
+    durationMs: Number(wanted.approxDurationMs || video.approxDurationMs || audio.approxDurationMs || 0),
+    formats,
+    clientInfo: { clientName:5, clientVersion:profile.clientVersion, osName:profile.osName, osVersion:profile.osVersion, deviceMake:profile.deviceMake, deviceModel:profile.deviceModel, acceptLanguage:"zh-TW", acceptRegion:"TW" }
+  });
+  const expectedBytes = Number(wanted.contentLength || 0);
+  const expectedDurationMs = Number(wanted.approxDurationMs || video.approxDurationMs || audio.approxDurationMs || 0);
+  const enabledTrackTypes = track === "audio" ? 1 : 2;
+  steps.push(`【VISIONOS SABR 完整下載】${track === "audio" ? "音訊" : "視訊"}採單軌模式；預期大小：${expectedBytes || "未知"} bytes；預期時間：${expectedDurationMs || "未知"} ms。`);
+  let streams;
+  try {
+    streams = await sabr.start({
+      videoFormat: video.itag,
+      audioFormat: audio.itag,
+      enabledTrackTypes,
+      maxRetries: 8,
+      stallDetectionMs: 30000
+    });
+  } catch (error) {
+    return json({ error:`VISIONOS SABR 啟動失敗：${error.message}`, code:"SABR_START_FAILED", version:VERSION, steps },422);
+  }
+  const selected = track === "audio" ? streams.audioStream : streams.videoStream;
+  const headers={
+    ...cors(),
+    "Content-Type":track==="audio"?"audio/mp4":"video/mp4",
+    "Cache-Control":"no-store",
+    "X-OwO-Media-Mode":"visionos-sabr-complete-track",
+    "X-OwO-Media-Source":"VISIONOS",
+    "X-OwO-Itag":String(selectedItag),
+    "X-OwO-Sabr-Session":String(sessionId||""),
+    "X-OwO-Expected-Bytes":String(expectedBytes || 0),
+    "X-OwO-Expected-Duration-Ms":String(expectedDurationMs || 0),
+    "X-OwO-Sabr-Track-Mode":track === "audio" ? "audio-only" : "video-only",
+    "X-OwO-Version":VERSION
+  };
+  return new Response(selected,{status:200,headers});
+}
+
+function sabrPairFrame(track, chunk) {
+  const payload = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+  const frame = new Uint8Array(5 + payload.byteLength);
+  frame[0] = track === "audio" ? 2 : 1;
+  new DataView(frame.buffer).setUint32(1, payload.byteLength, false);
+  frame.set(payload, 5);
+  return frame;
+}
+async function youtubeSabrPairDownload(request, id, videoItag, audioItag, apiKey, visitorData, sessionId, youtubeCookie = "") {
+  const steps=[];
+  if(!/^[A-Za-z0-9_-]{11}$/.test(id||"")) return json({error:"影片 ID 格式錯誤。",code:"INVALID_VIDEO_ID",version:VERSION,steps},400);
+  let session=await readYoutubeSabrSession(id,sessionId);
+  if(!session){
+    if(!apiKey)return json({error:"SABR Session 已過期，請重新解析影片。",code:"SABR_SESSION_EXPIRED",version:VERSION,steps},409);
+    let player;
+    try{player=await innertubePlayer(apiKey,visitorData,id,clientProfileByLabel("VISIONOS"),youtubeCookie);}catch(error){return json({error:`VISIONOS Player API 失敗：${error.message}`,code:"SABR_PLAYER_FAILED",version:VERSION,steps},422);}
+    const config=sabrConfiguration(player),formats=toSabrFormats(player);
+    if(!config.streamingUrl)return json({error:"VISIONOS Player Response 缺少 serverAbrStreamingUrl。",code:"SABR_STREAMING_URL_MISSING",version:VERSION,steps},409);
+    if(!config.ustreamerConfig)return json({error:"VISIONOS Player Response 缺少 videoPlaybackUstreamerConfig。",code:"SABR_USTREAMER_CONFIG_MISSING",version:VERSION,steps},409);
+    session={streamingUrl:config.streamingUrl,ustreamerConfig:config.ustreamerConfig,formats,createdAt:Date.now(),ageMs:0};
+    if(sessionId)await cacheYoutubeSabrSession(id,sessionId,player,steps);
+  }
+  const video=session.formats.find(f=>String(f.itag)===String(videoItag)&&String(f.mimeType||"").startsWith("video/"));
+  const audio=session.formats.find(f=>String(f.itag)===String(audioItag)&&(String(f.mimeType||"").startsWith("audio/")||f.audioQuality));
+  if(!video||!audio)return json({error:"SABR Session 缺少所選視訊或音訊軌。",code:"SABR_PAIR_MISSING",version:VERSION,steps},409);
+  const profile=clientProfileByLabel("VISIONOS");
+  const sabr=new SabrStream({
+    fetch:(input,init={})=>{const headers=new Headers(init.headers||{});headers.set("User-Agent",youtubeMediaUserAgent("VISIONOS"));headers.set("Accept-Language","zh-TW,zh;q=0.9,en;q=0.8");return fetch(input,{...init,headers});},
+    serverAbrStreamingUrl:session.streamingUrl,videoPlaybackUstreamerConfig:session.ustreamerConfig,
+    durationMs:Number(video.approxDurationMs||audio.approxDurationMs||0),formats:session.formats,
+    clientInfo:{clientName:5,clientVersion:profile.clientVersion,osName:profile.osName,osVersion:profile.osVersion,deviceMake:profile.deviceMake,deviceModel:profile.deviceModel,acceptLanguage:"zh-TW",acceptRegion:"TW"}
+  });
+  let streams;
+  try{streams=await sabr.start({videoFormat:video.itag,audioFormat:audio.itag,enabledTrackTypes:0,maxRetries:12,stallDetectionMs:45000,maxReadaheadMs:45000});}
+  catch(error){return json({error:`VISIONOS SABR 雙軌啟動失敗：${error.message}`,code:"SABR_START_FAILED",version:VERSION,steps},422);}
+  const paired=new ReadableStream({
+    start(controller){
+      let open=2,failed=false;
+      const pump=async(stream,track)=>{const reader=stream.getReader();try{while(true){const {done,value}=await reader.read();if(done)break;if(value?.byteLength)controller.enqueue(sabrPairFrame(track,value));}}catch(error){if(!failed){failed=true;controller.error(error);}}finally{open--;if(open===0&&!failed)controller.close();}};
+      pump(streams.videoStream,"video");pump(streams.audioStream,"audio");
+    },
+    cancel(){try{sabr.abort();}catch{}}
+  });
+  return new Response(paired,{status:200,headers:{...cors(),"Content-Type":"application/x-owo-sabr-pair","Cache-Control":"no-store","X-OwO-Media-Mode":"visionos-sabr-realtime-pair","X-OwO-Expected-Video-Bytes":String(video.contentLength||0),"X-OwO-Expected-Audio-Bytes":String(audio.contentLength||0),"X-OwO-Expected-Duration-Ms":String(video.approxDurationMs||audio.approxDurationMs||0),"X-OwO-Version":VERSION}});
+}
+async function immediateYoutubeMedia(request,{id,itag,source,apiKey,visitorData,start,end,wanted,total,muxed=false},youtubeCookie=""){
+  const steps=[];
+  if(!/^[A-Za-z0-9_-]{11}$/.test(id||""))return json({error:"影片 ID 格式錯誤。",code:"INVALID_VIDEO_ID",version:VERSION,steps},400);
+  if(!apiKey)return json({error:"缺少 Player API Key，請重新解析影片。",code:"PLAYER_API_KEY_MISSING",version:VERSION,steps},409);
+  const label=muxed?"ANDROID":(source||"ANDROID_VR");
+  const profile=clientProfileByLabel(label);
+  steps.push(`【${muxed?"影音合一":"高畫質區段"}同工作階段】呼叫 ${label} Player API 取得 itag ${itag}。`);
+  let player;
+  try{player=await innertubePlayer(apiKey,visitorData,id,profile,youtubeCookie);}catch(e){return json({error:`${label} Player API 失敗：${e.message}`,code:"PLAYER_TEMPORARILY_FAILED",version:VERSION,steps},422);}
+  const format=addressableFormats(player).find(x=>String(x.itag)===String(itag));
+  if(!format)return json({error:`${label} 本次未提供 itag ${itag}。`,code:"HQ_FORMAT_TEMPORARILY_MISSING",version:VERSION,steps},409);
+  const media=directUrl(format);
+  if(!media)return json({error:`${label} itag ${itag} 沒有可用媒體網址。`,code:"MEDIA_URL_MISSING",version:VERSION,steps},409);
+  const fp=immediateFormatFingerprint(format,media);
+  if(!muxed&&!fingerprintMatches(fp,wanted,total))return json({error:"即時取得的媒體軌與原選擇不一致，未混接區段。",code:"MEDIA_TRACK_CHANGED",version:VERSION,actual:fp,steps},409);
+  const u=new URL(media);
+  if(u.protocol!=="https:"||!MEDIA_SUFFIXES.some(x=>u.hostname.endsWith(x)))return json({error:"媒體網域未列入允許清單。",code:"MEDIA_DOMAIN_DENIED",version:VERSION,steps},403);
+  const headers=mediaRequestHeaders(request,label);
+  if(muxed)headers.delete("Range");else headers.set("Range",`bytes=${start}-${end}`);
+  const upstream=await fetch(u,{method:"GET",headers,redirect:"follow",cache:"no-store"});
+  steps.push(`【${muxed?"影音合一":"高畫質區段"}同工作階段】${label} itag ${itag}${muxed?"":` bytes=${start}-${end}`} 回傳 HTTP ${upstream.status}。`);
+  if(![200,206].includes(upstream.status)){try{await upstream.body?.cancel();}catch{}return json({error:`同工作階段媒體請求遭拒：HTTP ${upstream.status}。`,code:"IMMEDIATE_MEDIA_REJECTED",version:VERSION,steps},upstream.status===403?403:422);}
+  const out=new Headers(upstream.headers);Object.entries(cors()).forEach(([k,v])=>out.set(k,v));out.set("Cache-Control","no-store");out.set("X-OwO-Media-Mode",muxed?"muxed-same-invocation":"hq-segment-same-invocation");out.set("X-OwO-Media-Source",label);out.set("X-OwO-Version",VERSION);
+  return new Response(upstream.body,{status:upstream.status,headers:out});
+}
+
+async function media(request,target,id,itag,sourceLabel,wanted={},sessionId="",youtubeCookie="",refreshContext={}){
+  const steps = [];
+  let resolvedTarget = "";
+  let resolutionMode = "";
+  let mediaTotal = 0;
+  let trackRestart = false;
+  let selectedItag = String(itag || "");
+  const analysisFallback = String(target || "");
+  const sessionShort = String(sessionId || "none").slice(0, 8);
+  steps.push(`【媒體工作階段】請求 Session：${sessionShort}；影片：${id || "未知"}；itag：${itag || "未知"}；來源：${sourceLabel || "ANDROID"}。`);
+
+
+  if (!resolvedTarget && id && itag) {
+    const cached = await readYoutubeFormatCache(id,itag,sourceLabel||"ANDROID",sessionId);
+    if (cached?.url) {
+      resolvedTarget = cached.url;
+      sourceLabel = cached.source || sourceLabel;
+      resolutionMode = cached.matchMode === "exact-session" ? "session-cache" : "format-fallback-cache";
+      mediaTotal = Number(cached.contentLength || 0);
+      refreshContext = { apiKey: cached.refreshApiKey || refreshContext.apiKey || "", visitorData: cached.refreshVisitorData || refreshContext.visitorData || "" };
+      const label = cached.matchMode === "exact-session" ? "精確 Session" : "格式備援";
+      steps.push(`【媒體工作階段】命中${label}索引：${sourceLabel} / itag ${itag}；快取約 ${Math.round(cached.ageMs / 1000)} 秒。`);
+    } else {
+      steps.push(`【媒體工作階段】Session ${sessionShort} 的精確索引與格式備援索引均未命中。`);
+    }
+  }
+
+  if (!resolvedTarget && analysisFallback) {
+    resolvedTarget = analysisFallback;
+    resolutionMode = "analysis-fallback";
+    steps.push("【媒體工作階段】快取未命中，改用解析回應隨格式傳回的受驗證網址，不先啟動 WATCH 刷新。");
+  }
+
+  if (!resolvedTarget && id && itag) {
+    steps.push("【媒體工作階段】快取與解析網址皆不存在，停止媒體請求並要求前端重新解析。");
+    return json({ error: "媒體工作階段未命中，請重新解析影片後立即下載。", code: "MEDIA_SESSION_MISS", version: VERSION, steps }, 409);
+  }
+
+  let url;
+  try {
+    url = new URL(resolvedTarget);
+    mediaTotal = mediaTotal || Number(url.searchParams.get("clen") || 0);
+  } catch {
+    return json({ error: "媒體網址無效。", code: "INVALID_MEDIA_URL", version: VERSION, steps }, 400);
+  }
+  if (url.protocol !== "https:" || !MEDIA_SUFFIXES.some(suffix => url.hostname.endsWith(suffix))) {
+    return json({ error: "此媒體網域未列入允許清單。", code: "MEDIA_DOMAIN_DENIED", version: VERSION, steps }, 403);
+  }
+
+  const requestedRange=requestedByteRange(request);
+  async function fetchUpstream(activeUrl) {
+    return fetch(activeUrl, {
+      method: request.method,
+      headers: headersForRange(request, sourceLabel, true),
+      redirect: "follow",
+      cache: "no-store"
+    });
+  }
+
+  steps.push(`【媒體請求】使用 ${sourceLabel||"UNKNOWN"} Client 身分存取 ${resolutionMode||"legacy"} 網址${requestedRange?`，區段 ${requestedRange.header}`:""}。`);
+  let upstream=await fetchUpstream(url);
+  steps.push(`【媒體請求】${sourceLabel || "UNKNOWN"} 回傳 HTTP ${upstream.status}。`);
+  if (upstream.status === 403 && id && itag && resolutionMode === "analysis-url") {
+    const cached = await readYoutubeFormatCache(id,itag,sourceLabel||"ANDROID",sessionId);
+    if (cached?.url && cached.url !== url.href) {
+      steps.push(`【媒體工作階段】解析網址遭拒，改用 ${sourceLabel} / itag ${itag} 的短效快取網址。`);
+      url = new URL(cached.url); resolutionMode = "session-cache";
+      upstream=await fetchUpstream(url);
+      steps.push(`【媒體請求】短效快取網址回傳 HTTP ${upstream.status}。`);
+    }
+  }
+  const mediaRejected = [403, 416].includes(upstream.status);
+  if (mediaRejected && id && itag) {
+    steps.push(`【媒體單次刷新】${sourceLabel || "ANDROID"} / itag ${itag} 的 ${requestedRange?.header || "目前區段"} 回傳 HTTP ${upstream.status}；只執行一次直接 Player 刷新，不重新 WATCH。`);
+    await deleteYoutubeFormatCache(id, itag, sourceLabel || "ANDROID", sessionId);
+    try {
+      const fresh = await freshMediaUrlFromContext(id, itag, sourceLabel || "ANDROID", steps, wanted, refreshContext, youtubeCookie);
+      if (fresh.equivalent && String(fresh.selectedItag || itag) !== String(itag)) {
+        return json({
+          error: `直接 Player 刷新取得不同 itag ${fresh.selectedItag}，固定五段下載不混接不同位元流，請重新解析後再下載。`,
+          code: "MEDIA_TRACK_CHANGED",
+          version: VERSION,
+          steps
+        }, 409);
+      }
+      url = new URL(fresh.url);
+      sourceLabel = fresh.sourceLabel;
+      selectedItag = String(fresh.selectedItag || itag);
+      resolutionMode = "single-player-refresh";
+      mediaTotal = Number(fresh.contentLength || mediaTotal || 0);
+      upstream = await fetchUpstream(url);
+      steps.push(`【媒體單次刷新】${requestedRange?.header || "目前區段"} 使用刷新網址重試一次，回傳 HTTP ${upstream.status}。`);
+    } catch (error) {
+      steps.push(`【媒體單次刷新失敗】${error.message}`);
+      return json({
+        error: `媒體區段遭拒，單次 Player 刷新失敗：${error.message}`,
+        code: "MEDIA_REFRESH_FAILED",
+        version: VERSION,
+        steps
+      }, 422);
+    }
+  }
+
+  if ([403, 416].includes(upstream.status)) {
+    return json({
+      error: `Google Video Server 拒絕媒體區段：HTTP ${upstream.status}。固定五段下載已執行原網址一次與 Player 刷新網址一次。`,
+      code: "MEDIA_URL_FORBIDDEN",
+      version: VERSION,
+      steps
+    }, upstream.status === 403 ? 403 : 409);
+  }
+
+  const output = new Headers(upstream.headers);
+  Object.entries(cors()).forEach(([key, value]) => output.set(key, value));
+  output.set("Cache-Control", "no-store");
+  output.set("X-OwO-Media-Mode", resolutionMode || "legacy");
+  output.set("X-OwO-Media-Source", sourceLabel || "UNKNOWN");
+  output.set("X-OwO-Version", VERSION);
+  output.set("X-OwO-Selected-Itag", selectedItag);
+  if (trackRestart) output.set("X-OwO-Track-Restart", "1");
+  if (mediaTotal > 0) output.set("X-OwO-Media-Total", String(mediaTotal));
+  if (new URL(request.url).searchParams.get("download") === "1") {
+    const ext = (new URL(request.url).searchParams.get("ext") || "bin").replace(/[^a-z0-9]/gi, "");
+    output.set("Content-Disposition", `attachment; filename="youtube-media.${ext}"`);
+  }
+  return new Response(upstream.body, { status: upstream.status, headers: output });
+}
+export default {
+  async fetch(request, env) {
+    if (request.method === "OPTIONS") {
+      const headers = new Headers(cors());
+      const requestedHeaders = request.headers.get("Access-Control-Request-Headers");
+      if (requestedHeaders) headers.set("Access-Control-Allow-Headers", requestedHeaders);
+      headers.set("Content-Length", "0");
+      return new Response(null, { status: 204, headers });
+    }
+    const url = new URL(request.url);
+    try {
+      if (url.pathname === "/youtube" && request.method === "GET") {
+        const requestedMode = String(url.searchParams.get("mode") || "quick").toLowerCase();
+        const mode = ["quick", "hq", "all"].includes(requestedMode) ? requestedMode : "quick";
+        return await youtube(url.searchParams.get("id"), mode, requestYoutubeCookie(request, env), Number(env && env.YT_SUBREQUEST_LIMIT) || YT_SUBREQUEST_LIMIT);
+      }
+      if (url.pathname === "/facebook" && request.method === "GET") return await facebookResolve(url.searchParams.get("url"), env, request);
+      if (url.pathname === "/facebook-media" && ["GET", "HEAD"].includes(request.method)) return await facebookMedia(request, url.searchParams.get("url"), env);
+      if (url.pathname === "/instagram" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "instagram", request, env);
+      if (url.pathname === "/threads" && request.method === "GET") return await resolveSocial(url.searchParams.get("url"), "threads", request, env);
+      if (url.pathname === "/social-media" && ["GET", "HEAD"].includes(request.method)) return await metaSocialMedia(request, url.searchParams.get("url"), url.searchParams.get("platform") === "threads" ? "threads" : "instagram", env);
+      if (url.pathname === "/youtube-sabr-pair-download" && request.method === "GET") return await youtubeSabrPairDownload(request,url.searchParams.get("id")||"",url.searchParams.get("videoItag")||"",url.searchParams.get("audioItag")||"",url.searchParams.get("apiKey")||"",url.searchParams.get("visitorData")||"",url.searchParams.get("sessionId")||"",requestYoutubeCookie(request,env));
+      if (url.pathname === "/youtube-hls-playlist" && request.method === "GET") return await youtubeHlsPlaylist(url.searchParams.get("url")||"");
+      if (url.pathname === "/youtube-hls-segment" && request.method === "GET") return await youtubeHlsSegment(url.searchParams.get("url")||"");
+      if (url.pathname === "/youtube-sabr-download" && request.method === "GET") return await youtubeSabrDownload(request,url.searchParams.get("id")||"",url.searchParams.get("itag")||"",url.searchParams.get("track")||"video",url.searchParams.get("apiKey")||"",url.searchParams.get("visitorData")||"",url.searchParams.get("sessionId")||"",requestYoutubeCookie(request,env));
+      if (url.pathname === "/youtube-muxed-download" && request.method === "GET") return await immediateYoutubeMedia(request,{id:url.searchParams.get("id")||"",itag:url.searchParams.get("itag")||"18",apiKey:url.searchParams.get("apiKey")||"",visitorData:url.searchParams.get("visitorData")||"",muxed:true},requestYoutubeCookie(request,env));
+      if (url.pathname === "/youtube-hq-segment" && request.method === "GET") return await immediateYoutubeMedia(request,{id:url.searchParams.get("id")||"",itag:url.searchParams.get("itag")||"",source:url.searchParams.get("source")||"ANDROID_VR",apiKey:url.searchParams.get("apiKey")||"",visitorData:url.searchParams.get("visitorData")||"",start:Number(url.searchParams.get("start")||0),end:Number(url.searchParams.get("end")||0),total:Number(url.searchParams.get("total")||0),wanted:{kind:url.searchParams.get("kind")||"",height:Number(url.searchParams.get("height")||0),fps:Number(url.searchParams.get("fps")||0),codec:url.searchParams.get("codec")||"",container:url.searchParams.get("container")||""}},requestYoutubeCookie(request,env));
+      if (url.pathname === "/media" && ["GET", "HEAD"].includes(request.method)) {
+        return await media(
+          request,
+          url.searchParams.get("url"),
+          url.searchParams.get("id"),
+          url.searchParams.get("itag"),
+          url.searchParams.get("source"),
+          {
+            quality: url.searchParams.get("quality") || "",
+            height: Number(url.searchParams.get("height") || 0),
+            fps: Number(url.searchParams.get("fps") || 0),
+            codec: url.searchParams.get("codec") || "",
+            kind: url.searchParams.get("kind") || ""
+          },
+          url.searchParams.get("sessionId") || "",
+          requestYoutubeCookie(request, env),
+          {
+            apiKey: url.searchParams.get("refreshApiKey") || "",
+            visitorData: url.searchParams.get("refreshVisitorData") || ""
+          }
+        );
+      }
+      return json({ service: SERVICE, version: VERSION, build: BUILD, facebookSession: Boolean(env && env.FB_COOKIE), facebookStories: true, instagram: true, threads: true, webCookieInput: true, youtubeSession: Boolean(requestYoutubeCookie(request, env)), endpoints: ["GET /youtube?id=VIDEO_ID&mode=quick|hq|all", "GET /media?id=VIDEO_ID&itag=ITAG&source=CLIENT&url=SIGNED_URL", "GET /facebook?url=FACEBOOK_URL", "GET /facebook-media?url=MEDIA_URL"] });
+    } catch (error) {
+      return json({ error: error.message || "Worker 執行失敗", code: error.code || "WORKER_INTERNAL_ERROR", version: VERSION, steps: Array.isArray(error.steps) ? error.steps : [] }, Number(error.httpStatus || 500));
+    }
+  }
+};

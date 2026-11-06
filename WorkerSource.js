@@ -260,9 +260,116 @@ async function innertubePlayer(apiKey, visitorData, id, profile, youtubeCookie =
   return response.json();
 }
 
-const YOUTUBE_MEDIA_PROBE_END=262143;
-async function probeYoutubeFormats(player,label,steps){const c=addressableFormats(player);let v=false,a=false,n=0;for(const f of c){const u=directUrl(f);if(!u)continue;let r;try{r=await fetch(u,{headers:{Range:`bytes=0-${YOUTUBE_MEDIA_PROBE_END}`,Accept:"*/*","Accept-Encoding":"identity",Origin:"https://www.youtube.com",Referer:"https://www.youtube.com/","User-Agent":youtubeMediaUserAgent(label)},cache:"no-store"});if(![200,206].includes(r.status))continue;n++;const m=String(f.mimeType||"");if(m.startsWith("video/")&&!f.audioQuality)v=true;if(m.startsWith("audio/")||(!m.startsWith("video/")&&f.audioQuality))a=true;}catch{}finally{try{await r?.body?.cancel()}catch{}}}steps.push(`【實載驗證】${label} 以 256 KiB Range 驗證「${c.length}」個網址，通過「${n}」個；分離視訊：${v?"有":"無"}；分離音訊：${a?"有":"無"}。`);return{videoOnly:v,audioOnly:a}}
-async function collectSources(html, watchPlayer, id, steps, mode = "quick", youtubeCookie = "") {
+const YOUTUBE_MEDIA_PROBE_END = 262143;
+
+/* ═════════════════════════════════════════════════════════════════════
+ * Cloudflare 外部請求額度管理（每次 Worker 呼叫）
+ * Workers Free 每次呼叫最多 50 次外部 fetch；Workers Paid 為 10,000 次。
+ * 超過額度時 fetch 會直接丟出 "Too many subrequests"，過去會被誤判為驗證失敗。
+ * ═════════════════════════════════════════════════════════════════════ */
+const YT_SUBREQUEST_LIMIT = 50;      // 預設採 Free 額度；Paid 方案可由 Worker 變數 YT_SUBREQUEST_LIMIT 調高
+const YT_SUBREQUEST_SAFETY = 4;      // 保留給重新導向與未預期請求的安全餘額
+const YT_POLL_RESERVE = 12;          // 輪詢 Client 時，必須為抽樣驗證、播放器 JS、HLS、補驗證保留的額度
+const YT_PROBE_PER_GROUP = 3;        // 抽樣驗證時，每個群組（視訊／音訊）最多嘗試的網址數
+const YT_VERIFY_MAX_EXTRA = 12;       // 最終驗證階段最多再補驗證幾個網址（抽樣已足以判斷來源是否可用，其餘額度留作緩衝）
+const YT_BACKUP_CLIENTS = new Set(["ANDROID_VR", "VISIONOS"]);
+
+function createSubrequestBudget(limit = YT_SUBREQUEST_LIMIT) {
+  const safeLimit = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Number(limit) : YT_SUBREQUEST_LIMIT;
+  return {
+    limit: safeLimit,
+    used: 0,
+    exhausted: false,
+    probe: new Map(),                // 網址 → 實載驗證結果；抽樣與最終驗證共用，避免重複請求
+    remaining() { return Math.max(0, this.limit - YT_SUBREQUEST_SAFETY - this.used); },
+    take(count = 1) {
+      if (this.exhausted || this.remaining() < count) return false;
+      this.used += count;
+      return true;
+    },
+    noteError(error) {
+      if (/too many subrequests/i.test(String(error && error.message || error))) {
+        this.exhausted = true;
+        return true;
+      }
+      return false;
+    },
+    summary() { return `${this.used}/${this.limit}`; }
+  };
+}
+
+function youtubeFormatGroup(format) {
+  const mime = String(format.mimeType || "");
+  if (mime.startsWith("video/") && format.audioQuality) return "muxed";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/") || format.audioQuality) return "audio";
+  return "other";
+}
+
+function clenFromUrl(url) {
+  try { return Number(new URL(url).searchParams.get("clen") || 0); } catch { return 0; }
+}
+
+/* 對單一媒體網址做 256 KiB Range 驗證。
+ * 回傳 { ok, status, contentLength }；額度不足時回傳 { skipped: true }，呼叫端不得將其視為失敗。 */
+async function probeMediaUrl(url, sourceLabel, budget) {
+  const cached = budget.probe.get(url);
+  if (cached) return cached;
+  if (!budget.take()) return { skipped: true };
+  let response;
+  let result;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Range": `bytes=0-${YOUTUBE_MEDIA_PROBE_END}`,
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+        "Origin": "https://www.youtube.com",
+        "Referer": "https://www.youtube.com/",
+        "User-Agent": youtubeMediaUserAgent(sourceLabel)
+      },
+      redirect: "follow",
+      cache: "no-store"
+    });
+    const ok = response.status === 200 || response.status === 206;
+    const rangeTotal = Number((String(response.headers.get("Content-Range") || "").match(/\/(\d+)$/) || [])[1] || 0);
+    result = { ok, status: response.status, contentLength: ok ? (rangeTotal || clenFromUrl(url) || 0) : 0 };
+  } catch (error) {
+    if (budget.noteError(error)) return { skipped: true, error: String(error.message || error) };
+    result = { ok: false, status: 0, contentLength: 0, error: String(error && error.message || error) };
+  } finally {
+    try { await response?.body?.cancel(); } catch {}
+  }
+  budget.probe.set(url, result);
+  return result;
+}
+
+/* 輪詢階段的抽樣驗證：視訊、音訊各取位元率最高的代表格式，通過即止，每群組最多嘗試 YT_PROBE_PER_GROUP 個。 */
+async function probeYoutubeFormats(player, label, steps, budget) {
+  const groups = { video: [], audio: [] };
+  for (const format of addressableFormats(player)) {
+    const url = directUrl(format);
+    const group = youtubeFormatGroup(format);
+    if (url && groups[group]) groups[group].push({ format, url });
+  }
+  const passed = { video: false, audio: false };
+  let candidates = 0, attempted = 0, passedCount = 0, skipped = false;
+  for (const group of Object.keys(groups)) {
+    const list = groups[group].sort((a, b) => Number(b.format.bitrate || 0) - Number(a.format.bitrate || 0));
+    candidates += list.length;
+    for (const item of list.slice(0, YT_PROBE_PER_GROUP)) {
+      const result = await probeMediaUrl(item.url, label, budget);
+      if (result.skipped) { skipped = true; break; }
+      attempted++;
+      if (result.ok) { passed[group] = true; passedCount++; break; }
+    }
+    if (skipped) break;
+  }
+  steps.push(`【實載驗證】${label} 抽樣驗證（256 KiB Range）：候選「${candidates}」個，實際請求「${attempted}」次，通過「${passedCount}」個；分離視訊：${passed.video ? "有" : "無"}；分離音訊：${passed.audio ? "有" : "無"}${skipped ? "；外部請求額度不足，已中止抽樣" : ""}。`);
+  return { videoOnly: passed.video, audioOnly: passed.audio, skipped };
+}
+async function collectSources(html, watchPlayer, id, steps, mode = "quick", youtubeCookie = "", budget = createSubrequestBudget()) {
   const output = [{ label: "WATCH_PAGE", player: watchPlayer }];
   let state = playState(watchPlayer);
   let rawCount = rawFormats(watchPlayer).length;
@@ -311,6 +418,21 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
 
   for (let profileIndex = 0; profileIndex < profiles.length; profileIndex++) {
     const profile = profiles[profileIndex];
+
+    // 額度控管：一般 Client 必須為「備援 Client 與抽樣驗證」保留額度；備援 Client 只需 1 次。
+    const isBackupClient = YT_BACKUP_CLIENTS.has(profile.label);
+    const backupsAhead = profiles.slice(profileIndex + 1).filter(item => YT_BACKUP_CLIENTS.has(item.label)).length;
+    const requiredBudget = isBackupClient ? 1 : 1 + backupsAhead + YT_POLL_RESERVE;
+    if (budget.remaining() < requiredBudget) {
+      if (isBackupClient || backupsAhead === 0) {
+        steps.push(`【請求額度】剩餘「${budget.remaining()}」次，無法再呼叫 ${profile.label}，停止輪詢（已用 ${budget.summary()}）。`);
+        break;
+      }
+      steps.push(`【請求額度】剩餘「${budget.remaining()}」次，略過 ${profile.label}，保留額度給備援 Client 與媒體驗證。`);
+      continue;
+    }
+    budget.take();
+
     try {
       if (profileIndex > 0) {
         steps.push(`【請求節流】等待 ${CLIENT_REQUEST_INTERVAL_MS} 毫秒後再呼叫 ${profile.label}。`);
@@ -353,7 +475,19 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
         steps.push("【備援 2／VISIONOS SABR】一般來源與 ANDROID_VR 均未成功；已取得完整 SABR 描述，採用最後備援並結束搜尋。");
         break;
       }
-      if(videoOnly&&audioOnly){const p=await probeYoutubeFormats(player,profile.label,steps);if(p.videoOnly&&p.audioOnly){const category=profile.label==="ANDROID_VR"?"【備援 1／ANDROID_VR】":"【高畫質】";steps.push(`${category}${profile.label} 的分離視訊與音訊已通過實載驗證，停止其餘 Client 輪詢。`);break;}steps.push(`【高畫質續搜】${profile.label} 未通過實載驗證，繼續下一個 Client。`);}
+      if (videoOnly && audioOnly) {
+        const p = await probeYoutubeFormats(player, profile.label, steps, budget);
+        if (p.videoOnly && p.audioOnly) {
+          const category = profile.label === "ANDROID_VR" ? "【備援 1／ANDROID_VR】" : "【高畫質】";
+          steps.push(`${category}${profile.label} 的分離視訊與音訊已通過實載驗證，停止其餘 Client 輪詢。`);
+          break;
+        }
+        if (p.skipped) {
+          steps.push(`【請求額度】額度不足，無法完成 ${profile.label} 的實載驗證；保留其格式並停止輪詢（已用 ${budget.summary()}）。`);
+          break;
+        }
+        steps.push(`【高畫質續搜】${profile.label} 未通過實載驗證，繼續下一個 Client。`);
+      }
 
       if (mode !== "all" && muxed && authCount >= 4) {
         steps.push("【快速停止】已有影音合一格式，且多個來源要求登入，停止其餘 Client 輪詢。");
@@ -373,6 +507,10 @@ async function collectSources(html, watchPlayer, id, steps, mode = "quick", yout
       }
     } catch (error) {
       steps.push(`【${profile.label}】請求失敗：${error.message}。`);
+      if (budget.noteError(error)) {
+        steps.push("【請求額度】Cloudflare 回報外部請求額度已用盡，停止其餘 Client 輪詢；已取得的格式仍會保留。");
+        break;
+      }
       if (String(error.message).includes("HTTP 429")) {
         steps.push("【快速停止】YouTube 已回傳 HTTP 429，停止其餘 Client 輪詢。");
         break;
@@ -517,10 +655,14 @@ function compileTransform(playerJs, functionName) {
   };
 }
 
-async function loadPlayerRules(html, steps) {
+async function loadPlayerRules(html, steps, budget = createSubrequestBudget()) {
   const jsUrl = playerJsUrl(html);
   if (!jsUrl) {
     steps.push("【PLAYER_JS】找不到播放器 JavaScript 網址。");
+    return { signature: null, n: null };
+  }
+  if (!budget.take()) {
+    steps.push("【請求額度】外部請求額度不足，略過播放器 JavaScript 下載。");
     return { signature: null, n: null };
   }
   const response = await fetch(jsUrl, { cache: "no-store" });
@@ -569,12 +711,13 @@ function resolveFormatUrl(format, rules, counters) {
   return target.href;
 }
 
-async function fetchYoutubeWatchPage(id, steps, youtubeCookie = "") {
+async function fetchYoutubeWatchPage(id, steps, youtubeCookie = "", budget = createSubrequestBudget()) {
   const MAX_WATCH_CYCLES = 5;
   const watchRetryDelay = cycle => cycle <= 2 ? 1000 : cycle <= 4 ? 2000 : 3000;
   let lastStatus = 0;
   let lastHtml = "";
 
+  watchLoop:
   for (let cycle = 1; cycle <= MAX_WATCH_CYCLES; cycle++) {
     const nonce = `${Date.now()}-${cycle}`;
     const targets = [
@@ -584,6 +727,10 @@ async function fetchYoutubeWatchPage(id, steps, youtubeCookie = "") {
     ];
 
     for (let index = 0; index < targets.length; index++) {
+      if (!budget.take()) {
+        steps.push(`【請求額度】WATCH 重試已用掉外部請求額度（${budget.summary()}），停止重試。`);
+        break watchLoop;
+      }
       const response = await fetch(targets[index], {
         headers: {
           "User-Agent": index === 1
@@ -634,8 +781,12 @@ function hlsAttributes(line) {
   while ((match = pattern.exec(text))) result[match[1]] = match[2].replace(/^"|"$/g, "");
   return result;
 }
-async function parseHlsMasterFormats(manifestUrl, steps) {
+async function parseHlsMasterFormats(manifestUrl, steps, budget = createSubrequestBudget()) {
   if (!manifestUrl) return [];
+  if (!budget.take()) {
+    steps.push("【請求額度】外部請求額度不足，略過 WEB_SAFARI HLS Master Manifest。");
+    return [];
+  }
   let response;
   try { response = await fetch(manifestUrl, { headers: { "User-Agent": youtubeMediaUserAgent("WEB_SAFARI"), "Accept": "application/vnd.apple.mpegurl,*/*" }, cache: "no-store" }); }
   catch (error) { steps.push(`【WEB_SAFARI HLS】Master Manifest 連線失敗：${error.message}。`); return []; }
@@ -700,10 +851,12 @@ async function youtubeHlsSegment(url) {
   const headers=new Headers(response.headers);Object.entries(cors()).forEach(([k,v])=>headers.set(k,v));headers.set("Cache-Control","no-store");headers.set("X-OwO-Media-Mode","web-safari-hls");return new Response(response.body,{status:200,headers});
 }
 
-async function youtube(id, mode = "quick", youtubeCookie = "") {
+async function youtube(id, mode = "quick", youtubeCookie = "", subrequestLimit = YT_SUBREQUEST_LIMIT) {
   if (!/^[A-Za-z0-9_-]{11}$/.test(id || "")) return json({ error: "影片 ID 格式錯誤" }, 400);
   const steps = [];
-  const watchResult = await fetchYoutubeWatchPage(id, steps, youtubeCookie);
+  const budget = createSubrequestBudget(subrequestLimit);
+  steps.push(`【請求額度】本次解析可用外部請求上限「${budget.limit}」次（保留安全餘額「${YT_SUBREQUEST_SAFETY}」次）。`);
+  const watchResult = await fetchYoutubeWatchPage(id, steps, youtubeCookie, budget);
   const response = watchResult.response;
   if (!response.ok || !watchResult.html) {
     return json({
@@ -725,7 +878,7 @@ async function youtube(id, mode = "quick", youtubeCookie = "") {
   steps.push("【解析】已取得 ytInitialPlayerResponse。");
 
   if (youtubeCookie) steps.push("【YOUTUBE SESSION】已套用目前請求的登入工作階段（內容已隱藏）。");
-  const sources = await collectSources(html, watchPlayer, id, steps, mode, youtubeCookie);
+  const sources = await collectSources(html, watchPlayer, id, steps, mode, youtubeCookie, budget);
   const selected = sources.find(source => addressableFormats(source.player).length) || sources[0];
   const details = selected.player.videoDetails || watchPlayer.videoDetails || {};
   const rawMap = new Map();
@@ -765,23 +918,25 @@ async function youtube(id, mode = "quick", youtubeCookie = "") {
       ...(statusCounts.OTHER ? [`其他：${statusCounts.OTHER}`] : [])
     ].join("；");
     steps.push(`【狀態摘要】${statusSummary}。`);
-    return json({ id, phase: mode, title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "", formats: [], steps, code, retryable: false, version: VERSION, note });
+    steps.push(`【請求額度】本次解析共使用外部請求 ${budget.summary()} 次${budget.exhausted ? "（曾觸及 Cloudflare 上限）" : ""}。`);
+    return json({ id, phase: mode, subrequests: { used: budget.used, limit: budget.limit }, title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "", formats: [], steps, code, retryable: false, version: VERSION, note });
   }
 
   steps.push(`【來源】彙整 ${sources.map(source => source.label).join("、")}，取得「${raw.length}」個不重複的含網址或密文格式。`);
   const needsRules = raw.some(format => format.signatureCipher || format.cipher || (() => {
     try { return new URL(format.url || "").searchParams.has("n"); } catch { return false; }
   })());
-  const rules = needsRules ? await loadPlayerRules(html, steps) : { signature: null, n: null };
+  const rules = needsRules ? await loadPlayerRules(html, steps, budget) : { signature: null, n: null };
   const counters = { signature: 0, signatureFailed: 0, n: 0, nFailed: 0 };
   const candidateFormats = raw
     .map(format => normalize(format, resolveFormatUrl(format, rules, counters)))
     .filter(Boolean)
     .sort((a, b) => b.bitrate - a.bitrate);
-  let formats = await verifyYoutubeFormats(candidateFormats, steps);
   const safariHlsSource = sources.find(source => source.label === "WEB_SAFARI" && source.player?.streamingData?.hlsManifestUrl);
+  // 若有 HLS Master Manifest 需要下載，先替它保留 1 次額度，再把其餘額度用於補驗證。
+  let formats = await verifyYoutubeFormats(candidateFormats, steps, budget, safariHlsSource ? 1 : 0);
   if (safariHlsSource) {
-    const hlsFormats = await parseHlsMasterFormats(safariHlsSource.player.streamingData.hlsManifestUrl, steps);
+    const hlsFormats = await parseHlsMasterFormats(safariHlsSource.player.streamingData.hlsManifestUrl, steps, budget);
     formats = [...formats, ...hlsFormats];
   }
   const visionSabrSource = safariHlsSource ? null : sources.find(source => source.label === "VISIONOS" && hasSabrSeparatedFormats(source.player));
@@ -803,56 +958,96 @@ async function youtube(id, mode = "quick", youtubeCookie = "") {
   const sessionFormats = formats.map(format => ({ ...format, sessionId: mediaSessionId, refreshApiKey, refreshVisitorData }));
   if (visionSabrSource) await cacheYoutubeSabrSession(id, mediaSessionId, visionSabrSource.player, steps);
   await cacheYoutubeFormats(id,sessionFormats,steps,mediaSessionId);
-  return json({ id, phase: mode, mediaSessionId, source: sources.filter(source => addressableFormats(source.player).length).map(source => source.label).join("+") || selected.label, version: VERSION, code: formats.length ? "OK" : "SIGNATURE_REQUIRED", title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "",
+  steps.push(`【請求額度】本次解析共使用外部請求 ${budget.summary()} 次${budget.exhausted ? "（曾觸及 Cloudflare 上限）" : ""}。`);
+  return json({ id, phase: mode, mediaSessionId, subrequests: { used: budget.used, limit: budget.limit }, source: sources.filter(source => addressableFormats(source.player).length).map(source => source.label).join("+") || selected.label, version: VERSION, code: formats.length ? "OK" : "SIGNATURE_REQUIRED", title: details.title || "", thumbnail: details.thumbnail?.thumbnails?.at(-1)?.url || "",
     lengthSeconds: details.lengthSeconds || "", formats: sessionFormats, steps,
     note: formats.length ? "" : (candidateFormats.length ? "播放器有回傳媒體網址，但所有候選均未通過實際媒體驗證。" : "播放器已回傳格式，但格式都只有加密 signatureCipher。此執行環境需要更新播放器規則解析器。") });
 }
 
 
-async function verifyYoutubeFormats(formats, steps) {
+/* 最終媒體驗證。
+ * 1) 沿用輪詢階段的抽樣結果（同網址不重複請求）。
+ * 2) 以剩餘額度依「來源＋種類」輪流補驗證，優先涵蓋每個群組。
+ * 3) 額度不足而未驗證的格式：只要同群組沒有「全數失敗」就保留，避免把額度問題誤判為網址無效。 */
+async function verifyYoutubeFormats(formats, steps, budget = createSubrequestBudget(), keepBudget = 0) {
   if (!formats.length) return [];
-  const verified = [];
-  let rejected403 = 0;
-  let otherRejected = 0;
-  const queue = [...formats];
+  const groupKey = format => `${format.source || ""}|${format.kind || ""}`;
+  const results = new Map();
+  const pending = [];
+
+  for (const format of formats) {
+    const cached = budget.probe.get(format.url);
+    if (cached) results.set(format, cached);
+    else pending.push(format);
+  }
+  const reused = results.size;
+
+  // 依群組輪流排序，避免高位元率的同一種格式吃光所有補驗證額度。
+  const buckets = new Map();
+  for (const format of pending) {
+    const key = groupKey(format);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(format);
+  }
+  const interleaved = [];
+  for (let round = 0; interleaved.length < pending.length; round++) {
+    for (const list of buckets.values()) if (round < list.length) interleaved.push(list[round]);
+  }
+
+  const allowed = Math.min(YT_VERIFY_MAX_EXTRA, Math.max(0, budget.remaining() - Math.max(0, keepBudget)));
+  const queue = interleaved.slice(0, allowed);
+  const unchecked = interleaved.slice(allowed);
 
   async function worker() {
     while (queue.length) {
       const format = queue.shift();
-      let response;
-      try {
-        const headers = new Headers({
-          "Range": `bytes=0-${YOUTUBE_MEDIA_PROBE_END}`,
-          "Accept": "*/*",
-          "Accept-Encoding": "identity",
-          "Origin": "https://www.youtube.com",
-          "Referer": "https://www.youtube.com/",
-          "User-Agent": youtubeMediaUserAgent(format.source)
-        });
-        response = await fetch(format.url, { method: "GET", headers, redirect: "follow", cache: "no-store" });
-        const ok = response.status === 200 || response.status === 206;
-        if (ok) {
-          const contentRange = String(response.headers.get("Content-Range") || "");
-          const rangeTotal = Number((contentRange.match(/\/(\d+)$/) || [])[1] || 0);
-          const urlTotal = (() => { try { return Number(new URL(format.url).searchParams.get("clen") || 0); } catch { return 0; } })();
-          const contentLength = Number(format.contentLength || 0) || rangeTotal || urlTotal || 0;
-          verified.push({ ...format, contentLength: contentLength || "", verified: true, verifiedAt: Date.now(), verificationStatus: response.status });
-        } else if (response.status === 403) {
-          rejected403++;
-        } else {
-          otherRejected++;
-        }
-      } catch {
-        otherRejected++;
-      } finally {
-        try { await response?.body?.cancel(); } catch {}
-      }
+      const result = await probeMediaUrl(format.url, format.source, budget);
+      if (result.skipped) unchecked.push(format);
+      else results.set(format, result);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(3, queue.length) }, () => worker()));
+
+  const passedGroups = new Set();
+  const failedGroups = new Set();
+  let rejected403 = 0, otherRejected = 0;
+  const errorCounts = new Map();
+  for (const [format, result] of results) {
+    if (result.ok) { passedGroups.add(groupKey(format)); continue; }
+    failedGroups.add(groupKey(format));
+    if (result.status === 403) rejected403++;
+    else {
+      otherRejected++;
+      const reason = result.error || `HTTP ${result.status}`;
+      errorCounts.set(reason, (errorCounts.get(reason) || 0) + 1);
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(3, formats.length) }, () => worker()));
+  const verified = [];
+  for (const [format, result] of results) {
+    if (!result.ok) continue;
+    const contentLength = Number(format.contentLength || 0) || result.contentLength || 0;
+    verified.push({ ...format, contentLength: contentLength || "", verified: true, verifiedAt: Date.now(), verificationStatus: result.status });
+  }
+
+  let keptUnchecked = 0;
+  for (const format of unchecked) {
+    const key = groupKey(format);
+    if (failedGroups.has(key) && !passedGroups.has(key)) continue;
+    const contentLength = Number(format.contentLength || 0) || clenFromUrl(format.url) || 0;
+    verified.push({ ...format, contentLength: contentLength || "", verified: false, verificationStatus: "unchecked-budget" });
+    keptUnchecked++;
+  }
+
   verified.sort((a, b) => Number(b.bitrate || 0) - Number(a.bitrate || 0));
-  steps.push(`【媒體實載驗證 256 KiB】候選「${formats.length}」個；HTTP 200/206 通過「${verified.length}」個；HTTP 403 淘汰「${rejected403}」個；其他失敗「${otherRejected}」個。`);
+  const passedChecked = verified.filter(format => format.verified).length;
+  steps.push(`【媒體實載驗證 256 KiB】候選「${formats.length}」個；沿用抽樣結果「${reused}」個；本階段新增請求「${results.size - reused}」次；HTTP 200/206 通過「${passedChecked}」個；HTTP 403 淘汰「${rejected403}」個；其他失敗「${otherRejected}」個。`);
+  if (unchecked.length) {
+    steps.push(`【媒體實載驗證】為節省外部請求額度，「${unchecked.length}」個格式採同群組抽樣判定、未逐一實測；已保留「${keptUnchecked}」個（標記為未實測）。`);
+  }
+  if (errorCounts.size) {
+    steps.push(`【媒體實載驗證】失敗原因：${[...errorCounts].map(([reason, count]) => `${reason}×${count}`).join("；")}。`);
+  }
   if (!verified.length && formats.length) {
     steps.push("【媒體預先驗證】Player API 雖提供網址，但沒有任何候選通過 Google Video Server 實際存取驗證，因此不顯示無效下載選項。");
   }
@@ -2568,7 +2763,7 @@ export default {
       if (url.pathname === "/youtube" && request.method === "GET") {
         const requestedMode = String(url.searchParams.get("mode") || "quick").toLowerCase();
         const mode = ["quick", "hq", "all"].includes(requestedMode) ? requestedMode : "quick";
-        return await youtube(url.searchParams.get("id"), mode, requestYoutubeCookie(request, env));
+        return await youtube(url.searchParams.get("id"), mode, requestYoutubeCookie(request, env), Number(env && env.YT_SUBREQUEST_LIMIT) || YT_SUBREQUEST_LIMIT);
       }
       if (url.pathname === "/facebook" && request.method === "GET") return await facebookResolve(url.searchParams.get("url"), env, request);
       if (url.pathname === "/facebook-media" && ["GET", "HEAD"].includes(request.method)) return await facebookMedia(request, url.searchParams.get("url"), env);
